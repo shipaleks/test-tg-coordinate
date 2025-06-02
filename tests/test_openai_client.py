@@ -83,7 +83,7 @@ def test_get_nearby_fact_prompt_format(openai_client):
             mock_create.assert_called_once()
             call_args = mock_create.call_args
 
-            assert call_args[1]["model"] == "gpt-4o-mini"
+            assert call_args[1]["model"] == "gpt-4.1-mini"
             assert call_args[1]["max_tokens"] == 100
             assert call_args[1]["temperature"] == 0.7
 
