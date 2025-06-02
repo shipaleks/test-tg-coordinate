@@ -34,8 +34,10 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logger.error(f"Exception while handling an update: {context.error}")
 
 
-def create_application() -> Application:
-    """Create and configure the Telegram bot application."""
+def main() -> None:
+    """Main function to run the bot."""
+    logger.info("Starting NearbyFactBot...")
+
     # Get bot token from environment
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
@@ -53,16 +55,6 @@ def create_application() -> Application:
     # Add error handler
     application.add_error_handler(error_handler)
 
-    return application
-
-
-async def main() -> None:
-    """Main function to run the bot."""
-    logger.info("Starting NearbyFactBot...")
-
-    # Create application
-    application = create_application()
-
     # Get configuration
     port = int(os.getenv("PORT", "8000"))
     webhook_url = os.getenv("WEBHOOK_URL")
@@ -70,16 +62,19 @@ async def main() -> None:
     if webhook_url:
         # Production mode with webhook
         logger.info(f"Starting webhook on port {port}")
-        await application.run_webhook(
-            listen="0.0.0.0", port=port, webhook_url=webhook_url, url_path="webhook"
+        # Use synchronous run_webhook which handles event loop internally
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=port,
+            webhook_url=webhook_url,
+            url_path="webhook",
         )
     else:
         # Development mode with polling
         logger.info("Starting polling mode for development")
-        await application.run_polling(allowed_updates=Update.ALL_TYPES)
+        # Use synchronous run_polling which handles event loop internally
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(main())
+    main()
