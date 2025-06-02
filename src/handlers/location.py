@@ -37,9 +37,20 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         openai_client = get_openai_client()
         fact = await openai_client.get_nearby_fact(lat, lon)
 
-        # Send the fact to user
+        # Format the response with nice styling
+        formatted_response = (
+            "📍 *Интересный факт о вашем местоположении*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"💡 {fact}\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🔍 _Отправьте новую локацию для следующего факта_"
+        )
+
+        # Send the fact to user with Markdown formatting
         await update.message.reply_text(
-            text=f"🗺️ {fact}", reply_to_message_id=update.message.message_id
+            text=formatted_response,
+            reply_to_message_id=update.message.message_id,
+            parse_mode="Markdown",
         )
 
         logger.info(f"Sent fact to user {update.effective_user.id}")
@@ -50,7 +61,14 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
 
         # Send error message to user
+        error_response = (
+            "😔 *Упс! Что-то пошло не так*\n\n"
+            "Не удалось найти интересную информацию о данном месте.\n"
+            "Попробуйте отправить другую локацию!"
+        )
+
         await update.message.reply_text(
-            text="😔 Не найдено мест поблизости",
+            text=error_response,
             reply_to_message_id=update.message.message_id,
+            parse_mode="Markdown",
         )

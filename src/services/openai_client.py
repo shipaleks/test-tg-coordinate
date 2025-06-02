@@ -33,16 +33,32 @@ class OpenAIClient:
             Exception: If OpenAI API call fails
         """
         try:
-            prompt = (
-                f"Give one unusual fact about any place within 1 km of {lat},{lon}; "
-                "2 sentences, max 60 words."
+            system_prompt = (
+                "Ты - профессиональный экскурсовод с научной степенью по истории. "
+                "Твоя специализация - рассказывать малоизвестные, но удивительные факты о местах. "
+                "Ты избегаешь банальностей и общеизвестной информации, фокусируясь на деталях, "
+                "которые заставят людей воскликнуть 'Невероятно, я не знал!'. "
+                "Все факты должны быть исторически точными и проверяемыми."
+            )
+
+            user_prompt = (
+                f"Расскажи один малоизвестный, но очень интересный факт о любом месте "
+                f"в радиусе 1 км от координат {lat},{lon}. "
+                "Факт должен быть: "
+                "1) Неочевидным и удивительным "
+                "2) Исторически достоверным "
+                "3) Связан с конкретным местом, зданием или событием "
+                "Ответ: 2-3 предложения, максимум 100 слов."
             )
 
             response = await self.client.chat.completions.create(
                 model="gpt-4.1-mini",  # Using gpt-4.1-mini as specified in PRD
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=100,
-                temperature=0.7,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=200,  # Increased for Russian text
+                temperature=0.8,  # Slightly higher for more creative responses
             )
 
             fact = response.choices[0].message.content

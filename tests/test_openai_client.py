@@ -21,7 +21,7 @@ def test_get_nearby_fact_success(openai_client):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = (
-            "This is an interesting fact about the location."
+            "В этом здании в 1920 году тайно встречались революционеры."
         )
 
         # Create async mock that returns the mock response
@@ -30,7 +30,7 @@ def test_get_nearby_fact_success(openai_client):
         with patch.object(openai_client.client.chat.completions, "create", mock_create):
             fact = await openai_client.get_nearby_fact(55.751244, 37.618423)
 
-            assert fact == "This is an interesting fact about the location."
+            assert fact == "В этом здании в 1920 году тайно встречались революционеры."
 
     anyio.run(_test)
 
@@ -84,13 +84,15 @@ def test_get_nearby_fact_prompt_format(openai_client):
             call_args = mock_create.call_args
 
             assert call_args[1]["model"] == "gpt-4.1-mini"
-            assert call_args[1]["max_tokens"] == 100
-            assert call_args[1]["temperature"] == 0.7
+            assert call_args[1]["max_tokens"] == 200
+            assert call_args[1]["temperature"] == 0.8
 
             messages = call_args[1]["messages"]
-            assert len(messages) == 1
-            assert messages[0]["role"] == "user"
-            assert "55.751244,37.618423" in messages[0]["content"]
-            assert "2 sentences, max 60 words" in messages[0]["content"]
+            assert len(messages) == 2
+            assert messages[0]["role"] == "system"
+            assert "профессиональный экскурсовод" in messages[0]["content"]
+            assert messages[1]["role"] == "user"
+            assert "55.751244,37.618423" in messages[1]["content"]
+            assert "малоизвестный" in messages[1]["content"]
 
     anyio.run(_test)
