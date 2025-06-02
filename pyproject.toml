@@ -11,6 +11,7 @@ dependencies = [
     "python-telegram-bot[webhooks]==21.7",
     "openai>=1.54.0",
     "asyncio-throttle>=1.0.2",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]

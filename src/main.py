@@ -3,10 +3,14 @@
 import logging
 import os
 
+from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 from .handlers.location import handle_location
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
