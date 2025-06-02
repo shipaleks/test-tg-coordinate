@@ -9,14 +9,12 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements files
+# Copy project files
 COPY pyproject.toml ./
+COPY src/ ./src/
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -e .
-
-# Copy source code
-COPY src/ ./src/
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app \
