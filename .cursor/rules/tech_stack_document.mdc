@@ -1,0 +1,7 @@
+Слой	Библиотека / Сервис и версия	Зачем нужен	Документация
+Runtime	Python 3.12	Язык и среда выполнения скрипта бота	https://docs.python.org/3.12/
+Bot SDK	python-telegram-bot 21.2	Приём/отправка сообщений в Telegram, упрощённая работа с Webhook/Polling	https://docs.python-telegram-bot.org/
+OpenAI SDK	openai 1.23.2	Вызовы GPT-4.1-mini через chat.completions	https://github.com/openai/openai-python
+Database	None (stateless MVP)	Персистенция не нужна — бот отвечает «на лету»	—
+Deployment	Railway (2025-05)	Хостинг контейнера, CI/CD из GitHub	https://docs.railway.app/
+Линтер / Форматтер	ruff 0.4.0 (lint) + black 24.3.0 (fmt)	Статический анализ и автоформатирование кода	https://docs.astral.sh/ruff/, https://black.readthedocs.io/

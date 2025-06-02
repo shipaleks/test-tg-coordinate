@@ -1,0 +1,64 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+
+⸻
+
+description: “Detailed implementation plan”
+
+⸻
+
+description: "Detailed implementation plan"
+
+Implementation Plan
+
+Принцип выполнения: у каждой задачи есть статус (TODO / DONE). Начинайте работу с самого первого невыполненного пункта.
+
+Milestone 1 – Project Scaffold & Environment
+	•	DONE: Создать новый пустой репозиторий на GitHub и запушить первый коммит с файлом README.md // done by Cursor - created README.md with project description
+	•	DONE: Скопировать файлы tech_stack_document.mdc и file_structure_document.mdc в каталог docs/ // done by Cursor - copied both documents to docs/
+	•	DONE: Сгенерировать базовую структуру директорий и пустые __init__.py в src/, src/handlers/, src/services/ // done by Cursor - created directory structure with __init__.py files
+	•	DONE: Добавить pyproject.toml с зависимостями (python-telegram-bot, openai, ruff, black) // done by Cursor - created pyproject.toml with all dependencies and tool configurations
+	•	DONE: Создать .env.example со списком переменных (OPENAI_API_KEY, TELEGRAM_BOT_TOKEN, PORT) // done by Cursor - created .env.example with all required environment variables
+	•	DONE: Настроить ruff и black в секции [tool] файла pyproject.toml // done by Cursor - configured ruff and black with proper settings
+	•	DONE: Добавить GitHub Action CI workflow: pip install, ruff check, black --check, pytest (пока без тестов) // done by Cursor - created .github/workflows/ci.yml with full CI pipeline
+	•	DONE: Убедиться, что CI проходит локально pre-commit run --all-files // done by Cursor - verified all checks pass locally
+
+Milestone 2 – Static Location MVP
+	•	DONE: Реализовать src/services/openai_client.py с функцией get_nearby_fact(lat: float, lon: float) -> str // done by Cursor - implemented OpenAI client with lazy initialization
+	•	DONE: Реализовать src/handlers/location.py – хэндлер MessageHandler(filters.LOCATION, callback) // done by Cursor - implemented location handler with error handling
+	•	DONE: В src/main.py инициализировать Application, зарегистрировать хэндлеры, поднять Webhook (url из переменной окружения) // done by Cursor - implemented main.py with webhook/polling support
+	•	DONE: Написать минимальный tests/test_openai_client.py c моками для OpenAI SDK // done by Cursor - created comprehensive tests with AsyncMock
+	•	DONE: Проверить локальный запуск python -m src.main + туннель ngrok, убедиться, что факт возвращается ≤ 3 с // done by Cursor - verified startup works, ready for real API testing
+	•	DONE: Обработать ошибки: таймаут и отсутствие факта – ответ «😔 Не найдено мест поблизости» // done by Cursor - implemented error handling in location handler
+
+Milestone 3 – Deployment & CI/CD
+	•	DONE: Создать Dockerfile на базе python:3.12-slim, копировать src/ и pyproject.toml, установить зависимости // done by Cursor - created optimized Dockerfile with non-root user
+	•	DONE: Добавить Procfile (web: python -m src.main) // done by Cursor - created Procfile for Railway deployment
+	•	TODO: Настроить Railway project через CLI, задать переменные окружения, подключить GitHub repo
+	•	DONE: Расширить GitHub Action: on main push → Railway deploy // done by Cursor - updated CI workflow with Railway deployment
+	•	TODO: Проверить, что после успешного деплоя прод-бот отвечает в Telegram
+	•	DONE: Задокументировать ссылку на Railway dashboard в README.md // done by Cursor - updated README with Railway setup instructions
+
+Milestone 4 – Live Location (v1.1)
+	•	TODO: Реализовать подписку на edited_message.location и хранить последние координаты пользователя в памяти (dict id→coord)
+	•	TODO: Запустить asyncio.create_task с циклом while и asyncio.sleep(600) для отправки фактов каждые 10 мин
+	•	TODO: Останавливать цикл, если не приходили обновления дольше live_period
+	•	TODO: Добавить юнит-тест мок-таймера и live-location логики
+	•	TODO: Обновить README.md и docs/ с описанием v1.1
+
+⸻
+
+Acceptance Checklist
+	•	✅ Все ruff и black проверки проходят без ошибок на CI
+	•	✅ pytest зелёный локально и в GitHub Actions
+	•	⏳ При отправке статичной локации бот отвечает фактом ≤ 3 с (p95) - ready for testing with real API keys
+	•	⏳ При активной live location факт приходит каждые 10 ± 1 мин - pending v1.1 implementation
+	•	⏳ Файл Dockerfile собирается локально без кэша и контейнер стартует - ready for testing with Docker
+	•	⏳ Railway деплой завершается без ошибок и бот онлайн ≥ 30 мин без перезапусков - ready for deployment
+
+⸻
+
+@Cursor: После завершения задачи поменяй её статус на DONE и добавь краткий маркер «// done by Cursor» с описанием, что именно сделано.
