@@ -34,7 +34,7 @@ Product Requirements Document (PRD)
 
 1. Overview / Problem
 
-Путешественникам и городским исследователям не хватает лёгкого способа получать интересные, нетривиальные факты о местах вокруг себя одним тапом. MVP-бот в Telegram отвечает на отправленную локацию коротким фактом, сгенерированным GPT-4.1-mini, и тем самым делает открытие нового рядом стоящего места игрой “one-click trivia”.
+Путешественникам и городским исследователям не хватает лёгкого способа получать интересные, нетривиальные факты о местах вокруг себя одним тапом. MVP-бот в Telegram отвечает на отправленную локацию коротким фактом, сгенерированным GPT-4.1, и тем самым делает открытие нового рядом стоящего места игрой "one-click trivia".
 
 2. Key User Flows
 	1.	Статичная точка
@@ -47,12 +47,12 @@ Product Requirements Document (PRD)
 	3.	После остановки трансляции бот присылает «✔️ Location sharing ended».
 
 3. Functional Requirements
-	•	F-1 Обработка message.location; извлечение latitude, longitude.
-	•	F-2 Запрос к OpenAI chat.completions (GPT-4.1-mini) со шаблоном:
-“Give one unusual fact about any place within 1 km of {lat},{lon}; 2 sentences, max 60 words.”
-	•	F-3 Ответ пользователю тем же сообщением-фактом.
-	•	F-4 Логирование ошибок (stdout + Railway logs).
-	•	F-5 Локальный запуск через python main.py и туннель ngrok для Telegram → localhost.
+	•	F-1 Обработка message.location; извлечение latitude, longitude.
+	•	F-2 Запрос к OpenAI chat.completions (GPT-4.1) со шаблоном:
+"Give one unusual fact about any place within 1 km of {lat},{lon}; 2 sentences, max 60 words."
+	•	F-3 Ответ пользователю тем же сообщением-фактом.
+	•	F-4 Логирование ошибок (stdout + Railway logs).
+	•	F-5 Локальный запуск через python main.py и туннель ngrok для Telegram → localhost.
 	•	F-6 (v 1.1) Поддержка live-location:
 	•	подписка на edited_message.location
 	•	таймер на 10 мин; при срабатывании — новый факт с текущими координатами

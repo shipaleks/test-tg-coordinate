@@ -57,7 +57,7 @@ class OpenAIClient:
             )
 
             response = await self.client.chat.completions.create(
-                model="gpt-4.1-mini",  # Using gpt-4.1-mini as specified in PRD
+                model="gpt-4.1",  # Using gpt-4.1 as specified in PRD
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
