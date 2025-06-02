@@ -27,7 +27,7 @@ class OpenAIClient:
             lon: Longitude coordinate
 
         Returns:
-            A short interesting fact about the location
+            A location name and an interesting fact about it
 
         Raises:
             Exception: If OpenAI API call fails
@@ -42,13 +42,16 @@ class OpenAIClient:
             )
 
             user_prompt = (
-                f"Расскажи один малоизвестный, но очень интересный факт о любом месте "
-                f"в радиусе 1 км от координат {lat},{lon}. "
-                "Факт должен быть: "
-                "1) Неочевидным и удивительным "
-                "2) Исторически достоверным "
-                "3) Связан с конкретным местом, зданием или событием "
-                "Ответ: 2-3 предложения, максимум 100 слов."
+                f"Для координат {lat},{lon} выполни два действия:\n"
+                "1. Определи ближайшее интересное место, здание или район в радиусе 1 км\n"
+                "2. Расскажи один малоизвестный, но очень интересный факт об этом месте\n\n"
+                "Формат ответа:\n"
+                "МЕСТО: [название места]\n"
+                "ФАКТ: [интересный факт]\n\n"
+                "Требования к факту:\n"
+                "- Неочевидный и удивительный\n"
+                "- Исторически достоверный\n"
+                "- 2-3 предложения, максимум 100 слов"
             )
 
             response = await self.client.chat.completions.create(
@@ -57,16 +60,16 @@ class OpenAIClient:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                max_tokens=200,  # Increased for Russian text
+                max_tokens=250,  # Increased for place name + fact
                 temperature=0.8,  # Slightly higher for more creative responses
             )
 
-            fact = response.choices[0].message.content
-            if not fact:
+            content = response.choices[0].message.content
+            if not content:
                 raise ValueError("Empty response from OpenAI")
 
             logger.info(f"Generated fact for location {lat},{lon}")
-            return fact.strip()
+            return content.strip()
 
         except Exception as e:
             logger.error(f"Failed to generate fact for {lat},{lon}: {e}")

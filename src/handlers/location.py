@@ -35,16 +35,24 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         # Get fact from OpenAI
         openai_client = get_openai_client()
-        fact = await openai_client.get_nearby_fact(lat, lon)
+        response = await openai_client.get_nearby_fact(lat, lon)
 
-        # Format the response with nice styling
-        formatted_response = (
-            "📍 *Интересный факт о вашем местоположении*\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"💡 {fact}\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "🔍 _Отправьте новую локацию для следующего факта_"
-        )
+        # Parse the response to extract place and fact
+        lines = response.split("\n")
+        place = "рядом с вами"
+        fact = response  # Default to full response if parsing fails
+
+        # Try to parse structured response
+        for i, line in enumerate(lines):
+            if line.startswith("МЕСТО:"):
+                place = line.replace("МЕСТО:", "").strip()
+            elif line.startswith("ФАКТ:"):
+                # Join all lines after ФАКТ: as the fact might be multiline
+                fact = "\n".join(lines[i:]).replace("ФАКТ:", "").strip()
+                break
+
+        # Format the response with simple styling
+        formatted_response = f"📍 *Место:* {place}\n\n" f"💡 *Факт:* {fact}"
 
         # Send the fact to user with Markdown formatting
         await update.message.reply_text(
@@ -62,7 +70,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         # Send error message to user
         error_response = (
-            "😔 *Упс! Что-то пошло не так*\n\n"
+            "😔 *Упс!*\n\n"
             "Не удалось найти интересную информацию о данном месте.\n"
             "Попробуйте отправить другую локацию!"
         )
