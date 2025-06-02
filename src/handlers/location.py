@@ -44,15 +44,22 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         # Try to parse structured response
         for i, line in enumerate(lines):
-            if line.startswith("МЕСТО:"):
-                place = line.replace("МЕСТО:", "").strip()
-            elif line.startswith("ФАКТ:"):
-                # Join all lines after ФАКТ: as the fact might be multiline
-                fact = "\n".join(lines[i:]).replace("ФАКТ:", "").strip()
+            if line.startswith("Локация:"):
+                place = line.replace("Локация:", "").strip()
+            elif line.startswith("Интересный факт:"):
+                # Join all lines after Интересный факт: as the fact might be multiline
+                fact_lines = []
+                # Start from the current line, removing the prefix
+                fact_lines.append(line.replace("Интересный факт:", "").strip())
+                # Add all subsequent lines
+                for j in range(i + 1, len(lines)):
+                    if lines[j].strip():  # Only add non-empty lines
+                        fact_lines.append(lines[j].strip())
+                fact = " ".join(fact_lines)
                 break
 
         # Format the response with simple styling
-        formatted_response = f"📍 *Место:* {place}\n\n" f"💡 *Факт:* {fact}"
+        formatted_response = f"📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
 
         # Send the fact to user with Markdown formatting
         await update.message.reply_text(

@@ -34,24 +34,26 @@ class OpenAIClient:
         """
         try:
             system_prompt = (
-                "Ты - профессиональный экскурсовод с научной степенью по истории. "
-                "Твоя специализация - рассказывать малоизвестные, но удивительные факты о местах. "
-                "Ты избегаешь банальностей и общеизвестной информации, фокусируясь на деталях, "
-                "которые заставят людей воскликнуть 'Невероятно, я не знал!'. "
-                "Все факты должны быть исторически точными и проверяемыми."
+                "You are a professional tour guide with deep knowledge of various locations around the world. "
+                "Your task is to provide an interesting and non-obvious fact about a toponym within 300 meters of the given location. "
+                "Imagine you are physically present at this location and have extensive knowledge of the area. "
+                "Do not invent or fabricate information. If you cannot think of a genuine interesting fact, "
+                "simply state the location and that you don't have any unusual facts about the immediate vicinity. "
+                "Your entire response should be in Russian language. "
+                "Remember, do not search the internet or use external resources. "
+                "Rely only on the knowledge you have been trained with."
             )
 
             user_prompt = (
-                f"Для координат {lat},{lon} выполни два действия:\n"
-                "1. Определи ближайшее интересное место, здание или район в радиусе 1 км\n"
-                "2. Расскажи один малоизвестный, но очень интересный факт об этом месте\n\n"
-                "Формат ответа:\n"
-                "МЕСТО: [название места]\n"
-                "ФАКТ: [интересный факт]\n\n"
-                "Требования к факту:\n"
-                "- Неочевидный и удивительный\n"
-                "- Исторически достоверный\n"
-                "- 2-3 предложения, максимум 100 слов"
+                f"Location coordinates: {lat}, {lon}\n\n"
+                "1. Identify any toponyms (named places, landmarks, streets, etc.) within approximately 300 meters of this location. "
+                "If there are no notable toponyms within 300 meters, state this fact.\n"
+                "2. Choose one of the identified toponyms (or the location itself if no nearby toponyms exist) "
+                "and think of an interesting, non-obvious fact about it. "
+                "This fact should be something that is not commonly known but is true and intriguing.\n\n"
+                "Provide your response in the following format:\n"
+                "Локация: [Name of the location or nearest identifiable place]\n"
+                "Интересный факт: [Your interesting fact about a nearby toponym or the location itself]"
             )
 
             response = await self.client.chat.completions.create(
@@ -60,8 +62,8 @@ class OpenAIClient:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                max_tokens=250,  # Increased for place name + fact
-                temperature=0.8,  # Slightly higher for more creative responses
+                max_tokens=300,  # Increased for detailed responses
+                temperature=0.7,  # Balanced for accuracy and creativity
             )
 
             content = response.choices[0].message.content

@@ -21,8 +21,8 @@ def test_get_nearby_fact_success(openai_client):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = (
-            "МЕСТО: Дом Пашкова\n"
-            "ФАКТ: В этом здании в 1920 году тайно встречались революционеры."
+            "Локация: Дом Пашкова\n"
+            "Интересный факт: В этом здании в 1920 году тайно встречались революционеры."
         )
 
         # Create async mock that returns the mock response
@@ -31,9 +31,9 @@ def test_get_nearby_fact_success(openai_client):
         with patch.object(openai_client.client.chat.completions, "create", mock_create):
             fact = await openai_client.get_nearby_fact(55.751244, 37.618423)
 
-            assert "МЕСТО: Дом Пашкова" in fact
+            assert "Локация: Дом Пашкова" in fact
             assert (
-                "ФАКТ: В этом здании в 1920 году тайно встречались революционеры."
+                "Интересный факт: В этом здании в 1920 году тайно встречались революционеры."
                 in fact
             )
 
@@ -77,7 +77,9 @@ def test_get_nearby_fact_prompt_format(openai_client):
     async def _test():
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "МЕСТО: Test\nФАКТ: Test fact"
+        mock_response.choices[
+            0
+        ].message.content = "Локация: Test\nИнтересный факт: Test fact"
 
         mock_create = AsyncMock(return_value=mock_response)
 
@@ -89,16 +91,17 @@ def test_get_nearby_fact_prompt_format(openai_client):
             call_args = mock_create.call_args
 
             assert call_args[1]["model"] == "gpt-4.1-mini"
-            assert call_args[1]["max_tokens"] == 250
-            assert call_args[1]["temperature"] == 0.8
+            assert call_args[1]["max_tokens"] == 300
+            assert call_args[1]["temperature"] == 0.7
 
             messages = call_args[1]["messages"]
             assert len(messages) == 2
             assert messages[0]["role"] == "system"
-            assert "профессиональный экскурсовод" in messages[0]["content"]
+            assert "professional tour guide" in messages[0]["content"]
+            assert "300 meters" in messages[0]["content"]
             assert messages[1]["role"] == "user"
-            assert "55.751244,37.618423" in messages[1]["content"]
-            assert "МЕСТО:" in messages[1]["content"]
-            assert "ФАКТ:" in messages[1]["content"]
+            assert "55.751244, 37.618423" in messages[1]["content"]
+            assert "Локация:" in messages[1]["content"]
+            assert "Интересный факт:" in messages[1]["content"]
 
     anyio.run(_test)
