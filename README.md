@@ -1,5 +1,7 @@
 # NearbyFactBot 🗺️
 
+[![CI/CD](https://github.com/shipaleks/test-tg-coordinate/actions/workflows/ci.yml/badge.svg)](https://github.com/shipaleks/test-tg-coordinate/actions/workflows/ci.yml)
+
 Telegram bot that provides interesting facts about places near your location using GPT-4.1-mini.
 
 ## Features
@@ -7,6 +9,9 @@ Telegram bot that provides interesting facts about places near your location usi
 - 📍 Send a location and get an interesting fact within 3 seconds
 - 🔴 Live location support (v1.1) - automatic facts every 10 minutes
 - 🤖 Powered by OpenAI GPT-4.1-mini
+- 🎓 Professional tour guide with deep knowledge of locations worldwide
+- 🇷🇺 Responds in Russian with culturally relevant and historically accurate facts
+- 🎯 Focuses on specific toponyms within 300 meters of your location
 
 ## Quick Start
 
