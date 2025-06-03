@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
-from .handlers.location import handle_location
+from .handlers.location import handle_location, handle_edited_location
 
 # Load environment variables from .env file
 load_dotenv()
@@ -40,47 +40,54 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logger.error(f"Exception while handling an update: {context.error}")
 
 
-def main() -> None:
-    """Main function to run the bot."""
-    logger.info("Starting NearbyFactBot...")
-
+def create_application() -> Application:
+    """Create and configure the Telegram bot application."""
     # Get bot token from environment
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
-    if not token:
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not bot_token:
         raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
 
     # Create application
-    application = Application.builder().token(token).build()
+    application = Application.builder().token(bot_token).build()
 
     # Add handlers
     application.add_handler(
         MessageHandler(filters.COMMAND & filters.Regex("^/start"), start_command)
     )
     application.add_handler(MessageHandler(filters.LOCATION, handle_location))
+    
+    # Add handler for live location updates (edited messages)
+    application.add_handler(
+        MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.LOCATION, handle_edited_location)
+    )
 
-    # Add error handler
-    application.add_error_handler(error_handler)
+    return application
 
-    # Get configuration
-    port = int(os.getenv("PORT", "8000"))
+
+async def main() -> None:
+    """Main function to run the bot."""
+    logger.info("Starting NearbyFactBot...")
+
+    application = create_application()
+
+    # Check if we should use webhook or polling
     webhook_url = os.getenv("WEBHOOK_URL")
+    port = int(os.getenv("PORT", "8000"))
 
     if webhook_url:
-        # Production mode with webhook
+        # Use webhook for production
         logger.info(f"Starting webhook on port {port}")
-        # Use synchronous run_webhook which handles event loop internally
-        application.run_webhook(
+        await application.run_webhook(
             listen="0.0.0.0",
             port=port,
             webhook_url=webhook_url,
-            url_path="webhook",
         )
     else:
-        # Development mode with polling
-        logger.info("Starting polling mode for development")
-        # Use synchronous run_polling which handles event loop internally
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
+        # Use polling for local development
+        logger.info("Starting polling mode")
+        await application.run_polling()
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())

@@ -1,0 +1,241 @@
+"""Live location tracking service for managing user location streams."""
+
+import asyncio
+import logging
+from typing import Dict, Optional, Tuple
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+
+from telegram import Bot
+
+from .openai_client import get_openai_client
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class LiveLocationData:
+    """Data structure for tracking live location sessions."""
+    user_id: int
+    chat_id: int
+    latitude: float
+    longitude: float
+    last_update: datetime
+    live_period: int
+    task: Optional[asyncio.Task] = None
+
+
+class LiveLocationTracker:
+    """Service for tracking and managing live location sessions."""
+
+    def __init__(self):
+        """Initialize the tracker."""
+        self._active_sessions: Dict[int, LiveLocationData] = {}
+        self._lock = asyncio.Lock()
+
+    async def start_live_location(
+        self,
+        user_id: int,
+        chat_id: int,
+        latitude: float,
+        longitude: float,
+        live_period: int,
+        bot: Bot,
+    ) -> None:
+        """Start tracking live location for a user.
+        
+        Args:
+            user_id: Telegram user ID
+            chat_id: Telegram chat ID
+            latitude: Initial latitude
+            longitude: Initial longitude
+            live_period: Live location period in seconds
+            bot: Telegram bot instance
+        """
+        async with self._lock:
+            # Stop existing session if any
+            await self._stop_session(user_id)
+            
+            # Create new session data
+            session_data = LiveLocationData(
+                user_id=user_id,
+                chat_id=chat_id,
+                latitude=latitude,
+                longitude=longitude,
+                last_update=datetime.now(),
+                live_period=live_period,
+            )
+            
+            # Start the fact sending task
+            task = asyncio.create_task(
+                self._fact_sending_loop(session_data, bot)
+            )
+            session_data.task = task
+            
+            # Store the session
+            self._active_sessions[user_id] = session_data
+            
+            logger.info(f"Started live location tracking for user {user_id} for {live_period}s")
+
+    async def update_live_location(
+        self,
+        user_id: int,
+        latitude: float,
+        longitude: float,
+    ) -> None:
+        """Update coordinates for an active live location session.
+        
+        Args:
+            user_id: Telegram user ID
+            latitude: New latitude
+            longitude: New longitude
+        """
+        async with self._lock:
+            if user_id in self._active_sessions:
+                session = self._active_sessions[user_id]
+                session.latitude = latitude
+                session.longitude = longitude
+                session.last_update = datetime.now()
+                
+                logger.info(f"Updated live location for user {user_id}: {latitude}, {longitude}")
+
+    async def stop_live_location(self, user_id: int) -> None:
+        """Stop live location tracking for a user.
+        
+        Args:
+            user_id: Telegram user ID
+        """
+        async with self._lock:
+            await self._stop_session(user_id)
+
+    async def _stop_session(self, user_id: int) -> None:
+        """Internal method to stop a session (called with lock held)."""
+        if user_id in self._active_sessions:
+            session = self._active_sessions[user_id]
+            if session.task and not session.task.done():
+                session.task.cancel()
+                try:
+                    await session.task
+                except asyncio.CancelledError:
+                    pass
+            
+            del self._active_sessions[user_id]
+            logger.info(f"Stopped live location tracking for user {user_id}")
+
+    async def _fact_sending_loop(self, session_data: LiveLocationData, bot: Bot) -> None:
+        """Background task that sends facts every 10 minutes.
+        
+        Args:
+            session_data: Live location session data
+            bot: Telegram bot instance
+        """
+        try:
+            # Wait 10 minutes before sending first fact (to avoid immediate fact after location share)
+            await asyncio.sleep(600)  # 10 minutes
+            
+            while True:
+                # Check if session is still active and not expired
+                current_time = datetime.now()
+                time_since_update = current_time - session_data.last_update
+                
+                # Stop if no updates for longer than live_period + 1 minute buffer
+                if time_since_update > timedelta(seconds=session_data.live_period + 60):
+                    logger.info(f"Live location expired for user {session_data.user_id}")
+                    break
+                
+                # Send fact at current coordinates
+                try:
+                    openai_client = get_openai_client()
+                    response = await openai_client.get_nearby_fact(
+                        session_data.latitude, session_data.longitude
+                    )
+                    
+                    # Parse the response to extract place and fact
+                    lines = response.split("\n")
+                    place = "рядом с вами"
+                    fact = response  # Default to full response if parsing fails
+
+                    # Try to parse structured response
+                    for i, line in enumerate(lines):
+                        if line.startswith("Локация:"):
+                            place = line.replace("Локация:", "").strip()
+                        elif line.startswith("Интересный факт:"):
+                            # Join all lines after Интересный факт: as the fact might be multiline
+                            fact_lines = []
+                            # Start from the current line, removing the prefix
+                            fact_lines.append(line.replace("Интересный факт:", "").strip())
+                            # Add all subsequent lines
+                            for j in range(i + 1, len(lines)):
+                                if lines[j].strip():  # Only add non-empty lines
+                                    fact_lines.append(lines[j].strip())
+                            fact = " ".join(fact_lines)
+                            break
+
+                    # Format the response with live location indicator
+                    formatted_response = (
+                        f"🔴 *Live Location Update*\n\n"
+                        f"📍 *Место:* {place}\n\n"
+                        f"💡 *Факт:* {fact}"
+                    )
+                    
+                    # Send the fact
+                    await bot.send_message(
+                        chat_id=session_data.chat_id,
+                        text=formatted_response,
+                        parse_mode="Markdown",
+                    )
+                    
+                    logger.info(f"Sent live location fact to user {session_data.user_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Error sending live location fact to user {session_data.user_id}: {e}")
+                    
+                    # Send error message
+                    error_response = (
+                        "🔴 *Live Location Update*\n\n"
+                        "😔 *Упс!*\n\n"
+                        "Не удалось найти интересную информацию о текущем месте."
+                    )
+                    
+                    try:
+                        await bot.send_message(
+                            chat_id=session_data.chat_id,
+                            text=error_response,
+                            parse_mode="Markdown",
+                        )
+                    except Exception as send_error:
+                        logger.error(f"Failed to send error message: {send_error}")
+                
+                # Wait another 10 minutes
+                await asyncio.sleep(600)
+                
+        except asyncio.CancelledError:
+            logger.info(f"Live location task cancelled for user {session_data.user_id}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in live location loop for user {session_data.user_id}: {e}")
+        finally:
+            # Clean up session when task ends
+            async with self._lock:
+                if session_data.user_id in self._active_sessions:
+                    del self._active_sessions[session_data.user_id]
+
+    def get_active_sessions_count(self) -> int:
+        """Get the number of active live location sessions."""
+        return len(self._active_sessions)
+
+    def is_user_tracking(self, user_id: int) -> bool:
+        """Check if a user has an active live location session."""
+        return user_id in self._active_sessions
+
+
+# Global tracker instance
+_live_location_tracker: Optional[LiveLocationTracker] = None
+
+
+def get_live_location_tracker() -> LiveLocationTracker:
+    """Get or create the global live location tracker instance."""
+    global _live_location_tracker
+    if _live_location_tracker is None:
+        _live_location_tracker = LiveLocationTracker()
+    return _live_location_tracker 
