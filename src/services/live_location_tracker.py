@@ -23,6 +23,7 @@ class LiveLocationData:
     last_update: datetime
     live_period: int
     fact_interval_minutes: int = 10  # Default 10 minutes
+    fact_count: int = 0  # Counter for facts sent
     task: Optional[asyncio.Task] = None
 
 
@@ -150,6 +151,9 @@ class LiveLocationTracker:
                 
                 # Send fact at current coordinates
                 try:
+                    # Increment fact counter
+                    session_data.fact_count += 1
+                    
                     openai_client = get_openai_client()
                     response = await openai_client.get_nearby_fact(
                         session_data.latitude, session_data.longitude
@@ -176,9 +180,9 @@ class LiveLocationTracker:
                             fact = " ".join(fact_lines)
                             break
 
-                    # Format the response with live location indicator
+                    # Format the response with live location indicator and fact number
                     formatted_response = (
-                        f"🔴 *Обновление локации*\n\n"
+                        f"🔴 *Факт #{session_data.fact_count}*\n\n"
                         f"📍 *Место:* {place}\n\n"
                         f"💡 *Факт:* {fact}"
                     )
@@ -190,14 +194,15 @@ class LiveLocationTracker:
                         parse_mode="Markdown",
                     )
                     
-                    logger.info(f"Sent live location fact to user {session_data.user_id}")
+                    logger.info(f"Sent live location fact #{session_data.fact_count} to user {session_data.user_id}")
                     
                 except Exception as e:
                     logger.error(f"Error sending live location fact to user {session_data.user_id}: {e}")
                     
-                    # Send error message
+                    # Send error message with fact number
+                    session_data.fact_count += 1
                     error_response = (
-                        "🔴 *Обновление локации*\n\n"
+                        f"🔴 *Факт #{session_data.fact_count}*\n\n"
                         "😔 *Упс!*\n\n"
                         "Не удалось найти интересную информацию о текущем месте."
                     )

@@ -206,8 +206,16 @@ async def handle_interval_callback(update: Update, context: ContextTypes.DEFAULT
                 fact = " ".join(fact_lines)
                 break
 
-        # Format the initial fact
-        initial_fact_response = f"🔴 *Начальный факт*\n\n📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
+        # Get the tracker to increment fact counter for initial fact
+        tracker = get_live_location_tracker()
+        if user_id in tracker._active_sessions:
+            tracker._active_sessions[user_id].fact_count += 1
+            fact_number = tracker._active_sessions[user_id].fact_count
+        else:
+            fact_number = 1  # Fallback
+
+        # Format the initial fact with number
+        initial_fact_response = f"🔴 *Факт #{fact_number}*\n\n📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
 
         # Send initial fact
         await context.bot.send_message(

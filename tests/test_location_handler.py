@@ -240,7 +240,7 @@ def test_handle_interval_callback_success(mock_callback_query, mock_context):
                 # Verify initial fact was sent
                 mock_context.bot.send_message.assert_called_once()
                 fact_call_args = mock_context.bot.send_message.call_args
-                assert "🔴 *Начальный факт*" in fact_call_args[1]["text"]
+                assert "🔴 *Факт #1*" in fact_call_args[1]["text"]
 
     anyio.run(_test)
 
