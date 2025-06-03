@@ -4,7 +4,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 
 from .handlers.location import handle_location, handle_edited_location, handle_interval_callback
@@ -23,34 +23,24 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Handle /start command."""
     welcome_text = (
         "🗺️ *Добро пожаловать в бот удивительных фактов!*\n\n"
-        "Я — ваш персональный гид по скрытым историям мест. "
-        "Отправьте мне локацию, и я расскажу малоизвестный, "
-        "но захватывающий факт о месте поблизости.\n\n"
-        "*📍 Обычная локация:*\n"
-        "• Нажмите кнопку ниже или скрепку 📎 → Location\n"
-        "• Получите мгновенный факт!\n\n"
+        "Отправьте локацию — получите интересный факт о месте поблизости.\n\n"
+        "*📍 Быстрая отправка:*\n"
+        "Нажмите кнопку ниже для отправки текущей геопозиции\n\n"
         "*🔴 Живая локация (для прогулок):*\n"
-        "• Нажмите кнопку → «Share Live Location»\n"
-        "• Установите время (15 мин - 8 часов)\n"
-        "• Выберите частоту фактов (5-60 минут)\n"
-        "• Получайте факты автоматически!\n\n"
-        "*Примеры использования:*\n"
-        "• Прогулка по историческому центру\n"
-        "• Поездка на автомобиле по новому маршруту\n"
-        "• Туристическая экскурсия\n"
-        "• Исследование незнакомого района\n\n"
+        "📎 → Location → Share Live Location\n"
+        "Автоматические факты каждые 5-60 минут во время движения\n\n"
         "_Каждый факт — это маленькое открытие!_ ✨"
     )
     
-    # Create location sharing keyboard
+    # Create simplified location sharing keyboard
     keyboard = [
         [KeyboardButton("📍 Поделиться локацией", request_location=True)],
-        [KeyboardButton("ℹ️ Информация"), KeyboardButton("❌ Убрать кнопки")]
+        [KeyboardButton("ℹ️ Подробная инструкция")]
     ]
     reply_markup = ReplyKeyboardMarkup(
         keyboard, 
         resize_keyboard=True, 
-        one_time_keyboard=False  # Keep keyboard visible for convenience
+        one_time_keyboard=False
     )
     
     await update.message.reply_text(
@@ -63,26 +53,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle info button press."""
     info_text = (
-        "ℹ️ *Как пользоваться ботом:*\n\n"
+        "ℹ️ *Подробная инструкция:*\n\n"
         "*Обычная локация:*\n"
-        "Нажмите «📍 Поделиться локацией» → «Отправить мою текущую геопозицию»\n\n"
-        "*Живая локация:*\n"
-        "Нажмите «📍 Поделиться локацией» → «Транслировать мою геопозицию»\n"
-        "Выберите время трансляции → настройте интервал фактов\n\n"
-        "*Команды:*\n"
-        "/start - перезапустить бота\n\n"
-        "_Бот работает только в личных чатах_"
+        "• Кнопка «📍 Поделиться локацией»\n"
+        "• Мгновенный факт о текущем месте\n\n"
+        "*Живая локация (прогулки по городу):*\n"
+        "• Скрепка 📎 → Location → Share Live Location\n"
+        "• Выберите время (15 мин - 8 часов)\n"
+        "• Настройте частоту фактов (5-60 минут)\n"
+        "• Получайте факты автоматически во время движения\n\n"
+        "*Зачем живая локация?*\n"
+        "Идеально для туристических прогулок — узнавайте о местах "
+        "автоматически, не отвлекаясь от экскурсии!"
     )
     
     await update.message.reply_text(info_text, parse_mode="Markdown")
-
-
-async def remove_keyboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle remove keyboard button."""
-    await update.message.reply_text(
-        "✅ Кнопки убраны.\n\nИспользуйте /start чтобы вернуть их.", 
-        reply_markup=ReplyKeyboardRemove()
-    )
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -109,10 +94,7 @@ def main() -> None:
     
     # Add text message handlers
     application.add_handler(
-        MessageHandler(filters.TEXT & filters.Regex("^ℹ️ Информация$"), info_command)
-    )
-    application.add_handler(
-        MessageHandler(filters.TEXT & filters.Regex("^❌ Убрать кнопки$"), remove_keyboard_command)
+        MessageHandler(filters.TEXT & filters.Regex("^ℹ️ Подробная инструкция$"), info_command)
     )
     
     # Add location handlers

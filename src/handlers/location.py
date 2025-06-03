@@ -15,7 +15,7 @@ def get_location_keyboard() -> ReplyKeyboardMarkup:
     """Get the location sharing keyboard."""
     keyboard = [
         [KeyboardButton("📍 Поделиться локацией", request_location=True)],
-        [KeyboardButton("ℹ️ Информация"), KeyboardButton("❌ Убрать кнопки")]
+        [KeyboardButton("ℹ️ Подробная инструкция")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 

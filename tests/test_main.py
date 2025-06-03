@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import anyio
 import pytest
-from src.main import start_command, info_command, remove_keyboard_command
+from src.main import start_command, info_command
 from telegram import Chat, Message, Update, User
 
 
@@ -40,7 +40,7 @@ def mock_context():
 
 
 def test_start_command(mock_update, mock_context):
-    """Test start command sends welcome message with location keyboard."""
+    """Test start command sends welcome message with simplified location keyboard."""
 
     async def _test():
         # Call start command
@@ -54,9 +54,9 @@ def test_start_command(mock_update, mock_context):
         text = call_args[0][0]  # First positional argument
         assert "🗺️" in text
         assert "Добро пожаловать" in text
-        assert "Обычная локация" in text
+        assert "Быстрая отправка" in text
         assert "Живая локация" in text
-        assert "Примеры использования" in text
+        assert "прогулок" in text
 
         # Check that markdown is used
         assert call_args[1]["parse_mode"] == "Markdown"
@@ -73,24 +73,22 @@ def test_start_command(mock_update, mock_context):
         keyboard = reply_markup.keyboard
         assert len(keyboard) == 2  # Two rows
         assert len(keyboard[0]) == 1  # First row has 1 button (location)
-        assert len(keyboard[1]) == 2  # Second row has 2 buttons (info, remove)
+        assert len(keyboard[1]) == 1  # Second row has 1 button (info)
         
         # Check location button
         location_button = keyboard[0][0]
         assert location_button.text == "📍 Поделиться локацией"
         assert location_button.request_location is True
         
-        # Check other buttons
+        # Check info button
         info_button = keyboard[1][0]
-        remove_button = keyboard[1][1]
-        assert info_button.text == "ℹ️ Информация"
-        assert remove_button.text == "❌ Убрать кнопки"
+        assert info_button.text == "ℹ️ Подробная инструкция"
 
     anyio.run(_test)
 
 
 def test_info_command(mock_update, mock_context):
-    """Test info command sends help information."""
+    """Test info command sends detailed help information."""
 
     async def _test():
         # Call info command
@@ -102,39 +100,14 @@ def test_info_command(mock_update, mock_context):
 
         # Check that info text contains key information
         text = call_args[0][0]  # First positional argument
-        assert "ℹ️ *Как пользоваться ботом:*" in text
+        assert "ℹ️ *Подробная инструкция:*" in text
         assert "Обычная локация" in text
         assert "Живая локация" in text
-        assert "/start" in text
-        assert "личных чатах" in text
+        assert "прогулки по городу" in text
+        assert "Share Live Location" in text
+        assert "туристических прогулок" in text
 
         # Check that markdown is used
         assert call_args[1]["parse_mode"] == "Markdown"
-
-    anyio.run(_test)
-
-
-def test_remove_keyboard_command(mock_update, mock_context):
-    """Test remove keyboard command removes the keyboard."""
-
-    async def _test():
-        # Call remove keyboard command
-        await remove_keyboard_command(mock_update, mock_context)
-
-        # Verify reply was sent
-        mock_update.message.reply_text.assert_called_once()
-        call_args = mock_update.message.reply_text.call_args
-
-        # Check that confirmation text is sent
-        text = call_args[0][0]  # First positional argument
-        assert "✅ Кнопки убраны" in text
-        assert "/start" in text
-
-        # Check that ReplyKeyboardRemove is used
-        assert "reply_markup" in call_args[1]
-        reply_markup = call_args[1]["reply_markup"]
-        # Should be ReplyKeyboardRemove instance
-        assert hasattr(reply_markup, 'remove_keyboard')
-        assert reply_markup.remove_keyboard is True
 
     anyio.run(_test) 
