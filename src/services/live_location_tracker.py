@@ -22,6 +22,7 @@ class LiveLocationData:
     longitude: float
     last_update: datetime
     live_period: int
+    fact_interval_minutes: int = 10  # Default 10 minutes
     task: Optional[asyncio.Task] = None
 
 
@@ -41,6 +42,7 @@ class LiveLocationTracker:
         longitude: float,
         live_period: int,
         bot: Bot,
+        fact_interval_minutes: int = 10,
     ) -> None:
         """Start tracking live location for a user.
         
@@ -51,6 +53,7 @@ class LiveLocationTracker:
             longitude: Initial longitude
             live_period: Live location period in seconds
             bot: Telegram bot instance
+            fact_interval_minutes: How often to send facts (in minutes)
         """
         async with self._lock:
             # Stop existing session if any
@@ -64,6 +67,7 @@ class LiveLocationTracker:
                 longitude=longitude,
                 last_update=datetime.now(),
                 live_period=live_period,
+                fact_interval_minutes=fact_interval_minutes,
             )
             
             # Start the fact sending task
@@ -75,7 +79,7 @@ class LiveLocationTracker:
             # Store the session
             self._active_sessions[user_id] = session_data
             
-            logger.info(f"Started live location tracking for user {user_id} for {live_period}s")
+            logger.info(f"Started live location tracking for user {user_id} for {live_period}s, facts every {fact_interval_minutes} min")
 
     async def update_live_location(
         self,
@@ -123,15 +127,16 @@ class LiveLocationTracker:
             logger.info(f"Stopped live location tracking for user {user_id}")
 
     async def _fact_sending_loop(self, session_data: LiveLocationData, bot: Bot) -> None:
-        """Background task that sends facts every 10 minutes.
+        """Background task that sends facts at custom intervals.
         
         Args:
             session_data: Live location session data
             bot: Telegram bot instance
         """
         try:
-            # Wait 10 minutes before sending first fact (to avoid immediate fact after location share)
-            await asyncio.sleep(600)  # 10 minutes
+            # Wait for the specified interval before sending first fact
+            interval_seconds = session_data.fact_interval_minutes * 60
+            await asyncio.sleep(interval_seconds)
             
             while True:
                 # Check if session is still active and not expired
@@ -173,7 +178,7 @@ class LiveLocationTracker:
 
                     # Format the response with live location indicator
                     formatted_response = (
-                        f"🔴 *Live Location Update*\n\n"
+                        f"🔴 *Обновление локации*\n\n"
                         f"📍 *Место:* {place}\n\n"
                         f"💡 *Факт:* {fact}"
                     )
@@ -192,7 +197,7 @@ class LiveLocationTracker:
                     
                     # Send error message
                     error_response = (
-                        "🔴 *Live Location Update*\n\n"
+                        "🔴 *Обновление локации*\n\n"
                         "😔 *Упс!*\n\n"
                         "Не удалось найти интересную информацию о текущем месте."
                     )
@@ -206,8 +211,8 @@ class LiveLocationTracker:
                     except Exception as send_error:
                         logger.error(f"Failed to send error message: {send_error}")
                 
-                # Wait another 10 minutes
-                await asyncio.sleep(600)
+                # Wait for the next interval
+                await asyncio.sleep(interval_seconds)
                 
         except asyncio.CancelledError:
             logger.info(f"Live location task cancelled for user {session_data.user_id}")

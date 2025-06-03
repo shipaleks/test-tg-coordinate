@@ -5,9 +5,9 @@ import os
 
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import Application, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 
-from .handlers.location import handle_location, handle_edited_location
+from .handlers.location import handle_location, handle_edited_location, handle_interval_callback
 
 # Load environment variables from .env file
 load_dotenv()
@@ -26,11 +26,23 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "Я — ваш персональный гид по скрытым историям мест. "
         "Отправьте мне локацию, и я расскажу малоизвестный, "
         "но захватывающий факт о месте поблизости.\n\n"
-        "*Как пользоваться:*\n"
+        "*📍 Обычная локация:*\n"
         "1️⃣ Нажмите на скрепку 📎\n"
         "2️⃣ Выберите «Location» 📍\n"
-        "3️⃣ Отправьте свою геопозицию\n\n"
-        "_Каждый факт — это маленькое открытие!_"
+        "3️⃣ Отправьте свою геопозицию\n"
+        "4️⃣ Получите мгновенный факт!\n\n"
+        "*🔴 Живая локация (для прогулок):*\n"
+        "1️⃣ Скрепка 📎 → «Location» 📍\n"
+        "2️⃣ Выберите «Share Live Location»\n"
+        "3️⃣ Установите время (15 мин - 8 часов)\n"
+        "4️⃣ Выберите частоту фактов (5-60 минут)\n"
+        "5️⃣ Получайте факты автоматически!\n\n"
+        "*Примеры использования:*\n"
+        "• Прогулка по историческому центру\n"
+        "• Поездка на автомобиле по новому маршруту\n"
+        "• Туристическая экскурсия\n"
+        "• Исследование незнакомого района\n\n"
+        "_Каждый факт — это маленькое открытие!_ ✨"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
@@ -61,6 +73,11 @@ def main() -> None:
     # Add handler for live location updates (edited messages)
     application.add_handler(
         MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.LOCATION, handle_edited_location)
+    )
+    
+    # Add callback query handler for interval selection
+    application.add_handler(
+        CallbackQueryHandler(handle_interval_callback, pattern="^interval_")
     )
     
     # Add error handler

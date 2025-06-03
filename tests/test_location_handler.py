@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import anyio
 import pytest
-from src.handlers.location import handle_location, handle_edited_location
-from telegram import Chat, Location, Message, Update, User
+from src.handlers.location import handle_location, handle_edited_location, handle_interval_callback
+from telegram import Chat, Location, Message, Update, User, CallbackQuery
 
 
 @pytest.fixture
@@ -73,6 +73,28 @@ def mock_live_update():
 
 
 @pytest.fixture
+def mock_callback_query():
+    """Create a mock callback query for interval selection."""
+    user = MagicMock(spec=User)
+    user.id = 123456
+
+    chat = MagicMock(spec=Chat)
+    chat.id = 123456
+
+    query = MagicMock(spec=CallbackQuery)
+    query.data = "interval_10_55.751244_37.618423_3600"
+    query.answer = AsyncMock()
+    query.edit_message_text = AsyncMock()
+
+    update = MagicMock(spec=Update)
+    update.callback_query = query
+    update.effective_user = user
+    update.effective_chat = chat
+
+    return update
+
+
+@pytest.fixture
 def mock_edited_update():
     """Create a mock update with edited location data."""
     # Create mock user
@@ -108,6 +130,7 @@ def mock_context():
     context = MagicMock()
     context.bot = MagicMock()
     context.bot.send_chat_action = AsyncMock()
+    context.bot.send_message = AsyncMock()
     return context
 
 
@@ -150,8 +173,31 @@ def test_handle_location_static_success(mock_update, mock_context):
     anyio.run(_test)
 
 
-def test_handle_location_live_success(mock_live_update, mock_context):
-    """Test successful live location handling."""
+def test_handle_location_live_shows_interval_selection(mock_live_update, mock_context):
+    """Test that live location shows interval selection buttons."""
+
+    async def _test():
+        # Call handler
+        await handle_location(mock_live_update, mock_context)
+
+        # Verify interval selection message was sent
+        mock_live_update.message.reply_text.assert_called_once()
+        call_args = mock_live_update.message.reply_text.call_args
+        
+        # Check that interval selection message contains Russian text
+        assert "🔴 *Живая локация получена!*" in call_args[1]["text"]
+        assert "60 минут" in call_args[1]["text"]  # 3600 seconds = 60 minutes
+        assert "Как часто присылать интересные факты?" in call_args[1]["text"]
+        
+        # Check that reply_markup (keyboard) is present
+        assert "reply_markup" in call_args[1]
+        assert call_args[1]["parse_mode"] == "Markdown"
+
+    anyio.run(_test)
+
+
+def test_handle_interval_callback_success(mock_callback_query, mock_context):
+    """Test successful interval callback handling."""
 
     async def _test():
         with patch("src.handlers.location.get_openai_client") as mock_get_client:
@@ -169,9 +215,12 @@ def test_handle_location_live_success(mock_live_update, mock_context):
                 mock_get_tracker.return_value = mock_tracker
 
                 # Call handler
-                await handle_location(mock_live_update, mock_context)
+                await handle_interval_callback(mock_callback_query, mock_context)
 
-                # Verify live location was started
+                # Verify callback was answered
+                mock_callback_query.callback_query.answer.assert_called_once()
+
+                # Verify live location was started with correct interval
                 mock_tracker.start_live_location.assert_called_once_with(
                     user_id=123456,
                     chat_id=123456,
@@ -179,20 +228,19 @@ def test_handle_location_live_success(mock_live_update, mock_context):
                     longitude=37.618423,
                     live_period=3600,
                     bot=mock_context.bot,
+                    fact_interval_minutes=10,
                 )
 
-                # Verify two replies were sent (confirmation + initial fact)
-                assert mock_live_update.message.reply_text.call_count == 2
+                # Verify confirmation message was sent (Russian)
+                mock_callback_query.callback_query.edit_message_text.assert_called_once()
+                edit_call_args = mock_callback_query.callback_query.edit_message_text.call_args
+                assert "🔴 *Живая локация активирована!*" in edit_call_args[1]["text"]
+                assert "10 минут" in edit_call_args[1]["text"]
 
-                # Check confirmation message
-                first_call = mock_live_update.message.reply_text.call_args_list[0]
-                assert "🔴 *Live Location Started*" in first_call[1]["text"]
-                assert "60 minutes" in first_call[1]["text"]  # 3600 seconds = 60 minutes
-
-                # Check initial fact message
-                second_call = mock_live_update.message.reply_text.call_args_list[1]
-                assert "🔴 *Initial Fact*" in second_call[1]["text"]
-                assert "📍 *Место:* Красная площадь" in second_call[1]["text"]
+                # Verify initial fact was sent
+                mock_context.bot.send_message.assert_called_once()
+                fact_call_args = mock_context.bot.send_message.call_args
+                assert "🔴 *Начальный факт*" in fact_call_args[1]["text"]
 
     anyio.run(_test)
 

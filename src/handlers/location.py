@@ -2,7 +2,7 @@
 
 import logging
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from ..services.openai_client import get_openai_client
@@ -38,35 +38,37 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         # Check if this is a live location
         if location.live_period:
-            # This is a live location - start tracking
-            tracker = get_live_location_tracker()
+            # This is a live location - show interval selection
+            keyboard = [
+                [
+                    InlineKeyboardButton("Каждые 5 минут", callback_data=f"interval_5_{lat}_{lon}_{location.live_period}"),
+                    InlineKeyboardButton("Каждые 10 минут", callback_data=f"interval_10_{lat}_{lon}_{location.live_period}")
+                ],
+                [
+                    InlineKeyboardButton("Каждые 30 минут", callback_data=f"interval_30_{lat}_{lon}_{location.live_period}"),
+                    InlineKeyboardButton("Каждые 60 минут", callback_data=f"interval_60_{lat}_{lon}_{location.live_period}")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
             
-            await tracker.start_live_location(
-                user_id=user_id,
-                chat_id=chat_id,
-                latitude=lat,
-                longitude=lon,
-                live_period=location.live_period,
-                bot=context.bot,
-            )
-            
-            # Send confirmation message
-            confirmation_response = (
-                "🔴 *Live Location Started*\n\n"
-                f"📍 Tracking your location for {location.live_period // 60} minutes\n"
-                "💡 I'll send you interesting facts every 10 minutes!\n\n"
-                "Stop sharing your location to end the session."
+            # Send interval selection message
+            interval_response = (
+                "🔴 *Живая локация получена!*\n\n"
+                f"📍 Отслеживание на {location.live_period // 60} минут\n\n"
+                "Как часто присылать интересные факты?"
             )
             
             await update.message.reply_text(
-                text=confirmation_response,
+                text=interval_response,
+                reply_markup=reply_markup,
                 reply_to_message_id=update.message.message_id,
                 parse_mode="Markdown",
             )
             
-            logger.info(f"Started live location tracking for user {user_id} for {location.live_period}s")
+            logger.info(f"Sent interval selection for live location from user {user_id}")
+            return  # Don't send initial fact yet, wait for interval selection
         
-        # For both static and live locations, send immediate fact
+        # For static locations, send immediate fact
         # Get fact from OpenAI
         openai_client = get_openai_client()
         response = await openai_client.get_nearby_fact(lat, lon)
@@ -92,11 +94,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 fact = " ".join(fact_lines)
                 break
 
-        # Format the response with appropriate indicator
-        if location.live_period:
-            formatted_response = f"🔴 *Initial Fact*\n\n📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
-        else:
-            formatted_response = f"📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
+        # Format the response for static location
+        formatted_response = f"📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
 
         # Send the fact to user with Markdown formatting
         await update.message.reply_text(
@@ -123,6 +122,98 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             text=error_response,
             reply_to_message_id=update.message.message_id,
             parse_mode="Markdown",
+        )
+
+
+async def handle_interval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle interval selection for live location.
+
+    Args:
+        update: Telegram update containing callback query
+        context: Bot context
+    """
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        # Parse callback data: interval_<minutes>_<lat>_<lon>_<live_period>
+        data_parts = query.data.split('_')
+        interval_minutes = int(data_parts[1])
+        lat = float(data_parts[2])
+        lon = float(data_parts[3])
+        live_period = int(data_parts[4])
+        
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        
+        # Start live location tracking with selected interval
+        tracker = get_live_location_tracker()
+        await tracker.start_live_location(
+            user_id=user_id,
+            chat_id=chat_id,
+            latitude=lat,
+            longitude=lon,
+            live_period=live_period,
+            bot=context.bot,
+            fact_interval_minutes=interval_minutes,
+        )
+        
+        # Update the message to show confirmation
+        confirmation_text = (
+            "🔴 *Живая локация активирована!*\n\n"
+            f"📍 Отслеживание: {live_period // 60} минут\n"
+            f"⏰ Факты каждые: {interval_minutes} минут\n\n"
+            "🚀 Сейчас пришлю первый факт, затем буду присылать автоматически!\n\n"
+            "Остановите sharing чтобы завершить сессию."
+        )
+        
+        await query.edit_message_text(
+            text=confirmation_text,
+            parse_mode="Markdown"
+        )
+        
+        # Send initial fact immediately
+        openai_client = get_openai_client()
+        response = await openai_client.get_nearby_fact(lat, lon)
+
+        # Parse the response to extract place and fact
+        lines = response.split("\n")
+        place = "рядом с вами"
+        fact = response  # Default to full response if parsing fails
+
+        # Try to parse structured response
+        for i, line in enumerate(lines):
+            if line.startswith("Локация:"):
+                place = line.replace("Локация:", "").strip()
+            elif line.startswith("Интересный факт:"):
+                # Join all lines after Интересный факт: as the fact might be multiline
+                fact_lines = []
+                # Start from the current line, removing the prefix
+                fact_lines.append(line.replace("Интересный факт:", "").strip())
+                # Add all subsequent lines
+                for j in range(i + 1, len(lines)):
+                    if lines[j].strip():  # Only add non-empty lines
+                        fact_lines.append(lines[j].strip())
+                fact = " ".join(fact_lines)
+                break
+
+        # Format the initial fact
+        initial_fact_response = f"🔴 *Начальный факт*\n\n📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
+
+        # Send initial fact
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=initial_fact_response,
+            parse_mode="Markdown",
+        )
+        
+        logger.info(f"Started live location tracking for user {user_id} with {interval_minutes} min interval")
+        
+    except Exception as e:
+        logger.error(f"Error handling interval callback: {e}")
+        await query.edit_message_text(
+            text="😔 Произошла ошибка при настройке живой локации. Попробуйте еще раз.",
+            parse_mode="Markdown"
         )
 
 
@@ -175,8 +266,8 @@ async def handle_stop_live_location(update: Update, context: ContextTypes.DEFAUL
             
             # Send confirmation message
             stop_response = (
-                "✅ *Live Location Stopped*\n\n"
-                "Location sharing has ended. Thank you for using NearbyFactBot!"
+                "✅ *Живая локация остановлена*\n\n"
+                "Спасибо что пользуетесь NearbyFactBot! 🗺️✨"
             )
             
             await context.bot.send_message(
