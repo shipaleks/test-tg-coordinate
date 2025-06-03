@@ -2,13 +2,22 @@
 
 import logging
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
 
 from ..services.openai_client import get_openai_client
 from ..services.live_location_tracker import get_live_location_tracker
 
 logger = logging.getLogger(__name__)
+
+
+def get_location_keyboard() -> ReplyKeyboardMarkup:
+    """Get the location sharing keyboard."""
+    keyboard = [
+        [KeyboardButton("📍 Поделиться локацией", request_location=True)],
+        [KeyboardButton("ℹ️ Информация"), KeyboardButton("❌ Убрать кнопки")]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

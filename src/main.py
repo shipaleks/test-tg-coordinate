@@ -4,7 +4,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import Application, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 
 from .handlers.location import handle_location, handle_edited_location, handle_interval_callback
@@ -27,16 +27,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "Отправьте мне локацию, и я расскажу малоизвестный, "
         "но захватывающий факт о месте поблизости.\n\n"
         "*📍 Обычная локация:*\n"
-        "1️⃣ Нажмите на скрепку 📎\n"
-        "2️⃣ Выберите «Location» 📍\n"
-        "3️⃣ Отправьте свою геопозицию\n"
-        "4️⃣ Получите мгновенный факт!\n\n"
+        "• Нажмите кнопку ниже или скрепку 📎 → Location\n"
+        "• Получите мгновенный факт!\n\n"
         "*🔴 Живая локация (для прогулок):*\n"
-        "1️⃣ Скрепка 📎 → «Location» 📍\n"
-        "2️⃣ Выберите «Share Live Location»\n"
-        "3️⃣ Установите время (15 мин - 8 часов)\n"
-        "4️⃣ Выберите частоту фактов (5-60 минут)\n"
-        "5️⃣ Получайте факты автоматически!\n\n"
+        "• Нажмите кнопку → «Share Live Location»\n"
+        "• Установите время (15 мин - 8 часов)\n"
+        "• Выберите частоту фактов (5-60 минут)\n"
+        "• Получайте факты автоматически!\n\n"
         "*Примеры использования:*\n"
         "• Прогулка по историческому центру\n"
         "• Поездка на автомобиле по новому маршруту\n"
@@ -44,7 +41,48 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "• Исследование незнакомого района\n\n"
         "_Каждый факт — это маленькое открытие!_ ✨"
     )
-    await update.message.reply_text(welcome_text, parse_mode="Markdown")
+    
+    # Create location sharing keyboard
+    keyboard = [
+        [KeyboardButton("📍 Поделиться локацией", request_location=True)],
+        [KeyboardButton("ℹ️ Информация"), KeyboardButton("❌ Убрать кнопки")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(
+        keyboard, 
+        resize_keyboard=True, 
+        one_time_keyboard=False  # Keep keyboard visible for convenience
+    )
+    
+    await update.message.reply_text(
+        welcome_text, 
+        parse_mode="Markdown", 
+        reply_markup=reply_markup
+    )
+
+
+async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle info button press."""
+    info_text = (
+        "ℹ️ *Как пользоваться ботом:*\n\n"
+        "*Обычная локация:*\n"
+        "Нажмите «📍 Поделиться локацией» → «Отправить мою текущую геопозицию»\n\n"
+        "*Живая локация:*\n"
+        "Нажмите «📍 Поделиться локацией» → «Транслировать мою геопозицию»\n"
+        "Выберите время трансляции → настройте интервал фактов\n\n"
+        "*Команды:*\n"
+        "/start - перезапустить бота\n\n"
+        "_Бот работает только в личных чатах_"
+    )
+    
+    await update.message.reply_text(info_text, parse_mode="Markdown")
+
+
+async def remove_keyboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle remove keyboard button."""
+    await update.message.reply_text(
+        "✅ Кнопки убраны.\n\nИспользуйте /start чтобы вернуть их.", 
+        reply_markup=ReplyKeyboardRemove()
+    )
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -64,10 +102,20 @@ def main() -> None:
     # Create application
     application = Application.builder().token(bot_token).build()
 
-    # Add handlers
+    # Add command handlers
     application.add_handler(
         MessageHandler(filters.COMMAND & filters.Regex("^/start"), start_command)
     )
+    
+    # Add text message handlers
+    application.add_handler(
+        MessageHandler(filters.TEXT & filters.Regex("^ℹ️ Информация$"), info_command)
+    )
+    application.add_handler(
+        MessageHandler(filters.TEXT & filters.Regex("^❌ Убрать кнопки$"), remove_keyboard_command)
+    )
+    
+    # Add location handlers
     application.add_handler(MessageHandler(filters.LOCATION, handle_location))
     
     # Add handler for live location updates (edited messages)
