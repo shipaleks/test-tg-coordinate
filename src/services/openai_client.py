@@ -778,25 +778,25 @@ class OpenAIClient:
         images = await self.get_wikipedia_images(search_keywords, max_images=1)
         return images[0] if images else None
 
-    async def get_nearby_fact_with_history(self, lat: float, lon: float, search_keywords: str | None = None) -> str:
+    async def get_nearby_fact_with_history(self, lat: float, lon: float, cache_key: str | None = None) -> str:
         """Get fact for static location with history tracking to avoid repetition.
         
         Args:
             lat: Latitude coordinate
             lon: Longitude coordinate  
-            search_keywords: Search keywords for the location (for history tracking)
+            cache_key: Cache key for the location (coordinates or search keywords)
             
         Returns:
             A location name and an interesting fact about it
         """
-        # Get previous facts for this location if we have search keywords
+        # Get previous facts for this location if we have a cache key
         previous_facts = []
-        if search_keywords:
-            previous_facts = self.static_history.get_previous_facts(search_keywords)
+        if cache_key:
+            previous_facts = self.static_history.get_previous_facts(cache_key)
             if previous_facts:
-                logger.info(f"Found {len(previous_facts)} previous facts for {search_keywords}: {previous_facts}")
+                logger.info(f"Found {len(previous_facts)} previous facts for {cache_key}: {previous_facts}")
             else:
-                logger.info(f"No previous facts found for {search_keywords}")
+                logger.info(f"No previous facts found for {cache_key}")
         
         # Get fact using existing method but with previous facts
         logger.info(f"Calling get_nearby_fact with {len(previous_facts)} previous facts")
@@ -805,7 +805,7 @@ class OpenAIClient:
         fact_response = await self.get_nearby_fact(lat, lon, is_live_location=False, previous_facts=previous_facts)
         
         # Parse the response to extract place and fact for history
-        if search_keywords:
+        if cache_key:
             lines = fact_response.split("\n")
             place = "рядом с вами"
             fact = fact_response
@@ -825,8 +825,8 @@ class OpenAIClient:
                     break
             
             # Add to history
-            logger.info(f"Adding fact to history for {search_keywords}: {place}")
-            self.static_history.add_fact(search_keywords, place, fact)
+            logger.info(f"Adding fact to history for {cache_key}: {place}")
+            self.static_history.add_fact(cache_key, place, fact)
             
             # Log cache stats after adding
             stats = self.static_history.get_cache_stats()

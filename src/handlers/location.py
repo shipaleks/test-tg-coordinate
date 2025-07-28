@@ -241,18 +241,13 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # First, get a basic fact to extract search keywords
         response = await openai_client.get_nearby_fact(lat, lon, is_live_location=False)
         
-        # Try to extract search keywords for history
-        search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
-        search_keywords = search_match.group(1).strip() if search_match else None
+        # Use coordinates as stable cache key instead of unreliable AI-generated keywords
+        # Round coordinates to ~100m precision for caching
+        cache_key = f"{round(lat, 4)}_{round(lon, 4)}"
+        logger.info(f"Static location - using coordinate-based cache key: '{cache_key}'")
         
-        logger.info(f"Static location - search keywords extracted: '{search_keywords}'")
-        
-        # Now get fact with history if we have search keywords
-        if search_keywords:
-            logger.info(f"Getting fact with history for keywords: {search_keywords}")
-            response = await openai_client.get_nearby_fact_with_history(lat, lon, search_keywords)
-        else:
-            logger.warning("No search keywords found, fact will not be tracked in history")
+        # Get fact with history using coordinate key
+        response = await openai_client.get_nearby_fact_with_history(lat, lon, cache_key)
         
         # Parse the response to extract place and fact
         logger.info(f"Final response for static location: {response[:100]}...")
@@ -279,13 +274,17 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Format the response for static location
         formatted_response = f"📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
 
-        # Send fact with images using search keywords
-        if search_keywords:
+        # Extract search keywords from final response for images
+        search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
+        final_search_keywords = search_match.group(1).strip() if search_match else None
+        
+        # Send fact with images using extracted search keywords
+        if final_search_keywords:
             await send_fact_with_images(
                 context.bot, 
                 chat_id, 
                 formatted_response, 
-                search_keywords, 
+                final_search_keywords, 
                 place, 
                 reply_to_message_id=update.message.message_id
             )
