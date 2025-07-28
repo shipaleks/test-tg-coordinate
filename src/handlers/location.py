@@ -238,12 +238,9 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # For static locations, send immediate fact with history tracking
         openai_client = get_openai_client()
         
-        # First, get a basic fact to extract search keywords
-        response = await openai_client.get_nearby_fact(lat, lon, is_live_location=False)
-        
         # Use coordinates as stable cache key instead of unreliable AI-generated keywords
-        # Round coordinates to ~100m precision for caching
-        cache_key = f"{round(lat, 4)}_{round(lon, 4)}"
+        # Round coordinates to ~111m precision for caching (3 decimal places)
+        cache_key = f"{round(lat, 3)}_{round(lon, 3)}"
         logger.info(f"Static location - using coordinate-based cache key: '{cache_key}'")
         
         # Get fact with history using coordinate key

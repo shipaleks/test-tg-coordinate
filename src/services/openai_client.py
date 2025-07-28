@@ -289,6 +289,11 @@ class OpenAIClient:
             else:
                 # Use gpt-4.1 for static location (fast, concise facts)
                 try:
+                    # Log prompt if we have previous facts
+                    if previous_facts:
+                        logger.info(f"Sending prompt to GPT-4.1 with {len(previous_facts)} previous facts")
+                        logger.debug(f"User prompt preview: {user_prompt[:200]}...")
+                    
                     response = await self.client.chat.completions.create(
                         model="gpt-4.1",
                         messages=[
