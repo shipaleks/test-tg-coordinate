@@ -39,12 +39,12 @@ async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "💝 *Любая поддержка добровольна и очень ценится!*"
     )
     
-    # Create donation buttons
+    # Create donation buttons with increased amounts
     keyboard = [
         [
-            InlineKeyboardButton("10⭐", callback_data="donate_10"),
-            InlineKeyboardButton("50⭐", callback_data="donate_50"),
             InlineKeyboardButton("100⭐", callback_data="donate_100"),
+            InlineKeyboardButton("250⭐", callback_data="donate_250"),
+            InlineKeyboardButton("500⭐", callback_data="donate_500"),
         ],
         [
             InlineKeyboardButton("💰 Другая сумма", callback_data="donate_custom"),
@@ -77,12 +77,12 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
         if amount_str == "custom":
             custom_keyboard = [
                 [
-                    InlineKeyboardButton("25⭐", callback_data="donate_25"),
-                    InlineKeyboardButton("75⭐", callback_data="donate_75"),
+                    InlineKeyboardButton("50⭐", callback_data="donate_50"),
+                    InlineKeyboardButton("150⭐", callback_data="donate_150"),
                 ],
                 [
-                    InlineKeyboardButton("200⭐", callback_data="donate_200"),
-                    InlineKeyboardButton("500⭐", callback_data="donate_500"),
+                    InlineKeyboardButton("1000⭐", callback_data="donate_1000"),
+                    InlineKeyboardButton("2000⭐", callback_data="donate_2000"),
                 ],
                 [
                     InlineKeyboardButton("← Назад", callback_data="donate_back"),
@@ -124,9 +124,9 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
             # Create donation buttons
             keyboard = [
                 [
-                    InlineKeyboardButton("10⭐", callback_data="donate_10"),
-                    InlineKeyboardButton("50⭐", callback_data="donate_50"),
                     InlineKeyboardButton("100⭐", callback_data="donate_100"),
+                    InlineKeyboardButton("250⭐", callback_data="donate_250"),
+                    InlineKeyboardButton("500⭐", callback_data="donate_500"),
                 ],
                 [
                     InlineKeyboardButton("💰 Другая сумма", callback_data="donate_custom"),
