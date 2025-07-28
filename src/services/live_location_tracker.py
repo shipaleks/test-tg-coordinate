@@ -317,27 +317,51 @@ class LiveLocationTracker:
                     )
 
                     # Parse the response to extract place and fact
-                    lines = response.split("\n")
-                    place = "рядом с вами"
+                    place = "рядом с вами"  # Default location
                     fact = response  # Default to full response if parsing fails
+                    search_keywords = ""
 
-                    # Try to parse structured response
-                    for i, line in enumerate(lines):
-                        if line.startswith("Локация:"):
-                            place = line.replace("Локация:", "").strip()
-                        elif line.startswith("Интересный факт:"):
-                            # Join all lines after Интересный факт: as the fact might be multiline
-                            fact_lines = []
-                            # Start from the current line, removing the prefix
-                            fact_lines.append(
-                                line.replace("Интересный факт:", "").strip()
-                            )
-                            # Add all subsequent lines
-                            for j in range(i + 1, len(lines)):
-                                if lines[j].strip():  # Only add non-empty lines
-                                    fact_lines.append(lines[j].strip())
-                            fact = " ".join(fact_lines)
-                            break
+                    # Try to parse structured response from <answer> tags first
+                    answer_match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
+                    if answer_match:
+                        answer_content = answer_match.group(1).strip()
+                        
+                        # Extract location from answer content
+                        location_match = re.search(r"Location:\s*(.+?)(?:\n|$)", answer_content)
+                        if location_match:
+                            place = location_match.group(1).strip()
+                        
+                        # Extract search keywords from answer content
+                        search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
+                        if search_match:
+                            search_keywords = search_match.group(1).strip()
+                        
+                        # Extract fact from answer content
+                        fact_match = re.search(r"Interesting fact:\s*(.*?)(?:\n\s*$|$)", answer_content, re.DOTALL)
+                        if fact_match:
+                            fact = fact_match.group(1).strip()
+                    
+                    # Legacy fallback for old format responses
+                    else:
+                        lines = response.split("\n")
+                        
+                        # Try to parse old structured response format
+                        for i, line in enumerate(lines):
+                            if line.startswith("Локация:"):
+                                place = line.replace("Локация:", "").strip()
+                            elif line.startswith("Интересный факт:"):
+                                # Join all lines after Интересный факт: as the fact might be multiline
+                                fact_lines = []
+                                # Start from the current line, removing the prefix
+                                fact_lines.append(
+                                    line.replace("Интересный факт:", "").strip()
+                                )
+                                # Add all subsequent lines
+                                for j in range(i + 1, len(lines)):
+                                    if lines[j].strip():  # Only add non-empty lines
+                                        fact_lines.append(lines[j].strip())
+                                fact = " ".join(fact_lines)
+                                break
 
                     # Format the response with live location indicator and fact number
                     formatted_response = (
@@ -349,10 +373,8 @@ class LiveLocationTracker:
                     # Save fact to history to avoid repetition
                     session_data.fact_history.append(f"{place}: {fact}")
 
-                    # Send the fact with images
-                    search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
-                    if search_match:
-                        search_keywords = search_match.group(1).strip()
+                    # Send the fact with images using extracted search keywords
+                    if search_keywords:
                         await send_live_fact_with_images(
                             bot, 
                             session_data.chat_id, 
@@ -361,12 +383,24 @@ class LiveLocationTracker:
                             place
                         )
                     else:
-                        # No search keywords, send just text
-                        await bot.send_message(
-                            chat_id=session_data.chat_id,
-                            text=formatted_response,
-                            parse_mode="Markdown",
-                        )
+                        # Legacy fallback: try to extract search keywords from old format
+                        legacy_search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
+                        if legacy_search_match:
+                            legacy_search_keywords = legacy_search_match.group(1).strip()
+                            await send_live_fact_with_images(
+                                bot, 
+                                session_data.chat_id, 
+                                formatted_response, 
+                                legacy_search_keywords, 
+                                place
+                            )
+                        else:
+                            # No search keywords, send just text
+                            await bot.send_message(
+                                chat_id=session_data.chat_id,
+                                text=formatted_response,
+                                parse_mode="Markdown",
+                            )
 
                     # Try to parse coordinates and send location for navigation using search keywords (background fact)
                     coordinates = await openai_client.parse_coordinates_from_response(

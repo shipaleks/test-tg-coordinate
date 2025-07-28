@@ -63,10 +63,21 @@ class DonorsDatabase:
                         )
                     """)
                     
+                    # User preferences table for language settings
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS user_preferences (
+                            user_id INTEGER PRIMARY KEY,
+                            language TEXT DEFAULT 'ru',
+                            created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
+                            updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
+                    
                     # Create indexes for better performance
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_donors_user_id ON donors (user_id)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_user_id ON donations (user_id)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_payment_id ON donations (payment_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences (user_id)")
                     
                     conn.commit()
                     logger.info("Donors database initialized successfully")
@@ -274,16 +285,122 @@ class DonorsDatabase:
                         (current_time,)
                     ).fetchone()[0]
                     
+                    # Total users with language preferences
+                    users_with_language = conn.execute("SELECT COUNT(*) FROM user_preferences").fetchone()[0]
+                    
                     return {
                         "total_donors": total_donors,
                         "total_donations": total_donations,
                         "total_stars": total_stars,
-                        "active_premium": active_premium
+                        "active_premium": active_premium,
+                        "users_with_language": users_with_language
                     }
                     
         except Exception as e:
             logger.error(f"Failed to get database stats: {e}")
             return {}
+    
+    def get_user_language(self, user_id: int) -> str:
+        """Get user's preferred language.
+        
+        Args:
+            user_id: Telegram user ID
+            
+        Returns:
+            Language code (defaults to 'ru' if not set)
+        """
+        try:
+            with self._lock:
+                with sqlite3.connect(self.db_path) as conn:
+                    result = conn.execute(
+                        "SELECT language FROM user_preferences WHERE user_id = ?",
+                        (user_id,)
+                    ).fetchone()
+                    
+                    if result:
+                        return result[0]
+                    return "ru"  # Default to Russian
+                    
+        except Exception as e:
+            logger.error(f"Failed to get user language for user {user_id}: {e}")
+            return "ru"  # Default fallback
+    
+    def set_user_language(self, user_id: int, language: str) -> bool:
+        """Set user's preferred language.
+        
+        Args:
+            user_id: Telegram user ID
+            language: Language code (e.g., 'en', 'ru', 'fr', etc.)
+            
+        Returns:
+            True if language was set successfully, False otherwise
+        """
+        try:
+            current_time = int(time.time())
+            
+            with self._lock:
+                with sqlite3.connect(self.db_path) as conn:
+                    # Use INSERT OR REPLACE to handle both new and existing users
+                    conn.execute("""
+                        INSERT OR REPLACE INTO user_preferences (user_id, language, updated_at)
+                        VALUES (?, ?, ?)
+                    """, (user_id, language, current_time))
+                    
+                    conn.commit()
+                    logger.info(f"Set language {language} for user {user_id}")
+                    return True
+                    
+        except Exception as e:
+            logger.error(f"Failed to set language for user {user_id}: {e}")
+            return False
+    
+    def has_language_set(self, user_id: int) -> bool:
+        """Check if user has a language preference set.
+        
+        Args:
+            user_id: Telegram user ID
+            
+        Returns:
+            True if user has language set, False otherwise
+        """
+        try:
+            with self._lock:
+                with sqlite3.connect(self.db_path) as conn:
+                    result = conn.execute(
+                        "SELECT 1 FROM user_preferences WHERE user_id = ?",
+                        (user_id,)
+                    ).fetchone()
+                    
+                    return result is not None
+                    
+        except Exception as e:
+            logger.error(f"Failed to check language status for user {user_id}: {e}")
+            return False
+    
+    def reset_user_language(self, user_id: int) -> bool:
+        """Reset user's language preference (delete from database).
+        
+        Args:
+            user_id: Telegram user ID
+            
+        Returns:
+            True if reset successfully, False otherwise
+        """
+        try:
+            with self._lock:
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.execute(
+                        "DELETE FROM user_preferences WHERE user_id = ?",
+                        (user_id,)
+                    )
+                    
+                    conn.commit()
+                    logger.info(f"Reset language preference for user {user_id}")
+                    return True
+                    
+        except Exception as e:
+            logger.error(f"Failed to reset language for user {user_id}: {e}")
+            return False
 
 
 # Global database instance - will be initialized lazily

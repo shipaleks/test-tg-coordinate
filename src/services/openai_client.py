@@ -138,123 +138,138 @@ class OpenAIClient:
             Exception: If OpenAI API call fails
         """
         try:
-            # Check if user has premium access for o3 model
+            # Check if user has premium access for o3 model and get language preference
             is_premium_user = False
+            user_language = "ru"  # Default to Russian
             if user_id:
                 try:
                     donors_db = get_donors_db()
                     is_premium_user = donors_db.is_premium_user(user_id)
+                    user_language = donors_db.get_user_language(user_id)
                 except Exception as e:
-                    logger.warning(f"Failed to check premium status for user {user_id}: {e}")
+                    logger.warning(f"Failed to check user preferences for user {user_id}: {e}")
             
-            system_prompt = (
-                "Вы — профессиональный экскурсовод с глубокими знаниями различных мест по всему миру. "
-                "Ваша задача — пошагово проанализировать координаты и предоставить интересный факт о местности.\n\n"
-                "Процесс рассуждения:\n"
-                "1. Сначала внимательно проанализируйте координаты и определите точное местоположение\n"
-                "2. Подумайте о географических особенностях этой области\n"
-                "3. Вспомните исторические события, архитектурные особенности или культурные факты\n"
-                "4. Выберите наиболее интересный и достоверный факт\n"
-                "5. Убедитесь, что информация точна и не выдумана\n\n"
-                "ПРИНЦИПЫ РАБОТЫ:\n"
-                "• ПРИОРИТЕТ: Интересные, достоверные факты на основе ваших знаний\n"
-                "• КАЧЕСТВО: Стремитесь к уровню Atlas Obscura — необычные детали\n"
-                "• БЛИЗОСТЬ: Фокус на ближайших местах, но не отказывайтесь без веской причины\n"
-                "• ПРИОРИТЕТ РАССТОЯНИЙ:\n"
-                "  1. ЛУЧШЕ ВСЕГО: места в непосредственной близости (несколько минут пешком)\n"
-                "  2. ХОРОШО: места поблизости (короткая прогулка)\n"
-                "  3. ПРИЕМЛЕМО: места в той же части города\n"
-                "  4. Только если ничего ближе — более отдаленные места\n\n"
-                "💡 В больших городах почти всегда есть что-то интересное рядом!\n\n"
-                "ATLAS OBSCURA ПОДХОД:\n"
-                "• Ищите скрытые истории, неочевидные детали, архитектурные секреты\n"
-                "• Фокус на необычном: малоизвестные исторические события, культурные особенности\n"
-                "• Интересные подробности важнее банальных общих фактов\n"
-                "• НО: рассказывайте только то, в чем уверены - не изобретайте факты\n"
-                "• Используйте приблизительные даты если точные неизвестны\n"
-                "• Лучше увлекательная деталь, чем скучная общая информация\n"
-                "• Если сомневаетесь в деталях - дайте общий интересный контекст\n"
-                "• ВСЕГДА находите что-то неожиданное и интригующее\n\n"
-                "Весь ответ должен быть на русском языке."
-            )
+            # Choose appropriate system prompt based on location type  
+            if is_live_location:
+                # Detailed system prompt for live locations (o4-mini/o3)
+                system_prompt = f"""You are tasked with analyzing geographical coordinates and providing an interesting fact about the location. Follow these instructions carefully:
+
+IMPORTANT: You must respond entirely in {user_language}. All your analysis, reasoning, and final answer must be in {user_language}.
+
+Follow this step-by-step reasoning process:
+
+Step 1: Determine the geographical location based on the coordinates. Identify the city, district, and country.
+
+Step 2: Find nearby toponyms (streets, buildings, monuments, parks, memorial plaques). Prioritize the closest ones!
+
+Step 3: Analyze what interesting historical, architectural, or cultural facts you know about this area or nearby attractions.
+
+Step 4: Choose a fact nearby, considering the following priorities:
+   A) PRIORITY: Something in the immediate vicinity
+   B) Acceptable: Nearby places (short walk)
+   C) Acceptable: In the same part of the city
+   D) In large cities, there is ALWAYS something interesting nearby — keep searching!
+
+Use this search strategy:
+• First, look for obvious landmarks: streets, squares, parks, buildings
+• Then think about the history of the area, architecture, culture
+• If the place seems ordinary, look for details: monuments, historic buildings, cultural features
+• As a last resort, talk about the architectural style, urban planning, or history of the area
+
+Adopt the Atlas Obscura style:
+• Look for unusual stories, architectural details, cultural features
+• Hidden facts and non-obvious connections are more interesting than banal information
+• IMPORTANT: Use only reliable information, do not make things up
+• Approximate dates are acceptable if they make the story more lively
+• If you're not sure about specific details, provide an engaging general context
+• ALWAYS find something amazing — refusal is not acceptable
+
+Your goal is to create a DETAILED and ENGAGING fact (approximately 100-120 words). Include:
+- Unusual historical details or little-known events (only credible ones)
+- Architectural secrets, hidden elements, non-obvious features
+- Intriguing connections with famous personalities or events
+- Cultural peculiarities, local legends, urban stories
+- If the place is ordinary, find something unexpected and amazing about it
+- IMPORTANT: Do not invent facts — use only what you are sure about
+- DO NOT SPECIFY exact distances in meters — just talk about the place
+
+Remember: ALL your response must be in {user_language}."""
+            else:
+                # Concise system prompt for static locations (GPT-4.1)
+                system_prompt = f"""You are an AI assistant tasked with analyzing geographical coordinates and finding the nearest interesting place along with a brief, engaging fact about it. Your goal is to provide users with unexpected and intriguing information about locations near the given coordinates.
+
+IMPORTANT: You must respond entirely in {user_language}. All your analysis and final answer must be in {user_language}.
+
+When searching for an interesting place, prioritize locations in this order:
+1. BEST: Objects in the immediate vicinity
+2. GOOD: Nearby places (short walking distance)
+3. ACCEPTABLE: In the same part of the city
+4. Remember: In large cities, there's almost always something interesting nearby!
+
+Follow this Atlas Obscura-inspired strategy when searching for interesting places:
+• Look for streets, squares, buildings, or parks with unusual histories
+• Seek out hidden architectural details or little-known historical events
+• IMPORTANT: Only use factual information - do not invent or embellish facts
+• If the location seems ordinary, find something surprising about it
+• When in doubt, provide general interesting context rather than specific details
+• ALWAYS find an unexpected and interesting fact
+
+Your goal is to provide a brief but ENGAGING fact (60-80 words) that includes:
+- Unusual historical details or little-known events (only verified facts)
+- Intriguing architectural features or cultural information
+- Non-obvious connections or surprising details
+- IMPORTANT: Do not invent facts - it's better to give general context than made-up specifics
+- DO NOT mention exact distances in meters - simply describe the place
+
+Remember: ALL your response must be in {user_language}."""
 
             # Handle previous facts for both live and static locations
             previous_facts_text = ""
             if previous_facts:
                 previous_facts_text = (
-                    "\n\nВы уже рассказывали об этих местах:\n"
+                    "\n\nYou have already mentioned these places:\n"
                     + "\n".join([f"- {fact}" for fact in previous_facts[-5:]])
-                    + "\n\nНайдите ДРУГОЕ место рядом с теми же координатами, не повторяйте уже упомянутые локации."
+                    + "\n\nFind a DIFFERENT place near the same coordinates, do not repeat already mentioned locations."
                 )
 
             if is_live_location:
-                # Detailed prompt for live location (o4-mini)
-                user_prompt = (
-                    f"Проанализируйте координаты: {lat}, {lon}\n\n"
-                    "Пожалуйста, следуйте процессу рассуждения:\n\n"
-                    "Шаг 1: Определите географическое местоположение по координатам. Что это за город, район, страна?\n\n"
-                    "Шаг 2: Найдите топонимы поблизости (улицы, здания, памятники, парки, мемориальные доски). Приоритет ближайшим!\n\n"
-                    "Шаг 3: Проанализируйте, какие интересные исторические, архитектурные или культурные факты "
-                    "вы знаете об этой области или ближайших достопримечательностях.\n\n"
-                    f"Шаг 4: Выберите факт по близости:{previous_facts_text}\n"
-                    + "   А) ПРИОРИТЕТ: что-то в непосредственной близости\n"
-                    "   Б) Допустимо: места поблизости (короткая прогулка)\n"
-                    "   В) Приемлемо: в той же части города\n"
-                    "   Г) В больших городах ВСЕГДА есть что-то интересное рядом — ищите!\n\n"
-                    "🎯 СТРАТЕГИЯ ПОИСКА:\n"
-                    "• Сначала ищите очевидные ориентиры: улицы, площади, парки, здания\n"
-                    "• Затем думайте об истории района, архитектуре, культуре\n"
-                    "• Если место кажется обычным — ищите детали: памятники, исторические здания, культурные особенности\n"
-                    "• В крайнем случае расскажите об архитектурном стиле, городском планировании или истории района\n\n"
-                    "💎 ATLAS OBSCURA СТИЛЬ:\n"
-                    "• Ищите необычные истории, архитектурные детали, культурные особенности\n"    
-                    "• Скрытые факты и неочевидные связи интереснее банальной информации\n"
-                    "• НО ВАЖНО: используйте только достоверную информацию, не выдумывайте\n"
-                    "• Приблизительные даты приемлемы, если делают рассказ живее\n"
-                    "• Если не уверены в конкретных деталях — дайте общий увлекательный контекст\n"
-                    "• ВСЕГДА находите что-то удивительное — отказ недопустим\n\n"
-                    "ЦЕЛЬ: Создайте ПОДРОБНЫЙ и УВЛЕКАТЕЛЬНЫЙ факт (примерно 100-120 слов). Включите:\n"
-                    "- Необычные исторические детали или малоизвестные события (только достоверные)\n"
-                    "- Архитектурные секреты, скрытые элементы, неочевидные особенности\n"
-                    "- Интригующие связи с известными личностями или событиями\n"
-                    "- Культурные особенности, местные легенды, городские истории\n"
-                    "- Если место обычное — найдите в нем что-то неожиданное и удивительное\n"
-                    "- ВАЖНО: не изобретайте факты — используйте только то, в чем уверены\n"
-                    "- НЕ УКАЗЫВАЙТЕ точные расстояния в метрах — просто рассказывайте о месте\n\n"
-                    "Финальный ответ в формате:\n"
-                    "Локация: [Конкретное название места]\n"
-                    "Поиск: [Ключевые слова для точного поиска: ОРИГИНАЛЬНОЕ название на местном языке + город + страна. Например: 'Louvre Museum Paris France' или 'Красная площадь Москва Россия']\n"
-                    "Интересный факт: [Развернутый факт с историческими подробностями, примерно 100-120 слов]"
-                )
+                # Detailed prompt for live location (o4-mini/o3)
+                user_prompt = f"""Analyze these coordinates: {lat}, {lon}
+
+You will be provided with previous facts that have already been mentioned about this location or nearby areas in the following format:
+{previous_facts_text}
+
+Make sure to choose a fact that has not been mentioned in the previous facts. If all obvious facts have been covered, dig deeper to find more obscure or specific information about the location or its surroundings.
+
+Present your final answer in this format:
+<answer>
+Location: [Specific name of the place]
+Search: [Keywords for accurate search: ORIGINAL name in local language + city + country. For example: 'Louvre Museum Paris France' or 'Красная площадь Москва Россия']
+Interesting fact: [Detailed fact with historical details, approximately 100-120 words]
+</answer>
+
+Remember, your final output should only include the content within the <answer> tags. Do not include any of your thought process or the steps you took to arrive at your answer."""
             else:
                 # Concise prompt for static location (gpt-4.1)
-                user_prompt = (
-                    f"Проанализируйте координаты: {lat}, {lon}\n\n"
-                    "Найдите ближайшее интересное место и предоставьте краткий факт.\n\n"
-                    + (previous_facts_text + "\n\n" if previous_facts_text else "") +
-                    "ПРИОРИТЕТ РАССТОЯНИЙ:\n"
-                    "1. ЛУЧШЕ ВСЕГО: объекты в непосредственной близости\n"
-                    "2. ХОРОШО: места поблизости (короткая прогулка)\n"
-                    "3. ПРИЕМЛЕМО: в той же части города\n"
-                    "4. В больших городах почти всегда есть что-то интересное рядом!\n\n"
-                    "🎯 ATLAS OBSCURA СТРАТЕГИЯ:\n"
-                    "• Ищите улицы, площади, здания, парки с необычными историями\n"
-                    "• Скрытые детали архитектуры, малоизвестные исторические события\n"
-                    "• НО: только достоверная информация — не выдумывайте факты\n"
-                    "• Если место обычное — найдите в нем что-то удивительное\n"
-                    "• При сомнениях — лучше общий интересный контекст, чем выдуманные детали\n"
-                    "• ВСЕГДА находите неожиданный интересный факт\n\n"
-                    "ЦЕЛЬ: Краткий но УВЛЕКАТЕЛЬНЫЙ факт (60-80 слов). Включите:\n"
-                    "- Необычные исторические детали или малоизвестные события (только достоверные)\n"
-                    "- Интригующие архитектурные особенности или культурные факты\n"
-                    "- Неочевидные связи или удивительные подробности\n"
-                    "- ВАЖНО: не изобретайте факты — лучше общий контекст, чем выдуманные детали\n"
-                    "- НЕ УКАЗЫВАЙТЕ точные расстояния в метрах — просто рассказывайте о месте\n\n"
-                    "Финальный ответ в формате:\n"
-                    "Локация: [Конкретное название места]\n"
-                    "Поиск: [Ключевые слова для точного поиска: ОРИГИНАЛЬНОЕ название на местном языке + город + страна. Например: 'Louvre Museum Paris France' или 'Красная площадь Москва Россия']\n"
-                    "Интересный факт: [Краткий, но увлекательный факт, 60-80 слов]"
-                )
+                user_prompt = f"""Here are the coordinates to analyze:
+<coordinates>
+Latitude: {lat}
+Longitude: {lon}
+</coordinates>
+
+Before providing your answer, consider any previous facts that have been shared about nearby locations. This will help you avoid repetition and ensure you're providing new, interesting information. Here are the previous facts (if any):
+<previous_facts>
+{previous_facts_text if previous_facts_text else "None"}
+</previous_facts>
+
+Format your final answer as follows:
+<answer>
+Location: [Specific name of the place]
+Search: [Keywords for precise search: ORIGINAL name in local language + city + country. For example: 'Louvre Museum Paris France' or 'Red Square Moscow Russia']
+Interesting fact: [Brief but engaging fact, 60-80 words]
+</answer>
+
+Remember to think creatively and find truly engaging and unexpected information about the location you choose. Good luck!"""
 
             # Choose model based on location type and premium status
             model_to_use = "o4-mini"  # Default model
@@ -585,27 +600,56 @@ class OpenAIClient:
             Tuple of (latitude, longitude) if found, None otherwise
         """
         try:
-            # First, try to extract search keywords from new format
-            search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
-            if search_match:
-                search_keywords = search_match.group(1).strip()
-                logger.info(f"Found search keywords: {search_keywords}")
+            # Extract content from <answer> tags first
+            answer_match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
+            if answer_match:
+                answer_content = answer_match.group(1).strip()
+                
+                # Extract search keywords from answer content
+                search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
+                if search_match:
+                    search_keywords = search_match.group(1).strip()
+                    logger.info(f"Found search keywords from <answer> tags: {search_keywords}")
 
-                # Use new keyword-based search
-                coords = await self.get_coordinates_from_search_keywords(search_keywords)
-                if coords:
-                    return coords
+                    # Use new keyword-based search
+                    coords = await self.get_coordinates_from_search_keywords(search_keywords)
+                    if coords:
+                        return coords
 
-            # Fallback: try to extract location name if no search keywords
-            place_match = re.search(r"Локация:\s*(.+?)(?:\n|$)", response)
-            if place_match:
-                place_name = place_match.group(1).strip()
-                logger.info(f"No search keywords found, using location name: {place_name}")
+                # Fallback: extract location name from answer content
+                location_match = re.search(r"Location:\s*(.+?)(?:\n|$)", answer_content)
+                if location_match:
+                    place_name = location_match.group(1).strip()
+                    logger.info(f"No search keywords found, using location name from <answer>: {place_name}")
 
-                # Use location name as search keywords
-                coords = await self.get_coordinates_from_search_keywords(place_name)
-                if coords:
-                    return coords
+                    # Use location name as search keywords
+                    coords = await self.get_coordinates_from_search_keywords(place_name)
+                    if coords:
+                        return coords
+            
+            # Legacy fallback for old format responses (will be removed eventually)
+            else:
+                # First, try to extract search keywords from old format
+                search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
+                if search_match:
+                    search_keywords = search_match.group(1).strip()
+                    logger.info(f"Found search keywords from legacy format: {search_keywords}")
+
+                    # Use new keyword-based search
+                    coords = await self.get_coordinates_from_search_keywords(search_keywords)
+                    if coords:
+                        return coords
+
+                # Fallback: try to extract location name if no search keywords
+                place_match = re.search(r"Локация:\s*(.+?)(?:\n|$)", response)
+                if place_match:
+                    place_name = place_match.group(1).strip()
+                    logger.info(f"No search keywords found, using location name from legacy: {place_name}")
+
+                    # Use location name as search keywords
+                    coords = await self.get_coordinates_from_search_keywords(place_name)
+                    if coords:
+                        return coords
 
             logger.debug("No search keywords or location name found in response")
             return None

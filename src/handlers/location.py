@@ -15,11 +15,62 @@ from telegram.ext import ContextTypes
 
 from ..services.live_location_tracker import get_live_location_tracker
 from ..services.openai_client import get_openai_client
+from ..services.donors_db import get_donors_db
 
 logger = logging.getLogger(__name__)
 
+# Localized messages for location handler
+LOCATION_MESSAGES = {
+    'ru': {
+        'image_fallback': "⚠️ Изображения не загрузились, но вот факт:\n\n",
+        'live_location_received': "🔴 *Живая локация получена!*\n\n📍 Отслеживание на {minutes} минут\n\nКак часто присылать интересные факты?",
+        'interval_5min': "Каждые 5 минут",
+        'interval_10min': "Каждые 10 минут", 
+        'interval_30min': "Каждые 30 минут",
+        'interval_60min': "Каждые 60 минут",
+        'live_activated': "🔴 *Живая локация активирована!*\n\n📍 Отслеживание: {minutes} минут\n⏰ Факты каждые: {interval} минут\n\n🚀 Сейчас пришлю первый факт, затем буду присылать автоматически!\n\nОстановите sharing чтобы завершить сессию.",
+        'place_label': "📍 *Место:*",
+        'fact_label': "💡 *Факт:*",
+        'live_fact_label': "🔴 *Факт #{number}*",
+        'attraction_address': "Достопримечательность: {place}",
+        'error_no_info': "😔 *Упс!*\n\nНе удалось найти интересную информацию о данном месте.\nПопробуйте немного сместиться или отправить другую локацию.",
+        'near_you': "рядом с вами"
+    },
+    'en': {
+        'image_fallback': "⚠️ Images failed to load, but here's the fact:\n\n",
+        'live_location_received': "🔴 *Live location received!*\n\n📍 Tracking for {minutes} minutes\n\nHow often should I send interesting facts?",
+        'interval_5min': "Every 5 minutes",
+        'interval_10min': "Every 10 minutes",
+        'interval_30min': "Every 30 minutes", 
+        'interval_60min': "Every 60 minutes",
+        'live_activated': "🔴 *Live location activated!*\n\n📍 Tracking: {minutes} minutes\n⏰ Facts every: {interval} minutes\n\n🚀 I'll send the first fact now, then continue automatically!\n\nStop sharing to end the session.",
+        'place_label': "📍 *Place:*",
+        'fact_label': "💡 *Fact:*",
+        'live_fact_label': "🔴 *Fact #{number}*",
+        'attraction_address': "Attraction: {place}",
+        'error_no_info': "😔 *Oops!*\n\nCouldn't find interesting information about this location.\nTry moving slightly or sending a different location.",
+        'near_you': "near you"
+    }
+    # Add more languages as needed
+}
 
-async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, reply_to_message_id=None):
+
+def get_localized_message(user_id: int, key: str, **kwargs) -> str:
+    """Get localized message for user."""
+    try:
+        donors_db = get_donors_db()
+        user_language = donors_db.get_user_language(user_id)
+        messages = LOCATION_MESSAGES.get(user_language, LOCATION_MESSAGES['ru'])
+        message = messages.get(key, LOCATION_MESSAGES['ru'].get(key, key))
+        return message.format(**kwargs) if kwargs else message
+    except Exception as e:
+        logger.warning(f"Error getting localized message: {e}")
+        # Fallback to Russian
+        message = LOCATION_MESSAGES['ru'].get(key, key)
+        return message.format(**kwargs) if kwargs else message
+
+
+async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, user_id=None, reply_to_message_id=None):
     """Send fact message with Wikipedia images if available.
     
     Args:
@@ -28,6 +79,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
         formatted_response: Formatted text response
         search_keywords: Keywords to search images for
         place: Place name for caption
+        user_id: User ID for localization (optional)
         reply_to_message_id: Message ID to reply to (optional)
     """
     try:
@@ -109,9 +161,10 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                 # Check if text was sent successfully by trying to send it again
                 # (This is a fallback in case the text sending also failed)
                 try:
+                    fallback_message = get_localized_message(user_id or 0, 'image_fallback') if user_id else "⚠️ Изображения не загрузились, но вот факт:\n\n"
                     await bot.send_message(
                         chat_id=chat_id,
-                        text=f"⚠️ Изображения не загрузились, но вот факт:\n\n{formatted_response}",
+                        text=f"{fallback_message}{formatted_response}",
                         parse_mode="Markdown",
                         reply_to_message_id=reply_to_message_id
                     )
@@ -271,32 +324,57 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         
         # Parse the response to extract place and fact
         logger.info(f"Final response for static location: {response[:100]}...")
-        lines = response.split("\n")
-        place = "рядом с вами"
+        place = "рядом с вами"  # Default location
         fact = response  # Default to full response if parsing fails
+        final_search_keywords = None
 
-        # Try to parse structured response
-        for i, line in enumerate(lines):
-            if line.startswith("Локация:"):
-                place = line.replace("Локация:", "").strip()
-            elif line.startswith("Интересный факт:"):
-                # Join all lines after Интересный факт: as the fact might be multiline
-                fact_lines = []
-                # Start from the current line, removing the prefix
-                fact_lines.append(line.replace("Интересный факт:", "").strip())
-                # Add all subsequent lines
-                for j in range(i + 1, len(lines)):
-                    if lines[j].strip():  # Only add non-empty lines
-                        fact_lines.append(lines[j].strip())
-                fact = " ".join(fact_lines)
-                break
+        # Try to parse structured response from <answer> tags first
+        answer_match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
+        if answer_match:
+            answer_content = answer_match.group(1).strip()
+            
+            # Extract location from answer content
+            location_match = re.search(r"Location:\s*(.+?)(?:\n|$)", answer_content)
+            if location_match:
+                place = location_match.group(1).strip()
+            
+            # Extract search keywords from answer content
+            search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
+            if search_match:
+                final_search_keywords = search_match.group(1).strip()
+            
+            # Extract fact from answer content
+            fact_match = re.search(r"Interesting fact:\s*(.*?)(?:\n\s*$|$)", answer_content, re.DOTALL)
+            if fact_match:
+                fact = fact_match.group(1).strip()
+        
+        # Legacy fallback for old format responses
+        else:
+            lines = response.split("\n")
+            
+            # Try to parse old structured response format
+            for i, line in enumerate(lines):
+                if line.startswith("Локация:"):
+                    place = line.replace("Локация:", "").strip()
+                elif line.startswith("Интересный факт:"):
+                    # Join all lines after Интересный факт: as the fact might be multiline
+                    fact_lines = []
+                    # Start from the current line, removing the prefix
+                    fact_lines.append(line.replace("Интересный факт:", "").strip())
+                    # Add all subsequent lines
+                    for j in range(i + 1, len(lines)):
+                        if lines[j].strip():  # Only add non-empty lines
+                            fact_lines.append(lines[j].strip())
+                    fact = " ".join(fact_lines)
+                    break
+            
+            # Extract search keywords from legacy format
+            legacy_search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
+            if legacy_search_match:
+                final_search_keywords = legacy_search_match.group(1).strip()
 
         # Format the response for static location
         formatted_response = f"📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
-
-        # Extract search keywords from final response for images
-        search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
-        final_search_keywords = search_match.group(1).strip() if search_match else None
         
         # Send fact with images using extracted search keywords
         if final_search_keywords:
@@ -305,7 +383,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 chat_id, 
                 formatted_response, 
                 final_search_keywords, 
-                place, 
+                place,
+                user_id=user_id,
                 reply_to_message_id=update.message.message_id
             )
         else:
@@ -417,25 +496,49 @@ async def handle_interval_callback(
         response = await openai_client.get_nearby_fact(lat, lon, is_live_location=True, user_id=user_id)
 
         # Parse the response to extract place and fact
-        lines = response.split("\n")
-        place = "рядом с вами"
+        place = "рядом с вами"  # Default location
         fact = response  # Default to full response if parsing fails
+        search_keywords = ""
 
-        # Try to parse structured response
-        for i, line in enumerate(lines):
-            if line.startswith("Локация:"):
-                place = line.replace("Локация:", "").strip()
-            elif line.startswith("Интересный факт:"):
-                # Join all lines after Интересный факт: as the fact might be multiline
-                fact_lines = []
-                # Start from the current line, removing the prefix
-                fact_lines.append(line.replace("Интересный факт:", "").strip())
-                # Add all subsequent lines
-                for j in range(i + 1, len(lines)):
-                    if lines[j].strip():  # Only add non-empty lines
-                        fact_lines.append(lines[j].strip())
-                fact = " ".join(fact_lines)
-                break
+        # Try to parse structured response from <answer> tags first
+        answer_match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
+        if answer_match:
+            answer_content = answer_match.group(1).strip()
+            
+            # Extract location from answer content
+            location_match = re.search(r"Location:\s*(.+?)(?:\n|$)", answer_content)
+            if location_match:
+                place = location_match.group(1).strip()
+            
+            # Extract search keywords from answer content
+            search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
+            if search_match:
+                search_keywords = search_match.group(1).strip()
+            
+            # Extract fact from answer content
+            fact_match = re.search(r"Interesting fact:\s*(.*?)(?:\n\s*$|$)", answer_content, re.DOTALL)
+            if fact_match:
+                fact = fact_match.group(1).strip()
+        
+        # Legacy fallback for old format responses
+        else:
+            lines = response.split("\n")
+            
+            # Try to parse old structured response format
+            for i, line in enumerate(lines):
+                if line.startswith("Локация:"):
+                    place = line.replace("Локация:", "").strip()
+                elif line.startswith("Интересный факт:"):
+                    # Join all lines after Интересный факт: as the fact might be multiline
+                    fact_lines = []
+                    # Start from the current line, removing the prefix
+                    fact_lines.append(line.replace("Интересный факт:", "").strip())
+                    # Add all subsequent lines
+                    for j in range(i + 1, len(lines)):
+                        if lines[j].strip():  # Only add non-empty lines
+                            fact_lines.append(lines[j].strip())
+                    fact = " ".join(fact_lines)
+                    break
 
         # Get the tracker to increment fact counter for initial fact
         tracker = get_live_location_tracker()
@@ -454,24 +557,36 @@ async def handle_interval_callback(
         if user_id in tracker._active_sessions:
             tracker._active_sessions[user_id].fact_history.append(f"{place}: {fact}")
 
-        # Send initial fact with images
-        search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
-        if search_match:
-            search_keywords = search_match.group(1).strip()
+        # Send initial fact with images using extracted search keywords
+        if search_keywords:
             await send_fact_with_images(
                 context.bot, 
                 chat_id, 
                 initial_fact_response, 
                 search_keywords, 
-                place
+                place,
+                user_id=user_id
             )
         else:
-            # No search keywords, send just text
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=initial_fact_response,
-                parse_mode="Markdown",
-            )
+            # Legacy fallback: try to extract search keywords from old format
+            legacy_search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
+            if legacy_search_match:
+                legacy_search_keywords = legacy_search_match.group(1).strip()
+                await send_fact_with_images(
+                    context.bot, 
+                    chat_id, 
+                    initial_fact_response, 
+                    legacy_search_keywords, 
+                    place,
+                    user_id=user_id
+                )
+            else:
+                # No search keywords, send just text
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=initial_fact_response,
+                    parse_mode="Markdown",
+                )
 
         # Try to parse coordinates and send location for navigation using search keywords (live location)
         coordinates = await openai_client.parse_coordinates_from_response(response)
