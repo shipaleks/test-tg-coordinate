@@ -54,6 +54,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     keyboard = [
         [KeyboardButton("📱 Как поделиться Live Location")],
         [KeyboardButton("🔴 Поделиться локацией", request_location=True)],
+        [KeyboardButton("🌟 Поддержать проект")],
     ]
     reply_markup = ReplyKeyboardMarkup(
         keyboard, resize_keyboard=True, one_time_keyboard=False
@@ -113,6 +114,11 @@ def main() -> None:
     application.add_handler(
         MessageHandler(
             filters.TEXT & filters.Regex("^📱 Как поделиться Live Location$"), info_command
+        )
+    )
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & filters.Regex("^🌟 Поддержать проект$"), donate_command
         )
     )
 
