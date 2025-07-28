@@ -29,29 +29,60 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
         image_urls = await openai_client.get_wikipedia_images(search_keywords, max_images=4)  # Max 4 for media group
         
         if image_urls:
-            # Try sending text first, then media group
+            # Try sending images with text properly combined
             try:
                 logger.info(f"Attempting to send live fact with {len(image_urls)} images for {place}")
                 logger.debug(f"Live formatted response length: {len(formatted_response)} chars")
                 
-                # Always send text first to ensure it's not lost
-                await bot.send_message(
-                    chat_id=chat_id,
-                    text=formatted_response,
-                    parse_mode="Markdown"
-                )
-                logger.info(f"Successfully sent live text message for {place}")
-                
-                # Then send images with simple captions
-                media_list = []
-                for image_url in image_urls:
-                    media_list.append(InputMediaPhoto(media=image_url, caption=f"📸 {place}"))
-                
-                await bot.send_media_group(
-                    chat_id=chat_id,
-                    media=media_list
-                )
-                logger.info(f"Successfully sent {len(image_urls)} Wikipedia images for live fact {place}")
+                if len(image_urls) == 1:
+                    # Single image: send with full caption (up to 1024 chars)
+                    await bot.send_photo(
+                        chat_id=chat_id,
+                        photo=image_urls[0],
+                        caption=formatted_response,
+                        parse_mode="Markdown"
+                    )
+                    logger.info(f"Successfully sent single live image with caption for {place}")
+                else:
+                    # Multiple images: first with full caption, rest as media group
+                    if len(formatted_response) <= 1024:
+                        # Caption fits, send first image with caption
+                        await bot.send_photo(
+                            chat_id=chat_id,
+                            photo=image_urls[0],
+                            caption=formatted_response,
+                            parse_mode="Markdown"
+                        )
+                        
+                        # Send remaining images as media group if there are more
+                        if len(image_urls) > 1:
+                            media_list = []
+                            for image_url in image_urls[1:]:
+                                media_list.append(InputMediaPhoto(media=image_url, caption=f"📸 {place}"))
+                            
+                            await bot.send_media_group(
+                                chat_id=chat_id,
+                                media=media_list
+                            )
+                        logger.info(f"Successfully sent live photo with caption + {len(image_urls)-1} additional images for {place}")
+                    else:
+                        # Caption too long, send text first then all images
+                        await bot.send_message(
+                            chat_id=chat_id,
+                            text=formatted_response,
+                            parse_mode="Markdown"
+                        )
+                        
+                        # Send all images as media group
+                        media_list = []
+                        for image_url in image_urls:
+                            media_list.append(InputMediaPhoto(media=image_url, caption=f"📸 {place}"))
+                        
+                        await bot.send_media_group(
+                            chat_id=chat_id,
+                            media=media_list
+                        )
+                        logger.info(f"Successfully sent long live text + {len(image_urls)} images separately for {place}")
                 return
                 
             except Exception as media_group_error:
