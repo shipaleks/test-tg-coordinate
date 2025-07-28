@@ -113,7 +113,7 @@ def test_get_nearby_fact_prompt_format(openai_client):
             assert messages[1]["role"] == "user"
             assert "55.751244, 37.618423" in messages[1]["content"]
             # Static location should not have detailed steps, but should be concise
-            assert "КРАТКИМ (60-80 слов)" in messages[1]["content"]
+            assert "Краткий факт (60-80 слов)" in messages[1]["content"]
             assert "Локация:" in messages[1]["content"]
             assert "Интересный факт:" in messages[1]["content"]
 
