@@ -98,12 +98,12 @@ class DonorsDatabase:
                         )
                     """)
                     
-                    # Create indexes for better performance
-                    conn.execute("CREATE INDEX IF NOT EXISTS idx_donors_user_id ON donors (user_id)")
-                    conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_user_id ON donations (user_id)")
-                    conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_payment_id ON donations (payment_id)")
-                    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences (user_id)")
-                    
+                        # Create indexes for better performance
+                        conn.execute("CREATE INDEX IF NOT EXISTS idx_donors_user_id ON donors (user_id)")
+                        conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_user_id ON donations (user_id)")
+                        conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_payment_id ON donations (payment_id)")
+                        conn.execute("CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences (user_id)")
+                        
                         conn.commit()
                         logger.info("Donors database initialized successfully")
                         
