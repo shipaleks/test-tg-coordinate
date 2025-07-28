@@ -68,7 +68,7 @@ class OpenAIClient:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
-                    max_completion_tokens=800,  # o3 needs more tokens: reasoning + final answer
+                    max_completion_tokens=2000,  # Give o3 plenty of tokens for deep reasoning and detailed response
                 )
             except Exception as e:
                 logger.warning(f"o3 failed, falling back to gpt-4.1: {e}")
