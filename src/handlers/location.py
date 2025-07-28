@@ -220,6 +220,10 @@ async def handle_interval_callback(update: Update, context: ContextTypes.DEFAULT
         # Format the initial fact with number
         initial_fact_response = f"🔴 *Факт #{fact_number}*\n\n📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
 
+        # Save initial fact to history
+        if user_id in tracker._active_sessions:
+            tracker._active_sessions[user_id].fact_history.append(f"{place}: {fact}")
+
         # Send initial fact
         await context.bot.send_message(
             chat_id=chat_id,

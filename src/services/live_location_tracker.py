@@ -24,7 +24,12 @@ class LiveLocationData:
     live_period: int
     fact_interval_minutes: int = 10  # Default 10 minutes
     fact_count: int = 0  # Counter for facts sent
+    fact_history: list = None  # History of sent facts to avoid repetition
     task: Optional[asyncio.Task] = None
+    
+    def __post_init__(self):
+        if self.fact_history is None:
+            self.fact_history = []
 
 
 class LiveLocationTracker:
@@ -156,7 +161,9 @@ class LiveLocationTracker:
                     
                     openai_client = get_openai_client()
                     response = await openai_client.get_nearby_fact(
-                        session_data.latitude, session_data.longitude, is_live_location=True
+                        session_data.latitude, session_data.longitude, 
+                        is_live_location=True, 
+                        previous_facts=session_data.fact_history
                     )
                     
                     # Parse the response to extract place and fact
@@ -186,6 +193,9 @@ class LiveLocationTracker:
                         f"📍 *Место:* {place}\n\n"
                         f"💡 *Факт:* {fact}"
                     )
+                    
+                    # Save fact to history to avoid repetition
+                    session_data.fact_history.append(f"{place}: {fact}")
                     
                     # Send the fact
                     await bot.send_message(

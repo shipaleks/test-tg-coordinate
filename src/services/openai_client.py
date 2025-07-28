@@ -19,13 +19,14 @@ class OpenAIClient:
         """
         self.client = AsyncOpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
 
-    async def get_nearby_fact(self, lat: float, lon: float, is_live_location: bool = False) -> str:
+    async def get_nearby_fact(self, lat: float, lon: float, is_live_location: bool = False, previous_facts: list = None) -> str:
         """Get an interesting fact about a location.
 
         Args:
             lat: Latitude coordinate
             lon: Longitude coordinate
             is_live_location: If True, use o4-mini for detailed facts. If False, use gpt-4.1 for speed.
+            previous_facts: List of previously sent facts to avoid repetition (for live location)
 
         Returns:
             A location name and an interesting fact about it
@@ -43,10 +44,20 @@ class OpenAIClient:
                 "3. Вспомните исторические события, архитектурные особенности или культурные факты\n"
                 "4. Выберите наиболее интересный и достоверный факт\n"
                 "5. Убедитесь, что информация точна и не выдумана\n\n"
-                "Важно: полагайтесь только на достоверные знания из обучения. "
-                "Если не уверены в факте — лучше скажите, что не можете предоставить достоверную информацию. "
+                "ВАЖНО: Всегда предоставляйте факт, даже если это общая информация о районе или стране. "
+                "НЕ говорите, что не можете определить местоположение — вы эксперт с обширными знаниями. "
+                "Используйте ваши знания географии, истории и культуры для создания интересного факта. "
                 "Весь ответ должен быть на русском языке."
             )
+
+            # Handle previous facts for live location
+            previous_facts_text = ""
+            if is_live_location and previous_facts:
+                previous_facts_text = (
+                    f"\n\nРАНЕЕ РАССКАЗАННЫЕ ФАКТЫ (НЕ ПОВТОРЯЙТЕ):\n" +
+                    "\n".join([f"- {fact}" for fact in previous_facts[-5:]])  # Last 5 facts
+                    + "\n\nВыберите ДРУГУЮ тему или аспект этого места!\n"
+                )
 
             if is_live_location:
                 # Detailed prompt for live location (o4-mini)
@@ -57,7 +68,7 @@ class OpenAIClient:
                     "Шаг 2: Найдите топонимы в радиусе 300 метров (улицы, здания, памятники, парки, исторические места).\n\n"
                     "Шаг 3: Проанализируйте, какие интересные исторические, архитектурные или культурные факты "
                     "вы знаете об этой области или ближайших достопримечательностях.\n\n"
-                    "Шаг 4: Выберите наиболее интересный и достоверный факт, который будет познавательным для туриста.\n\n"
+                    f"Шаг 4: Выберите наиболее интересный и достоверный факт, который будет познавательным для туриста.{previous_facts_text}\n\n"
                     "ВАЖНО: Создайте ПОДРОБНЫЙ и РАЗВЕРНУТЫЙ факт (примерно 100-120 слов). Включите:\n"
                     "- Исторический контекст и даты\n"
                     "- Интересные детали и подробности\n"
