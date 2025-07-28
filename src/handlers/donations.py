@@ -462,8 +462,36 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Check if /data exists at all
         if os.path.exists("/data"):
             test_results.append(f"📂 */data exists:* Yes (writable: {os.access('/data', os.W_OK)})")
+            # Check permissions in detail
+            try:
+                import stat
+                stats = os.stat("/data")
+                mode = oct(stat.S_IMODE(stats.st_mode))
+                test_results.append(f"📂 */data permissions:* {mode}")
+                test_results.append(f"📂 */data owner UID:* {stats.st_uid}")
+                
+                # Try to list contents
+                contents = os.listdir("/data")
+                test_results.append(f"📂 */data contents:* {len(contents)} items")
+                if contents:
+                    test_results.append(f"📂 *Files:* {', '.join(contents[:5])}")
+            except Exception as perm_error:
+                test_results.append(f"⚠️ *Permission check error:* {str(perm_error)[:50]}")
         else:
             test_results.append("📂 */data exists:* No")
+        
+        # Check for other possible volume paths
+        possible_paths = [
+            "/app/data",
+            "/volume",
+            "/mnt/volume",
+            os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", ""),
+            os.environ.get("VOLUME_PATH", "")
+        ]
+        
+        for path in possible_paths:
+            if path and os.path.exists(path):
+                test_results.append(f"📂 *{path} exists:* Yes (writable: {os.access(path, os.W_OK)})")
         
         # Format results
         test_text = "🔧 *Database Diagnostics*\n\n" + "\n".join(test_results)

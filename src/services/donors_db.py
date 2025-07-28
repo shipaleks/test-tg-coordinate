@@ -35,20 +35,27 @@ class DonorsDatabase:
             # Allow forcing volume path via environment variable
             force_volume = os.environ.get("FORCE_VOLUME_PATH", "").lower() == "true"
             
-            volume_path = "/data"
+            # Check for custom volume path from environment variable
+            volume_path = os.environ.get("VOLUME_PATH", "/data")
             
             # If on Railway OR volume forced OR if volume path exists and is writable
             if is_railway or force_volume or (os.path.exists(volume_path) and os.access(volume_path, os.W_OK)):
-                db_path = os.path.join(volume_path, "donors.db")
-                logger.info(f"Using Railway volume for database: {db_path} (Railway: {is_railway}, Forced: {force_volume})")
-                
-                # Ensure the volume directory is accessible
-                if not os.path.exists(volume_path):
-                    logger.error(f"Volume path {volume_path} does not exist!")
-                elif not os.access(volume_path, os.W_OK):
-                    logger.error(f"Volume path {volume_path} is not writable!")
+                # Check if volume path is actually writable
+                if os.path.exists(volume_path) and os.access(volume_path, os.W_OK):
+                    db_path = os.path.join(volume_path, "donors.db")
+                    logger.info(f"Using Railway volume for database: {db_path}")
                 else:
-                    logger.info(f"Volume path {volume_path} is accessible and writable")
+                    # If we're on Railway but volume isn't writable, use local app directory
+                    if is_railway:
+                        logger.warning(f"Volume path {volume_path} is not writable on Railway, using app directory")
+                        # Create a data directory in the app folder if it doesn't exist
+                        app_data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "railway_data")
+                        os.makedirs(app_data_dir, exist_ok=True)
+                        db_path = os.path.join(app_data_dir, "donors.db")
+                        logger.info(f"Using app directory for database: {db_path}")
+                    else:
+                        db_path = "donors.db"
+                        logger.info(f"Using local database: {db_path}")
             else:
                 db_path = "donors.db"
                 logger.info(f"Using local database: {db_path} (Railway: {is_railway}, Forced: {force_volume})")
