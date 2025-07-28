@@ -208,7 +208,11 @@ class LiveLocationTracker:
         """
         async with self._lock:
             # Stop existing session if any
-            await self._stop_session(user_id)
+            if user_id in self._active_sessions:
+                logger.info(f"Stopping existing live location session for user {user_id}")
+                await self._stop_session(user_id)
+                # Give a moment for cleanup to complete
+                await asyncio.sleep(0.05)
 
             # Create new session data
             session_data = LiveLocationData(
@@ -222,15 +226,19 @@ class LiveLocationTracker:
             )
 
             # Start the fact sending task
-            task = asyncio.create_task(self._fact_sending_loop(session_data, bot))
-            session_data.task = task
-
-            # Store the session
-            self._active_sessions[user_id] = session_data
-
-            logger.info(
-                f"Started live location tracking for user {user_id} for {live_period}s, facts every {fact_interval_minutes} min"
-            )
+            try:
+                task = asyncio.create_task(self._fact_sending_loop(session_data, bot))
+                session_data.task = task
+                
+                # Store the session
+                self._active_sessions[user_id] = session_data
+                
+                logger.info(
+                    f"Started live location tracking for user {user_id} for {live_period}s, facts every {fact_interval_minutes} min"
+                )
+            except Exception as e:
+                logger.error(f"Failed to start live location task for user {user_id}: {e}")
+                raise
 
     async def update_live_location(
         self,

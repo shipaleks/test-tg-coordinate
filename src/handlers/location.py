@@ -1,5 +1,6 @@
 """Location message handler for Telegram bot."""
 
+import asyncio
 import logging
 import re
 
@@ -456,6 +457,14 @@ async def handle_interval_callback(
     try:
         # Parse callback data: interval_<minutes>_<lat>_<lon>_<live_period>
         data_parts = query.data.split("_")
+        if len(data_parts) != 5:
+            logger.error(f"Invalid callback data format: {query.data}")
+            await query.edit_message_text(
+                text="😔 Invalid callback data. Please try again.",
+                parse_mode="Markdown",
+            )
+            return
+            
         interval_minutes = int(data_parts[1])
         lat = float(data_parts[2])
         lon = float(data_parts[3])
@@ -464,8 +473,14 @@ async def handle_interval_callback(
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
 
+        logger.info(f"Processing interval callback for user {user_id}: {interval_minutes} min interval")
+
         # Start live location tracking with selected interval
         tracker = get_live_location_tracker()
+        
+        # Add small delay to ensure any previous session cleanup is complete
+        await asyncio.sleep(0.1)
+        
         await tracker.start_live_location(
             user_id=user_id,
             chat_id=chat_id,
