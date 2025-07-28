@@ -4,6 +4,7 @@ import logging
 import os
 import re
 
+import aiohttp
 from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
@@ -208,10 +209,181 @@ class OpenAIClient:
             logger.error(f"Failed to generate fact for {lat},{lon}: {e}")
             raise
 
-    def parse_coordinates_from_response(
+    async def get_precise_coordinates(
+        self, place_name: str, area_description: str
+    ) -> tuple[float, float] | None:
+        """Get precise coordinates for a location using GPT-4.1 with web search.
+
+        Args:
+            place_name: Name of the place/landmark
+            area_description: General area description for context
+
+        Returns:
+            Tuple of (latitude, longitude) if found, None otherwise
+        """
+        try:
+            search_prompt = (
+                f"Найдите точные GPS координаты для: {place_name}\n"
+                f"Контекст: {area_description}\n\n"
+                "Используйте веб-поиск для получения максимально точных координат.\n"
+                "Ответьте ТОЛЬКО в формате: latitude,longitude\n"
+                "Например: 55.7539,37.6208"
+            )
+
+            response = await self.client.chat.completions.create(
+                model="gpt-4.1",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Вы — точный геолокационный сервис. Используйте веб-поиск для поиска координат.",
+                    },
+                    {"role": "user", "content": search_prompt},
+                ],
+                tools=[{"type": "web_search"}],
+                max_tokens=100,
+                temperature=0.1,  # Low temperature for precision
+            )
+
+            content = response.choices[0].message.content if response.choices else None
+            if not content:
+                return None
+
+            # Parse coordinates from response
+            coord_match = re.search(
+                r"([-+]?\d*\.?\d+),([-+]?\d*\.?\d+)", content.strip()
+            )
+            if coord_match:
+                lat = float(coord_match.group(1))
+                lon = float(coord_match.group(2))
+
+                # Validate coordinates
+                if -90 <= lat <= 90 and -180 <= lon <= 180:
+                    logger.info(
+                        f"Found precise coordinates for {place_name}: {lat}, {lon}"
+                    )
+                    return lat, lon
+
+            logger.warning(f"Could not parse valid coordinates from: {content}")
+            return None
+
+        except Exception as e:
+            logger.error(f"Failed to get precise coordinates for {place_name}: {e}")
+            return None
+
+    async def get_coordinates_from_nominatim(
+        self, place_name: str
+    ) -> tuple[float, float] | None:
+        """Get coordinates using OpenStreetMap Nominatim service as fallback.
+
+        Args:
+            place_name: Name of the place to search
+
+        Returns:
+            Tuple of (latitude, longitude) if found, None otherwise
+        """
+        try:
+            url = "https://nominatim.openstreetmap.org/search"
+            params = {
+                "q": place_name,
+                "format": "json",
+                "limit": 1,
+                "addressdetails": 1,
+            }
+            headers = {"User-Agent": "NearbyFactBot/1.0 (Educational Project)"}
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url, params=params, headers=headers, timeout=5
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data:
+                            lat = float(data[0]["lat"])
+                            lon = float(data[0]["lon"])
+
+                            if -90 <= lat <= 90 and -180 <= lon <= 180:
+                                logger.info(
+                                    f"Found Nominatim coordinates for {place_name}: {lat}, {lon}"
+                                )
+                                return lat, lon
+
+            logger.debug(f"No coordinates found in Nominatim for: {place_name}")
+            return None
+
+        except Exception as e:
+            logger.warning(f"Failed to get Nominatim coordinates for {place_name}: {e}")
+            return None
+
+    def _coordinates_look_imprecise(self, lat: float, lon: float) -> bool:
+        """Check if coordinates look suspiciously imprecise.
+
+        Args:
+            lat: Latitude
+            lon: Longitude
+
+        Returns:
+            True if coordinates look imprecise (too rounded, common defaults, etc.)
+        """
+        # Convert to strings to check decimal places
+        lat_str = str(lat)
+        lon_str = str(lon)
+
+        # Check for overly rounded coordinates (less than 2 decimal places)
+        lat_decimals = len(lat_str.split('.')[-1]) if '.' in lat_str else 0
+        lon_decimals = len(lon_str.split('.')[-1]) if '.' in lon_str else 0
+
+        if lat_decimals < 2 or lon_decimals < 2:
+            logger.debug(f"Coordinates have too few decimal places: {lat} ({lat_decimals}), {lon} ({lon_decimals})")
+            return True
+
+        # Check for suspicious round numbers (often means city center, not specific landmark)
+        if lat == round(lat, 1) and lon == round(lon, 1):
+            logger.debug(f"Coordinates are suspiciously round: {lat}, {lon}")
+            return True
+
+        # Check for common default/placeholder coordinates
+        suspicious_patterns = [
+            (0.0, 0.0),  # Null Island
+            (55.7558, 37.6173),  # Generic Moscow center
+            (55.75, 37.62),  # Rounded Moscow
+            (59.9311, 30.3609),  # Generic SPb center
+        ]
+
+        for sus_lat, sus_lon in suspicious_patterns:
+            if abs(lat - sus_lat) < 0.01 and abs(lon - sus_lon) < 0.01:
+                logger.debug(f"Coordinates match suspicious pattern: {lat}, {lon}")
+                return True
+
+        return False
+
+    def _coordinates_are_more_precise(self, coords1: tuple[float, float], coords2: tuple[float, float]) -> bool:
+        """Compare two coordinate pairs to determine which is more precise.
+
+        Args:
+            coords1: First coordinate pair (lat, lon)
+            coords2: Second coordinate pair (lat, lon)
+
+        Returns:
+            True if coords1 are more precise than coords2
+        """
+        lat1, lon1 = coords1
+        lat2, lon2 = coords2
+
+        # Compare decimal places (more decimal places = more precise)
+        lat1_decimals = len(str(lat1).split('.')[-1]) if '.' in str(lat1) else 0
+        lon1_decimals = len(str(lon1).split('.')[-1]) if '.' in str(lon1) else 0
+        lat2_decimals = len(str(lat2).split('.')[-1]) if '.' in str(lat2) else 0
+        lon2_decimals = len(str(lon2).split('.')[-1]) if '.' in str(lon2) else 0
+
+        coords1_precision = lat1_decimals + lon1_decimals
+        coords2_precision = lat2_decimals + lon2_decimals
+
+        return coords1_precision > coords2_precision
+
+    async def parse_coordinates_from_response(
         self, response: str
     ) -> tuple[float, float] | None:
-        """Parse coordinates from OpenAI response.
+        """Parse coordinates from OpenAI response with enhanced accuracy.
 
         Args:
             response: OpenAI response text
@@ -220,9 +392,10 @@ class OpenAIClient:
             Tuple of (latitude, longitude) if found, None otherwise
         """
         try:
-            # Look for "Координаты: lat, lon" pattern
+            # First, try to extract coordinates directly from response
             coord_pattern = r"Координаты:\s*([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)"
             match = re.search(coord_pattern, response)
+            original_coords = None  # Store for later comparison
 
             if match:
                 lat = float(match.group(1))
@@ -230,14 +403,60 @@ class OpenAIClient:
 
                 # Basic validation: latitude should be -90 to 90, longitude -180 to 180
                 if -90 <= lat <= 90 and -180 <= lon <= 180:
-                    logger.info(f"Parsed coordinates: {lat}, {lon}")
-                    return lat, lon
+                    logger.info(f"Parsed coordinates from response: {lat}, {lon}")
+                    original_coords = (lat, lon)  # Store valid coordinates
+
+                    # Always try to get more precise coordinates instead of trusting GPT coordinates
+                    logger.info(f"Found GPT coordinates ({lat}, {lon}), but will search for more precise ones")
                 else:
-                    logger.warning(f"Invalid coordinates parsed: {lat}, {lon}")
-                    return None
-            else:
-                logger.debug("No coordinates found in response")
-                return None
+                    logger.warning(f"Invalid coordinates in response: {lat}, {lon}")
+
+            # If no coordinates found or invalid, try to extract location name and search for precise coordinates
+            place_match = re.search(r"Локация:\s*(.+?)(?:\n|$)", response)
+            if place_match:
+                place_name = place_match.group(1).strip()
+
+                # Extract context from the fact
+                fact_match = re.search(
+                    r"Интересный факт:\s*(.+?)(?:\n|$)", response, re.DOTALL
+                )
+                area_description = (
+                    fact_match.group(1).strip()[:200] if fact_match else ""
+                )
+
+                logger.info(f"Searching for precise coordinates for: {place_name}")
+
+                # Store original coordinates for comparison
+                original_coords = None
+                if match:
+                    original_lat = float(match.group(1))
+                    original_lon = float(match.group(2))
+                    if -90 <= original_lat <= 90 and -180 <= original_lon <= 180:
+                        original_coords = (original_lat, original_lon)
+
+                # Try WebSearch with GPT-4.1 first
+                precise_coords = await self.get_precise_coordinates(
+                    place_name, area_description
+                )
+                if precise_coords:
+                    # Always prefer WebSearch coordinates over GPT coordinates
+                    logger.info(f"Using WebSearch coordinates: {precise_coords}")
+                    return precise_coords
+
+                # Fallback to Nominatim geocoding service
+                logger.info(f"Trying Nominatim fallback for: {place_name}")
+                nominatim_coords = await self.get_coordinates_from_nominatim(place_name)
+                if nominatim_coords:
+                    logger.info(f"Using Nominatim coordinates: {nominatim_coords}")
+                    return nominatim_coords
+
+                # Last resort: use original GPT coordinates if we found them
+                if original_coords:
+                    logger.warning(f"Using GPT coordinates as last resort: {original_coords}")
+                    return original_coords
+
+            logger.debug("No coordinates found in response and no location to search")
+            return None
 
         except (ValueError, AttributeError) as e:
             logger.warning(f"Error parsing coordinates: {e}")

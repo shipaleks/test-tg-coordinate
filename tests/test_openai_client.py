@@ -165,34 +165,219 @@ def test_get_nearby_fact_live_location_model(openai_client):
 def test_parse_coordinates_from_response(openai_client):
     """Test parsing coordinates from OpenAI response."""
 
-    # Test valid coordinates
-    response_with_coords = (
-        "Локация: Красная площадь\n"
-        "Координаты: 55.7539, 37.6208\n"
-        "Интересный факт: Красная площадь - главная площадь Москвы."
-    )
-    coords = openai_client.parse_coordinates_from_response(response_with_coords)
-    assert coords == (55.7539, 37.6208)
+    async def _test():
+        # Test coordinates with successful WebSearch
+        response_with_coords = (
+            "Локация: Тестовое место\n"
+            "Координаты: 55.7415, 37.6056\n"
+            "Интересный факт: Тестовое место для проверки."
+        )
+        
+        # Mock WebSearch to return more precise coordinates
+        with patch.object(
+            openai_client,
+            "get_precise_coordinates",
+            new_callable=AsyncMock,
+            return_value=(55.741555, 37.605666),  # More precise
+        ):
+            coords = await openai_client.parse_coordinates_from_response(
+                response_with_coords
+            )
+            assert coords == (55.741555, 37.605666)  # WebSearch coordinates, not GPT
+            
+        # Test fallback to GPT coordinates when WebSearch and Nominatim fail
+        with patch.object(
+            openai_client,
+            "get_precise_coordinates",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch.object(
+            openai_client,
+            "get_coordinates_from_nominatim",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            coords = await openai_client.parse_coordinates_from_response(
+                response_with_coords
+            )
+            assert coords == (55.7415, 37.6056)  # GPT coordinates as last resort
 
-    # Test response without coordinates
-    response_without_coords = (
-        "Локация: Где-то в городе\n" "Интересный факт: Интересное место."
-    )
-    coords = openai_client.parse_coordinates_from_response(response_without_coords)
-    assert coords is None
+        # Test response without coordinates - will try to search for precise coordinates
+        # Mock both fallback methods to return None
+        with patch.object(
+            openai_client,
+            "get_precise_coordinates",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch.object(
+            openai_client,
+            "get_coordinates_from_nominatim",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            response_without_coords = (
+                "Локация: Где-то в городе\n" "Интересный факт: Интересное место."
+            )
+            coords = await openai_client.parse_coordinates_from_response(
+                response_without_coords
+            )
+            assert coords is None
 
-    # Test invalid coordinates (out of range)
-    response_invalid_coords = (
-        "Локация: Невалидное место\n"
-        "Координаты: 95.0, 200.0\n"
-        "Интересный факт: Факт."
-    )
-    coords = openai_client.parse_coordinates_from_response(response_invalid_coords)
-    assert coords is None
+        # Test invalid coordinates (out of range) - should try to search for precise coordinates
+        with patch.object(
+            openai_client,
+            "get_precise_coordinates",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch.object(
+            openai_client,
+            "get_coordinates_from_nominatim",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            response_invalid_coords = (
+                "Локация: Невалидное место\n"
+                "Координаты: 95.0, 200.0\n"
+                "Интересный факт: Факт."
+            )
+            coords = await openai_client.parse_coordinates_from_response(
+                response_invalid_coords
+            )
+            assert coords is None
 
-    # Test malformed coordinates
-    response_bad_coords = (
-        "Локация: Плохое место\n" "Координаты: не числа\n" "Интересный факт: Факт."
-    )
-    coords = openai_client.parse_coordinates_from_response(response_bad_coords)
-    assert coords is None
+        # Test malformed coordinates - should try to search for precise coordinates
+        with patch.object(
+            openai_client,
+            "get_precise_coordinates",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch.object(
+            openai_client,
+            "get_coordinates_from_nominatim",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            response_bad_coords = (
+                "Локация: Плохое место\n"
+                "Координаты: не числа\n"
+                "Интересный факт: Факт."
+            )
+            coords = await openai_client.parse_coordinates_from_response(
+                response_bad_coords
+            )
+            assert coords is None
+
+    anyio.run(_test)
+
+
+def test_get_precise_coordinates(openai_client):
+    """Test getting precise coordinates using web search."""
+
+    async def _test():
+        # Mock successful coordinate search
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "55.7539,37.6208"
+
+        mock_create = AsyncMock(return_value=mock_response)
+
+        with patch.object(openai_client.client.chat.completions, "create", mock_create):
+            coords = await openai_client.get_precise_coordinates(
+                "Красная площадь", "Центр Москвы"
+            )
+
+            assert coords == (55.7539, 37.6208)
+
+            # Verify the call was made with correct parameters
+            mock_create.assert_called_once()
+            call_args = mock_create.call_args
+
+            assert call_args[1]["model"] == "gpt-4.1"
+            assert call_args[1]["tools"] == [{"type": "web_search"}]
+            assert call_args[1]["temperature"] == 0.1
+            assert "Красная площадь" in call_args[1]["messages"][1]["content"]
+
+        # Test invalid response
+        mock_response.choices[0].message.content = "Could not find coordinates"
+        with patch.object(openai_client.client.chat.completions, "create", mock_create):
+            coords = await openai_client.get_precise_coordinates(
+                "Несуществующее место", "Где-то"
+            )
+            assert coords is None
+
+        # Test API error
+        mock_create_error = AsyncMock(side_effect=Exception("API Error"))
+        with patch.object(
+            openai_client.client.chat.completions, "create", mock_create_error
+        ):
+            coords = await openai_client.get_precise_coordinates("Место", "Контекст")
+            assert coords is None
+
+    anyio.run(_test)
+
+
+def test_get_coordinates_from_nominatim(openai_client):
+    """Test getting coordinates from Nominatim service."""
+
+    async def _test():
+        # Test successful response
+        with patch.object(
+            openai_client, "get_coordinates_from_nominatim", new_callable=AsyncMock
+        ) as mock_nominatim:
+            mock_nominatim.return_value = (55.7539, 37.6208)
+
+            coords = await openai_client.get_coordinates_from_nominatim(
+                "Красная площадь Москва"
+            )
+            assert coords == (55.7539, 37.6208)
+            mock_nominatim.assert_called_once_with("Красная площадь Москва")
+
+        # Test no results
+        with patch.object(
+            openai_client, "get_coordinates_from_nominatim", new_callable=AsyncMock
+        ) as mock_nominatim:
+            mock_nominatim.return_value = None
+
+            coords = await openai_client.get_coordinates_from_nominatim(
+                "Несуществующее место"
+            )
+            assert coords is None
+
+    anyio.run(_test)
+
+
+def test_coordinates_precision_detection(openai_client):
+    """Test detection of imprecise coordinates."""
+    
+    # Test precise coordinates that are far from suspicious patterns (should return False)
+    assert not openai_client._coordinates_look_imprecise(55.7415, 37.6056)  # Different area
+    
+    # Test imprecise coordinates - too few decimal places
+    assert openai_client._coordinates_look_imprecise(55.75, 37.62)
+    
+    # Test suspicious round numbers
+    assert openai_client._coordinates_look_imprecise(55.8, 37.6)
+    
+    # Test suspicious patterns (Moscow center)
+    assert openai_client._coordinates_look_imprecise(55.7558, 37.6173)
+    
+    # Test Null Island
+    assert openai_client._coordinates_look_imprecise(0.0, 0.0)
+
+
+def test_coordinates_precision_comparison(openai_client):
+    """Test comparison of coordinate precision."""
+    
+    # More precise vs less precise
+    precise_coords = (55.753915, 37.620795)  # 6 decimal places each
+    imprecise_coords = (55.75, 37.62)  # 2 decimal places each
+    
+    assert openai_client._coordinates_are_more_precise(precise_coords, imprecise_coords)
+    assert not openai_client._coordinates_are_more_precise(imprecise_coords, precise_coords)
+    
+    # Same precision
+    coords1 = (55.7539, 37.6208)  # 4 decimal places each
+    coords2 = (55.7541, 37.6207)  # 4 decimal places each (avoid trailing zeros)
+    
+    assert not openai_client._coordinates_are_more_precise(coords1, coords2)
+    assert not openai_client._coordinates_are_more_precise(coords2, coords1)
