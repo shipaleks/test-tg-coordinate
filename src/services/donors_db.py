@@ -43,27 +43,46 @@ class DonorsDatabase:
                 "/data"
             )
             
-            # If on Railway OR volume forced OR if volume path exists and is writable
-            if is_railway or force_volume or (os.path.exists(volume_path) and os.access(volume_path, os.W_OK)):
-                # Check if volume path is actually writable
+            logger.info(f"Detected volume path: {volume_path}")
+            
+            # Simplified path selection logic
+            if is_railway:
+                # On Railway, try volume path first, then fallback to writable app directory
                 if os.path.exists(volume_path) and os.access(volume_path, os.W_OK):
                     db_path = os.path.join(volume_path, "donors.db")
                     logger.info(f"Using Railway volume for database: {db_path}")
                 else:
-                    # If we're on Railway but volume isn't writable, use local app directory
-                    if is_railway:
-                        logger.warning(f"Volume path {volume_path} is not writable on Railway, using app directory")
-                        # Create a data directory in the app folder if it doesn't exist
-                        app_data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "railway_data")
+                    # Try to create subdirectory in volume, if that fails use /tmp
+                    if os.path.exists(volume_path):
+                        try:
+                            # Try creating subdirectory in volume with different permissions
+                            import subprocess
+                            subprocess.run(['mkdir', '-p', f'{volume_path}/appdata'], check=False)
+                            subprocess.run(['chmod', '777', f'{volume_path}/appdata'], check=False)
+                            
+                            app_volume_dir = os.path.join(volume_path, "appdata")
+                            if os.path.exists(app_volume_dir):
+                                db_path = os.path.join(app_volume_dir, "donors.db")
+                                logger.info(f"Using volume subdirectory: {db_path}")
+                            else:
+                                raise Exception("Could not create volume subdirectory")
+                        except Exception as subdir_error:
+                            logger.warning(f"Could not create volume subdirectory: {subdir_error}")
+                            # Fallback to /tmp (temporary but writable)
+                            app_data_dir = "/tmp/railway_data"
+                            os.makedirs(app_data_dir, exist_ok=True) 
+                            db_path = os.path.join(app_data_dir, "donors.db")
+                            logger.warning(f"Using temporary /tmp directory: {db_path} (NOT PERSISTENT!)")
+                    else:
+                        # Volume doesn't exist, use /tmp
+                        app_data_dir = "/tmp/railway_data"
                         os.makedirs(app_data_dir, exist_ok=True)
                         db_path = os.path.join(app_data_dir, "donors.db")
-                        logger.info(f"Using app directory for database: {db_path}")
-                    else:
-                        db_path = "donors.db"
-                        logger.info(f"Using local database: {db_path}")
+                        logger.warning(f"Volume not found, using /tmp: {db_path} (NOT PERSISTENT!)")
             else:
+                # Local development
                 db_path = "donors.db"
-                logger.info(f"Using local database: {db_path} (Railway: {is_railway}, Forced: {force_volume})")
+                logger.info(f"Using local database: {db_path}")
         self.db_path = Path(db_path)
         self._lock = threading.Lock()
         self._init_database()
