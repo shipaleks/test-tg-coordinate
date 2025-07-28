@@ -92,7 +92,7 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
             
             await query.edit_message_text(
                 "💰 *Выберите сумму:*\n\n"
-                "⭐ Помните: 1 звезда = 1 день премиума",
+                "✨ Любая поддержка очень ценится!",
                 parse_mode="Markdown",
                 reply_markup=custom_markup
             )
