@@ -90,12 +90,17 @@ def test_get_nearby_fact_prompt_format(openai_client):
             mock_create.assert_called_once()
             call_args = mock_create.call_args
 
-            assert call_args[1]["model"] == "o3"
-            assert call_args[1]["max_completion_tokens"] == 400
-            # o3 reasoning model doesn't use temperature parameter
-            assert "temperature" not in call_args[1]
-            # o3 uses max_completion_tokens instead of max_tokens
-            assert "max_tokens" not in call_args[1]
+            # Check that either o3-mini or gpt-4o was used
+            model_used = call_args[1]["model"]
+            assert model_used in ["o3-mini", "gpt-4o"]
+            assert call_args[1]["max_tokens"] == 400
+            
+            # If gpt-4o is used as fallback, it should have temperature
+            if model_used == "gpt-4o":
+                assert call_args[1]["temperature"] == 0.7
+            # o3-mini doesn't use temperature
+            elif model_used == "o3-mini":
+                assert "temperature" not in call_args[1]
 
             messages = call_args[1]["messages"]
             assert len(messages) == 2

@@ -60,17 +60,37 @@ class OpenAIClient:
                 "Интересный факт: [Увлекательный и достоверный факт]"
             )
 
-            response = await self.client.chat.completions.create(
-                model="o3",  # Using o3 reasoning model
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                max_completion_tokens=400,  # o3 model uses max_completion_tokens instead of max_tokens
-            )
+            # Try o3 first, fallback to gpt-4o if not available
+            try:
+                response = await self.client.chat.completions.create(
+                    model="o3-mini",  # Try o3-mini instead of o3
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    max_tokens=400,  # Use max_tokens for o3-mini
+                )
+            except Exception as e:
+                logger.warning(f"o3-mini failed, falling back to gpt-4o: {e}")
+                response = await self.client.chat.completions.create(
+                    model="gpt-4o",  # Fallback to gpt-4o
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    max_tokens=400,
+                    temperature=0.7,
+                )
+
+            logger.info(f"OpenAI response: {response}")
+            logger.info(f"Response choices: {response.choices}")
+            if response.choices:
+                logger.info(f"First choice: {response.choices[0]}")
+                logger.info(f"Message content: {response.choices[0].message.content}")
 
             content = response.choices[0].message.content
             if not content:
+                logger.error(f"Empty content in response: {response}")
                 raise ValueError("Empty response from OpenAI")
 
             logger.info(f"Generated fact for location {lat},{lon}")
