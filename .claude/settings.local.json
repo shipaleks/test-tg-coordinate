@@ -14,7 +14,10 @@
       "Bash(ruff check:*)",
       "Bash(black:*)",
       "Bash(timeout 30 python -m pytest:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(rm:*)",
+      "Bash(echo \"TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN:0:10...\")",
+      "Bash(echo \"OPENAI_API_KEY=$OPENAI_API_KEY:0:10...\")"
     ],
     "deny": []
   }
