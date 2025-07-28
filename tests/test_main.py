@@ -54,9 +54,9 @@ def test_start_command(mock_update, mock_context):
         text = call_args[0][0]  # First positional argument
         assert "🗺️" in text
         assert "Добро пожаловать" in text
-        assert "Быстрая отправка" in text
-        assert "Живая локация" in text
-        assert "прогулок" in text
+        assert "Живая локация — ваш персональный экскурсовод" in text
+        assert "прогулки" in text
+        assert "разовая отправка" in text
 
         # Check that markdown is used
         assert call_args[1]["parse_mode"] == "Markdown"
@@ -77,12 +77,12 @@ def test_start_command(mock_update, mock_context):
 
         # Check location button
         location_button = keyboard[0][0]
-        assert location_button.text == "📍 Поделиться локацией"
+        assert location_button.text == "🔴 Поделиться локацией"
         assert location_button.request_location is True
 
         # Check info button
         info_button = keyboard[1][0]
-        assert info_button.text == "ℹ️ Подробная инструкция"
+        assert info_button.text == "📖 Как использовать бота"
 
     anyio.run(_test)
 
@@ -100,12 +100,12 @@ def test_info_command(mock_update, mock_context):
 
         # Check that info text contains key information
         text = call_args[0][0]  # First positional argument
-        assert "ℹ️ *Подробная инструкция:*" in text
-        assert "Обычная локация" in text
-        assert "Живая локация" in text
-        assert "прогулки по городу" in text
+        assert "📖 *Как использовать бота:*" in text
+        assert "Живая локация — основной режим" in text
+        assert "Персональный экскурсовод" in text
         assert "Share Live Location" in text
         assert "туристических прогулок" in text
+        assert "Разовая геопозиция" in text
 
         # Check that markdown is used
         assert call_args[1]["parse_mode"] == "Markdown"
