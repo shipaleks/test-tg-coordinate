@@ -22,13 +22,26 @@ class DonorsDatabase:
         if db_path is None:
             # Use Railway volume path if available, otherwise default
             import os
+            
+            # Check if we're running on Railway (multiple detection methods)
+            is_railway = (
+                os.environ.get("RAILWAY_ENVIRONMENT") is not None or
+                os.environ.get("RAILWAY_PROJECT_ID") is not None or
+                os.environ.get("RAILWAY_DEPLOYMENT_ID") is not None
+            )
+            
+            # Allow forcing volume path via environment variable
+            force_volume = os.environ.get("FORCE_VOLUME_PATH", "").lower() == "true"
+            
             volume_path = "/data"
-            if os.path.exists(volume_path) and os.access(volume_path, os.W_OK):
+            
+            # If on Railway OR volume forced OR if volume path exists and is writable
+            if is_railway or force_volume or (os.path.exists(volume_path) and os.access(volume_path, os.W_OK)):
                 db_path = os.path.join(volume_path, "donors.db")
-                logger.info(f"Using Railway volume for database: {db_path}")
+                logger.info(f"Using Railway volume for database: {db_path} (Railway: {is_railway}, Forced: {force_volume})")
             else:
                 db_path = "donors.db"
-                logger.info(f"Using local database: {db_path}")
+                logger.info(f"Using local database: {db_path} (Railway: {is_railway}, Forced: {force_volume})")
         self.db_path = Path(db_path)
         self._lock = threading.Lock()
         self._init_database()

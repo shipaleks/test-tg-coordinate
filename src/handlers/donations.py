@@ -435,8 +435,14 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         except Exception as db_error:
             test_results.append(f"❌ Database operation failed: {str(db_error)}")
         
-        # 4. Check Railway volume (if applicable)
-        volume_status = "🔍 Checking volume status..."
+        # 4. Check Railway volume and environment
+        import os
+        railway_env_vars = {
+            "RAILWAY_ENVIRONMENT": os.environ.get("RAILWAY_ENVIRONMENT", "Not set"),
+            "RAILWAY_PROJECT_ID": os.environ.get("RAILWAY_PROJECT_ID", "Not set"),
+            "RAILWAY_DEPLOYMENT_ID": os.environ.get("RAILWAY_DEPLOYMENT_ID", "Not set")
+        }
+        
         if "/data" in db_path:
             test_results.append("🚀 *Deployment:* Railway with persistent volume")
             if os.path.exists("/data") and os.access("/data", os.W_OK):
@@ -445,6 +451,18 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 test_results.append("⚠️ Railway volume path not accessible")
         else:
             test_results.append("💻 *Deployment:* Local development mode")
+            # Show Railway environment variables for debugging
+            if any(v != "Not set" for v in railway_env_vars.values()):
+                test_results.append("⚠️ *Railway env detected but using local DB!*")
+                for var, value in railway_env_vars.items():
+                    if value != "Not set":
+                        test_results.append(f"  - {var}: {value[:20]}...")
+            
+        # Check if /data exists at all
+        if os.path.exists("/data"):
+            test_results.append(f"📂 */data exists:* Yes (writable: {os.access('/data', os.W_OK)})")
+        else:
+            test_results.append("📂 */data exists:* No")
         
         # Format results
         test_text = "🔧 *Database Diagnostics*\n\n" + "\n".join(test_results)

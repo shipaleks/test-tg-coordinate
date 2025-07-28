@@ -213,6 +213,12 @@ CRITICAL WRITING RULES:
 • Write conversationally but precisely - like telling a friend an amazing secret
 • Every sentence must add new information - no filler
 
+AVOIDING REPETITION:
+- If provided with previous facts, you MUST choose a completely different location or aspect
+- Never repeat the same building, street, or historical event mentioned before
+- When previous facts exist, expand your search radius or dig deeper for more obscure details
+- Each fact should feel like a completely new discovery
+
 ABSOLUTE REQUIREMENTS:
 - Never invent facts - use only verifiable historical information
 - Never use generic descriptions like "this area" or "nearby" - be specific
@@ -263,6 +269,11 @@ QUICK WRITING RULES:
 • Make every word count - no filler phrases
 • Focus on the unexpected, not the obvious
 
+AVOIDING REPETITION:
+- If given previous facts, find a completely different location or building nearby
+- Never repeat the same place, person, or event from previous facts
+- When previous facts exist, look for more obscure or hidden details
+
 REQUIREMENTS:
 - Only verified facts - no speculation
 - Be specific about location - not "this area"
@@ -273,23 +284,23 @@ Write in {user_language} - crisp, factual, surprising."""
 
             # Handle previous facts for both live and static locations
             previous_facts_text = ""
+            previous_facts_instruction = ""
             if previous_facts:
-                previous_facts_text = (
-                    "\n\nYou have already mentioned these places:\n"
-                    + "\n".join([f"- {fact}" for fact in previous_facts[-5:]])
-                    + "\n\nFind a DIFFERENT place near the same coordinates, do not repeat already mentioned locations."
-                )
+                previous_facts_text = "\n".join([f"- {fact}" for fact in previous_facts[-5:]])
+                previous_facts_instruction = "CRITICAL: Find a DIFFERENT place near these coordinates. Do NOT repeat any of the already mentioned locations or facts above."
 
             if is_live_location:
                 # Detailed prompt for live location (o4-mini/o3)
                 user_prompt = f"""Analyze these coordinates: {lat}, {lon}
 
-You will be provided with previous facts that have already been mentioned about this location or nearby areas in the following format:
+{f'''PREVIOUS FACTS ALREADY MENTIONED:
 {previous_facts_text}
 
-Make sure to choose a fact that has not been mentioned in the previous facts. If all obvious facts have been covered, dig deeper to find more obscure or specific information about the location or its surroundings.
+{previous_facts_instruction}''' if previous_facts else ''}
 
-Follow the Atlas Obscura method above to find the most surprising fact, then present your final answer in this format:
+Follow the Atlas Obscura method above to find the most surprising fact about this exact location. If you have previous facts to avoid, dig deeper to find more obscure or specific information about different nearby places.
+
+Present your final answer in this format:
 <answer>
 Location: [Specific name of the place - be precise, not generic]
 Search: [Keywords for image search: ORIGINAL name in local language + key identifying words + city. For example: 'Tour Eiffel Paris' or 'Эрмитаж Дворцовая площадь Санкт-Петербург']
@@ -305,12 +316,14 @@ Latitude: {lat}
 Longitude: {lon}
 </coordinates>
 
-Before providing your answer, consider any previous facts that have been shared about nearby locations. This will help you avoid repetition and ensure you're providing new, interesting information. Here are the previous facts (if any):
-<previous_facts>
-{previous_facts_text if previous_facts_text else "None"}
-</previous_facts>
+{f'''PREVIOUS FACTS ALREADY MENTIONED:
+{previous_facts_text}
 
-Apply the rapid Atlas Obscura search method above, then format your answer:
+{previous_facts_instruction}''' if previous_facts else ''}
+
+Apply the rapid Atlas Obscura search method above to find a surprising fact. If you have previous facts to avoid, choose a completely different nearby location or dig deeper for more obscure details.
+
+Format your answer:
 <answer>
 Location: [Exact place name - specific building or location, not "area near" or "district of"]
 Search: [Keywords for image search: ORIGINAL local name + identifying features + city. Example: 'Gamla Stan Medieval Wall Stockholm' or 'Банк Швеции средневековая стена']
