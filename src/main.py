@@ -97,10 +97,10 @@ def main() -> None:
         MessageHandler(filters.TEXT & filters.Regex("^ℹ️ Подробная инструкция$"), info_command)
     )
     
-    # Add location handlers
-    application.add_handler(MessageHandler(filters.LOCATION, handle_location))
+    # Add location handlers (exclude edited messages)
+    application.add_handler(MessageHandler(filters.LOCATION & ~filters.UpdateType.EDITED_MESSAGE, handle_location))
     
-    # Add handler for live location updates (edited messages)
+    # Add handler for live location updates (edited messages only)
     application.add_handler(
         MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.LOCATION, handle_edited_location)
     )
