@@ -3,6 +3,7 @@
 import logging
 import os
 import re
+from urllib.parse import quote
 
 import aiohttp
 from openai import AsyncOpenAI
@@ -483,6 +484,136 @@ class OpenAIClient:
         except (ValueError, AttributeError) as e:
             logger.warning(f"Error parsing coordinates: {e}")
             return None
+
+    async def get_wikipedia_image(self, search_keywords: str) -> str | None:
+        """Get image from Wikipedia using search keywords.
+        
+        Args:
+            search_keywords: Search keywords from GPT response
+            
+        Returns:
+            Image URL if found, None otherwise
+        """
+        # Languages to try (in order of preference)
+        languages = ['en', 'ru', 'fr', 'de', 'es', 'it']
+        
+        # Clean up search keywords
+        clean_keywords = search_keywords.replace(' + ', ' ').replace('+', ' ').strip()
+        
+        # Try different variations of search terms
+        search_variations = [
+            clean_keywords,
+            clean_keywords.split()[0] if clean_keywords.split() else clean_keywords,  # First word only
+        ]
+        
+        # Add specific variations for common patterns
+        if any(word in clean_keywords.lower() for word in ['metro', 'station', 'метро', 'станция']):
+            # For metro stations, try without "metro"/"метро" words
+            metro_clean = clean_keywords.lower()
+            for word in ['metro', 'station', 'метро', 'станция']:
+                metro_clean = metro_clean.replace(word, '').strip()
+            if metro_clean:
+                search_variations.append(metro_clean)
+        
+        for lang in languages:
+            for search_term in search_variations:
+                if not search_term:
+                    continue
+                    
+                try:
+                    image_url = await self._search_wikipedia_image(search_term, lang)
+                    if image_url:
+                        logger.info(f"Found Wikipedia image for '{search_term}' in {lang}: {image_url}")
+                        return image_url
+                except Exception as e:
+                    logger.debug(f"Wikipedia search failed for '{search_term}' in {lang}: {e}")
+                    continue
+        
+        logger.info(f"No Wikipedia image found for: {search_keywords}")
+        return None
+
+    async def _search_wikipedia_image(self, search_term: str, lang: str) -> str | None:
+        """Search for image on specific Wikipedia language.
+        
+        Args:
+            search_term: Term to search for
+            lang: Language code (en, ru, fr, etc.)
+            
+        Returns:
+            Image URL if found, None otherwise
+        """
+        try:
+            # First, search for the page
+            search_url = f"https://{lang}.wikipedia.org/api/rest_v1/page/search/{quote(search_term)}"
+            headers = {"User-Agent": "NearbyFactBot/1.0 (Educational Project)"}
+            
+            async with aiohttp.ClientSession() as session:
+                # Search for pages
+                async with session.get(search_url, headers=headers, timeout=5) as response:
+                    if response.status != 200:
+                        return None
+                    
+                    search_data = await response.json()
+                    pages = search_data.get('pages', [])
+                    
+                    if not pages:
+                        return None
+                    
+                    # Try first few pages
+                    for page in pages[:3]:
+                        page_title = page.get('title')
+                        if not page_title:
+                            continue
+                        
+                        # Get media list for this page
+                        media_url = f"https://{lang}.wikipedia.org/api/rest_v1/page/media-list/{quote(page_title)}"
+                        
+                        async with session.get(media_url, headers=headers, timeout=5) as media_response:
+                            if media_response.status != 200:
+                                continue
+                                
+                            media_data = await media_response.json()
+                            items = media_data.get('items', [])
+                            
+                            # Look for good images
+                            for item in items:
+                                if item.get('type') != 'image':
+                                    continue
+                                
+                                title = item.get('title', '').lower()
+                                
+                                # Skip common non-relevant images
+                                skip_patterns = [
+                                    'commons-logo', 'edit-icon', 'wikimedia', 'stub',
+                                    'ambox', 'crystal', 'nuvola', 'dialog', 'system',
+                                    'red_x', 'green_check', 'question_mark'
+                                ]
+                                
+                                if any(pattern in title for pattern in skip_patterns):
+                                    continue
+                                
+                                # Prefer images with good extensions
+                                if any(ext in title for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+                                    image_url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(item['title'])}"
+                                    return image_url
+                            
+                            # If no preferred images, try first image
+                            for item in items:
+                                if item.get('type') == 'image':
+                                    title = item.get('title', '').lower()
+                                    skip_patterns = [
+                                        'commons-logo', 'edit-icon', 'wikimedia', 'stub',
+                                        'ambox', 'crystal', 'nuvola', 'dialog', 'system'
+                                    ]
+                                    if not any(pattern in title for pattern in skip_patterns):
+                                        image_url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(item['title'])}"
+                                        return image_url
+        
+        except Exception as e:
+            logger.debug(f"Error searching Wikipedia {lang} for '{search_term}': {e}")
+            return None
+        
+        return None
 
 
 # Global client instance - will be initialized lazily

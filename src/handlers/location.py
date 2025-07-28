@@ -1,6 +1,7 @@
 """Location message handler for Telegram bot."""
 
 import logging
+import re
 
 from telegram import (
     InlineKeyboardButton,
@@ -141,6 +142,23 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             reply_to_message_id=update.message.message_id,
             parse_mode="Markdown",
         )
+
+        # Try to get and send Wikipedia image
+        search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
+        if search_match:
+            search_keywords = search_match.group(1).strip()
+            try:
+                image_url = await openai_client.get_wikipedia_image(search_keywords)
+                if image_url:
+                    await context.bot.send_photo(
+                        chat_id=chat_id,
+                        photo=image_url,
+                        caption=f"📸 {place}",
+                        reply_to_message_id=update.message.message_id,
+                    )
+                    logger.info(f"Sent Wikipedia image for {place}")
+            except Exception as img_error:
+                logger.warning(f"Failed to send Wikipedia image: {img_error}")
 
         # Try to parse coordinates and send location for navigation using search keywords
         coordinates = await openai_client.parse_coordinates_from_response(response)
@@ -286,6 +304,22 @@ async def handle_interval_callback(
             text=initial_fact_response,
             parse_mode="Markdown",
         )
+
+        # Try to get and send Wikipedia image for initial fact
+        search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
+        if search_match:
+            search_keywords = search_match.group(1).strip()
+            try:
+                image_url = await openai_client.get_wikipedia_image(search_keywords)
+                if image_url:
+                    await context.bot.send_photo(
+                        chat_id=chat_id,
+                        photo=image_url,
+                        caption=f"📸 {place}",
+                    )
+                    logger.info(f"Sent Wikipedia image for initial live fact: {place}")
+            except Exception as img_error:
+                logger.warning(f"Failed to send Wikipedia image for initial fact: {img_error}")
 
         # Try to parse coordinates and send location for navigation using search keywords (live location)
         coordinates = await openai_client.parse_coordinates_from_response(response)

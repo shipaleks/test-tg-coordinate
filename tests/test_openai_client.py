@@ -414,3 +414,62 @@ def test_get_coordinates_from_search_keywords(openai_client):
             assert coords is None
 
     anyio.run(_test)
+
+
+def test_get_wikipedia_image(openai_client):
+    """Test getting images from Wikipedia."""
+
+    async def _test():
+        # Test with a well-known landmark that should have an image
+        with patch('aiohttp.ClientSession') as mock_session:
+            # Mock Wikipedia search response
+            mock_search_response = MagicMock()
+            mock_search_response.status = 200
+            mock_search_response.json = AsyncMock(return_value={
+                'pages': [{'title': 'Eiffel Tower'}]
+            })
+            
+            # Mock Wikipedia media response  
+            mock_media_response = MagicMock()
+            mock_media_response.status = 200
+            mock_media_response.json = AsyncMock(return_value={
+                'items': [
+                    {'type': 'image', 'title': 'File:Eiffel_Tower.jpg'},
+                    {'type': 'image', 'title': 'File:Commons-logo.png'}  # Should be skipped
+                ]
+            })
+            
+            # Mock session context manager
+            mock_session_instance = MagicMock()
+            mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_session_instance)
+            mock_session.return_value.__aexit__ = AsyncMock(return_value=None)
+            
+            # Mock get requests
+            mock_session_instance.get.return_value.__aenter__ = AsyncMock()
+            mock_session_instance.get.return_value.__aexit__ = AsyncMock(return_value=None)
+            mock_session_instance.get.return_value.__aenter__.side_effect = [
+                mock_search_response, mock_media_response
+            ]
+            
+            # Test the function
+            image_url = await openai_client.get_wikipedia_image("Eiffel Tower Paris France")
+            
+            # Should return the image URL (URL encoded)
+            assert image_url == "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower.jpg"
+            
+        # Test with search keywords that won't be found
+        with patch('aiohttp.ClientSession') as mock_session:
+            mock_search_response = MagicMock()
+            mock_search_response.status = 200
+            mock_search_response.json = AsyncMock(return_value={'pages': []})
+            
+            mock_session_instance = MagicMock()
+            mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_session_instance)
+            mock_session.return_value.__aexit__ = AsyncMock(return_value=None)
+            mock_session_instance.get.return_value.__aenter__ = AsyncMock(return_value=mock_search_response)
+            mock_session_instance.get.return_value.__aexit__ = AsyncMock(return_value=None)
+            
+            image_url = await openai_client.get_wikipedia_image("NonexistentPlace")
+            assert image_url is None
+
+    anyio.run(_test)

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -212,6 +213,22 @@ class LiveLocationTracker:
                         text=formatted_response,
                         parse_mode="Markdown",
                     )
+
+                    # Try to get and send Wikipedia image for background fact
+                    search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
+                    if search_match:
+                        search_keywords = search_match.group(1).strip()
+                        try:
+                            image_url = await openai_client.get_wikipedia_image(search_keywords)
+                            if image_url:
+                                await bot.send_photo(
+                                    chat_id=session_data.chat_id,
+                                    photo=image_url,
+                                    caption=f"📸 {place}",
+                                )
+                                logger.info(f"Sent Wikipedia image for background fact: {place}")
+                        except Exception as img_error:
+                            logger.warning(f"Failed to send Wikipedia image for background fact: {img_error}")
 
                     # Try to parse coordinates and send location for navigation using search keywords (background fact)
                     coordinates = await openai_client.parse_coordinates_from_response(
