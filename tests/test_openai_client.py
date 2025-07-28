@@ -29,7 +29,9 @@ def test_get_nearby_fact_success(openai_client):
         mock_create = AsyncMock(return_value=mock_response)
 
         with patch.object(openai_client.client.chat.completions, "create", mock_create):
-            fact = await openai_client.get_nearby_fact(55.751244, 37.618423, is_live_location=False)
+            fact = await openai_client.get_nearby_fact(
+                55.751244, 37.618423, is_live_location=False
+            )
 
             assert "Локация: Дом Пашкова" in fact
             assert (
@@ -53,7 +55,9 @@ def test_get_nearby_fact_empty_response(openai_client):
 
         with patch.object(openai_client.client.chat.completions, "create", mock_create):
             with pytest.raises(ValueError, match="Empty content from gpt-4.1"):
-                await openai_client.get_nearby_fact(55.751244, 37.618423, is_live_location=False)
+                await openai_client.get_nearby_fact(
+                    55.751244, 37.618423, is_live_location=False
+                )
 
     anyio.run(_test)
 
@@ -66,7 +70,9 @@ def test_get_nearby_fact_api_error(openai_client):
 
         with patch.object(openai_client.client.chat.completions, "create", mock_create):
             with pytest.raises(Exception, match="API Error"):
-                await openai_client.get_nearby_fact(55.751244, 37.618423, is_live_location=False)
+                await openai_client.get_nearby_fact(
+                    55.751244, 37.618423, is_live_location=False
+                )
 
     anyio.run(_test)
 
@@ -77,14 +83,16 @@ def test_get_nearby_fact_prompt_format(openai_client):
     async def _test():
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[
-            0
-        ].message.content = "Локация: Test\nИнтересный факт: Test fact"
+        mock_response.choices[0].message.content = (
+            "Локация: Test\nИнтересный факт: Test fact"
+        )
 
         mock_create = AsyncMock(return_value=mock_response)
 
         with patch.object(openai_client.client.chat.completions, "create", mock_create):
-            await openai_client.get_nearby_fact(55.751244, 37.618423, is_live_location=False)
+            await openai_client.get_nearby_fact(
+                55.751244, 37.618423, is_live_location=False
+            )
 
             # Check that create was called with correct parameters
             mock_create.assert_called_once()
@@ -118,14 +126,16 @@ def test_get_nearby_fact_live_location_model(openai_client):
     async def _test():
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[
-            0
-        ].message.content = "Локация: Test\nИнтересный факт: Test detailed fact"
+        mock_response.choices[0].message.content = (
+            "Локация: Test\nИнтересный факт: Test detailed fact"
+        )
 
         mock_create = AsyncMock(return_value=mock_response)
 
         with patch.object(openai_client.client.chat.completions, "create", mock_create):
-            await openai_client.get_nearby_fact(55.751244, 37.618423, is_live_location=True)
+            await openai_client.get_nearby_fact(
+                55.751244, 37.618423, is_live_location=True
+            )
 
             # Check that create was called with correct parameters
             mock_create.assert_called_once()
@@ -145,6 +155,44 @@ def test_get_nearby_fact_live_location_model(openai_client):
             assert "рассуждения" in messages[0]["content"]
             assert messages[1]["role"] == "user"
             assert "55.751244, 37.618423" in messages[1]["content"]
-            assert "Шаг 1:" in messages[1]["content"]  # Should have detailed steps for live location
+            assert (
+                "Шаг 1:" in messages[1]["content"]
+            )  # Should have detailed steps for live location
 
     anyio.run(_test)
+
+
+def test_parse_coordinates_from_response(openai_client):
+    """Test parsing coordinates from OpenAI response."""
+
+    # Test valid coordinates
+    response_with_coords = (
+        "Локация: Красная площадь\n"
+        "Координаты: 55.7539, 37.6208\n"
+        "Интересный факт: Красная площадь - главная площадь Москвы."
+    )
+    coords = openai_client.parse_coordinates_from_response(response_with_coords)
+    assert coords == (55.7539, 37.6208)
+
+    # Test response without coordinates
+    response_without_coords = (
+        "Локация: Где-то в городе\n" "Интересный факт: Интересное место."
+    )
+    coords = openai_client.parse_coordinates_from_response(response_without_coords)
+    assert coords is None
+
+    # Test invalid coordinates (out of range)
+    response_invalid_coords = (
+        "Локация: Невалидное место\n"
+        "Координаты: 95.0, 200.0\n"
+        "Интересный факт: Факт."
+    )
+    coords = openai_client.parse_coordinates_from_response(response_invalid_coords)
+    assert coords is None
+
+    # Test malformed coordinates
+    response_bad_coords = (
+        "Локация: Плохое место\n" "Координаты: не числа\n" "Интересный факт: Факт."
+    )
+    coords = openai_client.parse_coordinates_from_response(response_bad_coords)
+    assert coords is None

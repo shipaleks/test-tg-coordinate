@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 
 from openai import AsyncOpenAI
 
@@ -19,7 +20,13 @@ class OpenAIClient:
         """
         self.client = AsyncOpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
 
-    async def get_nearby_fact(self, lat: float, lon: float, is_live_location: bool = False, previous_facts: list = None) -> str:
+    async def get_nearby_fact(
+        self,
+        lat: float,
+        lon: float,
+        is_live_location: bool = False,
+        previous_facts: list = None,
+    ) -> str:
         """Get an interesting fact about a location.
 
         Args:
@@ -53,6 +60,10 @@ class OpenAIClient:
                 "  2. Исторические факты о районе/квартале\n"
                 "  3. Общая информация о городе или регионе\n"
                 "  4. Только если ничего достоверного не знаете — честно скажите об ограниченности знаний\n\n"
+                "КАЧЕСТВО ФАКТОВ:\n"
+                "Стремитесь к уровню качества фактов как в Atlas Obscura — необычные, неочевидные, "
+                "но достоверные детали о местах. Ищите скрытые истории, архитектурные секреты, "
+                "малоизвестные исторические события, культурные особенности.\n\n"
                 "ВАЖНО: Лучше предоставить достоверный общий факт о городе, чем выдуманный детальный. "
                 "Весь ответ должен быть на русском языке."
             )
@@ -61,8 +72,10 @@ class OpenAIClient:
             previous_facts_text = ""
             if is_live_location and previous_facts:
                 previous_facts_text = (
-                    f"\n\nРАНЕЕ РАССКАЗАННЫЕ ФАКТЫ (НЕ ПОВТОРЯЙТЕ):\n" +
-                    "\n".join([f"- {fact}" for fact in previous_facts[-5:]])  # Last 5 facts
+                    "\n\nРАНЕЕ РАССКАЗАННЫЕ ФАКТЫ (НЕ ПОВТОРЯЙТЕ):\n"
+                    + "\n".join(
+                        [f"- {fact}" for fact in previous_facts[-5:]]
+                    )  # Last 5 facts
                     + "\n\nВыберите ДРУГУЮ тему или аспект этого места!\n"
                 )
 
@@ -87,6 +100,7 @@ class OpenAIClient:
                     "- Архитектурные особенности или культурное значение (только если точно знаете)\n\n"
                     "Финальный ответ в формате:\n"
                     "Локация: [Конкретное название места]\n"
+                    "Координаты: [latitude], [longitude] (если знаете точные координаты достопримечательности)\n"
                     "Интересный факт: [Развернутый факт с историческими подробностями, примерно 100-120 слов]"
                 )
             else:
@@ -105,6 +119,7 @@ class OpenAIClient:
                     "- Достоверные особенности места\n\n"
                     "Финальный ответ в формате:\n"
                     "Локация: [Конкретное название места]\n"
+                    "Координаты: [latitude], [longitude] (если знаете точные координаты достопримечательности)\n"
                     "Интересный факт: [Краткий, но достоверный факт, 60-80 слов]"
                 )
 
@@ -122,14 +137,22 @@ class OpenAIClient:
                         max_completion_tokens=10000,  # Large limit for o4-mini extensive reasoning + detailed response
                     )
                     logger.info(f"o4-mini (live location) response: {response}")
-                    content = response.choices[0].message.content if response.choices else None
-                    
+                    content = (
+                        response.choices[0].message.content
+                        if response.choices
+                        else None
+                    )
+
                     if not content:
-                        logger.warning(f"o4-mini returned empty content, falling back to gpt-4.1")
+                        logger.warning(
+                            "o4-mini returned empty content, falling back to gpt-4.1"
+                        )
                         raise ValueError("Empty content from o4-mini")
-                        
+
                 except Exception as e:
-                    logger.warning(f"o4-mini failed ({e}), falling back to gpt-4.1 for live location")
+                    logger.warning(
+                        f"o4-mini failed ({e}), falling back to gpt-4.1 for live location"
+                    )
                     response = await self.client.chat.completions.create(
                         model="gpt-4.1",
                         messages=[
@@ -140,7 +163,11 @@ class OpenAIClient:
                         temperature=0.7,
                     )
                     logger.info(f"gpt-4.1 fallback for live location: {response}")
-                    content = response.choices[0].message.content if response.choices else None
+                    content = (
+                        response.choices[0].message.content
+                        if response.choices
+                        else None
+                    )
             else:
                 # Use gpt-4.1 for static location (fast, concise facts)
                 try:
@@ -154,12 +181,18 @@ class OpenAIClient:
                         temperature=0.7,
                     )
                     logger.info(f"gpt-4.1 (static location) response: {response}")
-                    content = response.choices[0].message.content if response.choices else None
-                    
+                    content = (
+                        response.choices[0].message.content
+                        if response.choices
+                        else None
+                    )
+
                     if not content:
-                        logger.warning(f"gpt-4.1 returned empty content for static location")
+                        logger.warning(
+                            "gpt-4.1 returned empty content for static location"
+                        )
                         raise ValueError("Empty content from gpt-4.1")
-                        
+
                 except Exception as e:
                     logger.error(f"gpt-4.1 failed for static location: {e}")
                     raise
@@ -174,6 +207,41 @@ class OpenAIClient:
         except Exception as e:
             logger.error(f"Failed to generate fact for {lat},{lon}: {e}")
             raise
+
+    def parse_coordinates_from_response(
+        self, response: str
+    ) -> tuple[float, float] | None:
+        """Parse coordinates from OpenAI response.
+
+        Args:
+            response: OpenAI response text
+
+        Returns:
+            Tuple of (latitude, longitude) if found, None otherwise
+        """
+        try:
+            # Look for "Координаты: lat, lon" pattern
+            coord_pattern = r"Координаты:\s*([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)"
+            match = re.search(coord_pattern, response)
+
+            if match:
+                lat = float(match.group(1))
+                lon = float(match.group(2))
+
+                # Basic validation: latitude should be -90 to 90, longitude -180 to 180
+                if -90 <= lat <= 90 and -180 <= lon <= 180:
+                    logger.info(f"Parsed coordinates: {lat}, {lon}")
+                    return lat, lon
+                else:
+                    logger.warning(f"Invalid coordinates parsed: {lat}, {lon}")
+                    return None
+            else:
+                logger.debug("No coordinates found in response")
+                return None
+
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Error parsing coordinates: {e}")
+            return None
 
 
 # Global client instance - will be initialized lazily

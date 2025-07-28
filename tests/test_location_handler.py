@@ -4,8 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import anyio
 import pytest
-from src.handlers.location import handle_location, handle_edited_location, handle_interval_callback
-from telegram import Chat, Location, Message, Update, User, CallbackQuery
+from src.handlers.location import (
+    handle_edited_location,
+    handle_interval_callback,
+    handle_location,
+)
+from telegram import CallbackQuery, Chat, Location, Message, Update, User
 
 
 @pytest.fixture
@@ -183,12 +187,12 @@ def test_handle_location_live_shows_interval_selection(mock_live_update, mock_co
         # Verify interval selection message was sent
         mock_live_update.message.reply_text.assert_called_once()
         call_args = mock_live_update.message.reply_text.call_args
-        
+
         # Check that interval selection message contains Russian text
         assert "🔴 *Живая локация получена!*" in call_args[1]["text"]
         assert "60 минут" in call_args[1]["text"]  # 3600 seconds = 60 minutes
         assert "Как часто присылать интересные факты?" in call_args[1]["text"]
-        
+
         # Check that reply_markup (keyboard) is present
         assert "reply_markup" in call_args[1]
         assert call_args[1]["parse_mode"] == "Markdown"
@@ -201,7 +205,9 @@ def test_handle_interval_callback_success(mock_callback_query, mock_context):
 
     async def _test():
         with patch("src.handlers.location.get_openai_client") as mock_get_client:
-            with patch("src.handlers.location.get_live_location_tracker") as mock_get_tracker:
+            with patch(
+                "src.handlers.location.get_live_location_tracker"
+            ) as mock_get_tracker:
                 # Mock OpenAI client
                 mock_client = MagicMock()
                 mock_client.get_nearby_fact = AsyncMock(
@@ -233,7 +239,9 @@ def test_handle_interval_callback_success(mock_callback_query, mock_context):
 
                 # Verify confirmation message was sent (Russian)
                 mock_callback_query.callback_query.edit_message_text.assert_called_once()
-                edit_call_args = mock_callback_query.callback_query.edit_message_text.call_args
+                edit_call_args = (
+                    mock_callback_query.callback_query.edit_message_text.call_args
+                )
                 assert "🔴 *Живая локация активирована!*" in edit_call_args[1]["text"]
                 assert "10 минут" in edit_call_args[1]["text"]
 
@@ -249,7 +257,9 @@ def test_handle_edited_location_success(mock_edited_update, mock_context):
     """Test successful edited location (live location update) handling."""
 
     async def _test():
-        with patch("src.handlers.location.get_live_location_tracker") as mock_get_tracker:
+        with patch(
+            "src.handlers.location.get_live_location_tracker"
+        ) as mock_get_tracker:
             # Mock live location tracker
             mock_tracker = MagicMock()
             mock_tracker.update_live_location = AsyncMock()

@@ -6,9 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import anyio
 import pytest
+from src.services.live_location_tracker import LiveLocationData, LiveLocationTracker
 from telegram import Bot
-
-from src.services.live_location_tracker import LiveLocationTracker, LiveLocationData
 
 
 @pytest.fixture
@@ -34,7 +33,9 @@ def test_start_live_location(tracker, mock_bot):
         lat, lon = 55.7558, 37.6173
         live_period = 3600  # 1 hour
 
-        with patch('src.services.live_location_tracker.get_openai_client') as mock_get_client:
+        with patch(
+            "src.services.live_location_tracker.get_openai_client"
+        ) as mock_get_client:
             # Mock OpenAI client
             mock_client = MagicMock()
             mock_client.get_nearby_fact = AsyncMock(
@@ -71,7 +72,9 @@ def test_update_live_location(tracker, mock_bot):
         lat, lon = 55.7558, 37.6173
         live_period = 3600
 
-        with patch('src.services.live_location_tracker.get_openai_client') as mock_get_client:
+        with patch(
+            "src.services.live_location_tracker.get_openai_client"
+        ) as mock_get_client:
             mock_client = MagicMock()
             mock_client.get_nearby_fact = AsyncMock(
                 return_value="Локация: Test\nИнтересный факт: Test fact"
@@ -112,7 +115,9 @@ def test_stop_live_location(tracker, mock_bot):
         lat, lon = 55.7558, 37.6173
         live_period = 3600
 
-        with patch('src.services.live_location_tracker.get_openai_client') as mock_get_client:
+        with patch(
+            "src.services.live_location_tracker.get_openai_client"
+        ) as mock_get_client:
             mock_client = MagicMock()
             mock_client.get_nearby_fact = AsyncMock(
                 return_value="Локация: Test\nИнтересный факт: Test fact"
@@ -151,7 +156,9 @@ def test_multiple_sessions(tracker, mock_bot):
         lat, lon = 55.7558, 37.6173
         live_period = 3600
 
-        with patch('src.services.live_location_tracker.get_openai_client') as mock_get_client:
+        with patch(
+            "src.services.live_location_tracker.get_openai_client"
+        ) as mock_get_client:
             mock_client = MagicMock()
             mock_client.get_nearby_fact = AsyncMock(
                 return_value="Локация: Test\nИнтересный факт: Test fact"
@@ -218,8 +225,10 @@ def test_fact_sending_loop_quick(tracker, mock_bot):
             live_period=live_period,
         )
 
-        with patch('src.services.live_location_tracker.get_openai_client') as mock_get_client:
-            with patch('asyncio.sleep') as mock_sleep:
+        with patch(
+            "src.services.live_location_tracker.get_openai_client"
+        ) as mock_get_client:
+            with patch("asyncio.sleep") as mock_sleep:
                 # Mock OpenAI client
                 mock_client = MagicMock()
                 mock_client.get_nearby_fact = AsyncMock(
@@ -269,8 +278,10 @@ def test_session_expiry():
         mock_bot = MagicMock(spec=Bot)
         mock_bot.send_message = AsyncMock()
 
-        with patch('src.services.live_location_tracker.get_openai_client') as mock_get_client:
-            with patch('asyncio.sleep') as mock_sleep:
+        with patch(
+            "src.services.live_location_tracker.get_openai_client"
+        ) as mock_get_client:
+            with patch("asyncio.sleep") as mock_sleep:
                 # Mock to return immediately on first sleep call
                 mock_sleep.return_value = asyncio.Future()
                 mock_sleep.return_value.set_result(None)
@@ -282,7 +293,7 @@ def test_session_expiry():
 
                 # Wait for task to complete (should exit due to expiry)
                 await asyncio.sleep(0.1)
-                
+
                 # Task should complete on its own due to expiry
                 if not task.done():
                     task.cancel()
@@ -294,4 +305,4 @@ def test_session_expiry():
                 # Verify no facts were sent due to expiry
                 mock_bot.send_message.assert_not_called()
 
-    anyio.run(_test) 
+    anyio.run(_test)

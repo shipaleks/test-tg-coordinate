@@ -4,10 +4,20 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import Application, ContextTypes, MessageHandler, filters, CallbackQueryHandler
+from telegram import KeyboardButton, ReplyKeyboardMarkup, Update
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
-from .handlers.location import handle_location, handle_edited_location, handle_interval_callback
+from .handlers.location import (
+    handle_edited_location,
+    handle_interval_callback,
+    handle_location,
+)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -31,22 +41,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "Автоматические факты каждые 5-60 минут во время движения\n\n"
         "_Каждый факт — это маленькое открытие!_ ✨"
     )
-    
+
     # Create simplified location sharing keyboard
     keyboard = [
         [KeyboardButton("📍 Поделиться локацией", request_location=True)],
-        [KeyboardButton("ℹ️ Подробная инструкция")]
+        [KeyboardButton("ℹ️ Подробная инструкция")],
     ]
     reply_markup = ReplyKeyboardMarkup(
-        keyboard, 
-        resize_keyboard=True, 
-        one_time_keyboard=False
+        keyboard, resize_keyboard=True, one_time_keyboard=False
     )
-    
+
     await update.message.reply_text(
-        welcome_text, 
-        parse_mode="Markdown", 
-        reply_markup=reply_markup
+        welcome_text, parse_mode="Markdown", reply_markup=reply_markup
     )
 
 
@@ -66,7 +72,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "Идеально для туристических прогулок — узнавайте о местах "
         "автоматически, не отвлекаясь от экскурсии!"
     )
-    
+
     await update.message.reply_text(info_text, parse_mode="Markdown")
 
 
@@ -91,25 +97,33 @@ def main() -> None:
     application.add_handler(
         MessageHandler(filters.COMMAND & filters.Regex("^/start"), start_command)
     )
-    
+
     # Add text message handlers
     application.add_handler(
-        MessageHandler(filters.TEXT & filters.Regex("^ℹ️ Подробная инструкция$"), info_command)
+        MessageHandler(
+            filters.TEXT & filters.Regex("^ℹ️ Подробная инструкция$"), info_command
+        )
     )
-    
+
     # Add location handlers (exclude edited messages)
-    application.add_handler(MessageHandler(filters.LOCATION & ~filters.UpdateType.EDITED_MESSAGE, handle_location))
-    
+    application.add_handler(
+        MessageHandler(
+            filters.LOCATION & ~filters.UpdateType.EDITED_MESSAGE, handle_location
+        )
+    )
+
     # Add handler for live location updates (edited messages only)
     application.add_handler(
-        MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.LOCATION, handle_edited_location)
+        MessageHandler(
+            filters.UpdateType.EDITED_MESSAGE & filters.LOCATION, handle_edited_location
+        )
     )
-    
+
     # Add callback query handler for interval selection
     application.add_handler(
         CallbackQueryHandler(handle_interval_callback, pattern="^interval_")
     )
-    
+
     # Add error handler
     application.add_error_handler(error_handler)
 
