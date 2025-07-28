@@ -24,10 +24,8 @@ async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     donor_info = donors_db.get_donor_info(user.id)
     
     # Create status text
-    if is_premium and donor_info:
-        status_text = f"✨ *Премиум статус активен*\n📊 Всего звезд: {donor_info['total_stars']}⭐\n\n"
-    elif donor_info:
-        status_text = f"💫 *Спасибо за поддержку!*\n📊 Всего звезд: {donor_info['total_stars']}⭐\n\n"
+    if donor_info:
+        status_text = f"🎁 *Донатер проекта*\n📊 Всего звезд: {donor_info['total_stars']}⭐\n🧠 o3 модель активна для живых локаций\n\n"
     else:
         status_text = ""
     
@@ -108,10 +106,8 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
             donor_info = donors_db.get_donor_info(user.id)
             
             # Create status text
-            if is_premium and donor_info:
-                status_text = f"✨ *Спасибо за поддержку!*\n📊 Всего звезд: {donor_info['total_stars']}⭐\n\n"
-            elif donor_info:
-                status_text = f"💫 *Спасибо за поддержку!*\n📊 Всего звезд: {donor_info['total_stars']}⭐\n\n"
+            if donor_info:
+                status_text = f"🎁 *Донатер проекта*\n📊 Всего звезд: {donor_info['total_stars']}⭐\n🧠 o3 модель активна для живых локаций\n\n"
             else:
                 status_text = ""
             
@@ -281,17 +277,31 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
             donor_info = donors_db.get_donor_info(user.id)
             total_stars = donor_info['total_stars'] if donor_info else stars_amount
             
-            # Create success message (скрытый бонус не упоминаем)
-            success_text = (
-                f"🎉 *Спасибо за поддержку!*\n\n"
-                f"💫 Получено: {stars_amount}⭐\n"
-                f"📊 Всего звезд: {total_stars}⭐\n\n"
-                f"✨ Ваша поддержка поможет:\n"
-                f"• Улучшить качество фактов\n"
-                f"• Развивать новые функции\n" 
-                f"• Поддерживать проект 24/7\n\n"
-                f"🙏 Спасибо за то, что делаете проект лучше!"
-            )
+            # Check if this is first donation (show bonus message)
+            is_first_donation = total_stars == stars_amount
+            
+            if is_first_donation:
+                # First donation - explain the bonus as gratitude
+                success_text = (
+                    f"🎉 *Спасибо за поддержку!*\n\n"
+                    f"💫 Получено: {stars_amount}⭐\n\n"
+                    f"🎁 *В благодарность мы включили вам более мощные модели!*\n\n"
+                    f"🧠 **Для живых локаций теперь доступна модель o3:**\n"
+                    f"• Более глубокий анализ мест при прогулках\n"
+                    f"• Детальнее исторические факты\n"
+                    f"• Лучше понимание контекста локации\n\n"
+                    f"✨ Это наш способ сказать спасибо за то, что помогаете проекту развиваться!"
+                )
+            else:
+                # Repeat donation - simpler thanks
+                success_text = (
+                    f"🎉 *Спасибо за поддержку!*\n\n"
+                    f"💫 Получено: {stars_amount}⭐\n"
+                    f"📊 Всего звезд: {total_stars}⭐\n\n"
+                    f"🙏 Ваша повторная поддержка очень ценна!\n"
+                    f"✨ Продолжайте наслаждаться улучшенными фактами!"
+                )
+            
             
             await update.message.reply_text(success_text, parse_mode="Markdown")
             
