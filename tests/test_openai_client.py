@@ -29,7 +29,7 @@ def test_get_nearby_fact_success(openai_client):
         mock_create = AsyncMock(return_value=mock_response)
 
         with patch.object(openai_client.client.chat.completions, "create", mock_create):
-            fact = await openai_client.get_nearby_fact(55.751244, 37.618423)
+            fact = await openai_client.get_nearby_fact(55.751244, 37.618423, is_live_location=False)
 
             assert "Локация: Дом Пашкова" in fact
             assert (
@@ -52,8 +52,8 @@ def test_get_nearby_fact_empty_response(openai_client):
         mock_create = AsyncMock(return_value=mock_response)
 
         with patch.object(openai_client.client.chat.completions, "create", mock_create):
-            with pytest.raises(ValueError, match="Empty response from OpenAI"):
-                await openai_client.get_nearby_fact(55.751244, 37.618423)
+            with pytest.raises(ValueError, match="Empty content from gpt-4.1"):
+                await openai_client.get_nearby_fact(55.751244, 37.618423, is_live_location=False)
 
     anyio.run(_test)
 
@@ -66,7 +66,7 @@ def test_get_nearby_fact_api_error(openai_client):
 
         with patch.object(openai_client.client.chat.completions, "create", mock_create):
             with pytest.raises(Exception, match="API Error"):
-                await openai_client.get_nearby_fact(55.751244, 37.618423)
+                await openai_client.get_nearby_fact(55.751244, 37.618423, is_live_location=False)
 
     anyio.run(_test)
 
@@ -84,25 +84,18 @@ def test_get_nearby_fact_prompt_format(openai_client):
         mock_create = AsyncMock(return_value=mock_response)
 
         with patch.object(openai_client.client.chat.completions, "create", mock_create):
-            await openai_client.get_nearby_fact(55.751244, 37.618423)
+            await openai_client.get_nearby_fact(55.751244, 37.618423, is_live_location=False)
 
             # Check that create was called with correct parameters
             mock_create.assert_called_once()
             call_args = mock_create.call_args
 
-            # Check that either o4-mini or gpt-4.1 was used
+            # For static location (is_live_location=False), should use gpt-4.1
             model_used = call_args[1]["model"]
-            assert model_used in ["o4-mini", "gpt-4.1"]
-            
-            # If gpt-4.1 is used as fallback, it should have temperature and max_tokens
-            if model_used == "gpt-4.1":
-                assert call_args[1]["temperature"] == 0.7
-                assert call_args[1]["max_tokens"] == 400
-            # o4-mini uses max_completion_tokens and no temperature (like o3)
-            elif model_used == "o4-mini":
-                assert "temperature" not in call_args[1]
-                assert call_args[1]["max_completion_tokens"] == 5000
-                assert "max_tokens" not in call_args[1]
+            assert model_used == "gpt-4.1"
+            assert call_args[1]["temperature"] == 0.7
+            assert call_args[1]["max_tokens"] == 400
+            assert "max_completion_tokens" not in call_args[1]
 
             messages = call_args[1]["messages"]
             assert len(messages) == 2
@@ -111,8 +104,47 @@ def test_get_nearby_fact_prompt_format(openai_client):
             assert "рассуждения" in messages[0]["content"]
             assert messages[1]["role"] == "user"
             assert "55.751244, 37.618423" in messages[1]["content"]
-            assert "Шаг 1:" in messages[1]["content"]
+            # Static location should not have detailed steps, but should be concise
+            assert "КРАТКИМ (60-80 слов)" in messages[1]["content"]
             assert "Локация:" in messages[1]["content"]
             assert "Интересный факт:" in messages[1]["content"]
+
+    anyio.run(_test)
+
+
+def test_get_nearby_fact_live_location_model(openai_client):
+    """Test that live location uses o4-mini model."""
+
+    async def _test():
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[
+            0
+        ].message.content = "Локация: Test\nИнтересный факт: Test detailed fact"
+
+        mock_create = AsyncMock(return_value=mock_response)
+
+        with patch.object(openai_client.client.chat.completions, "create", mock_create):
+            await openai_client.get_nearby_fact(55.751244, 37.618423, is_live_location=True)
+
+            # Check that create was called with correct parameters
+            mock_create.assert_called_once()
+            call_args = mock_create.call_args
+
+            # For live location (is_live_location=True), should use o4-mini
+            model_used = call_args[1]["model"]
+            assert model_used == "o4-mini"
+            assert "temperature" not in call_args[1]
+            assert call_args[1]["max_completion_tokens"] == 2000
+            assert "max_tokens" not in call_args[1]
+
+            messages = call_args[1]["messages"]
+            assert len(messages) == 2
+            assert messages[0]["role"] == "system"
+            assert "экскурсовод" in messages[0]["content"]
+            assert "рассуждения" in messages[0]["content"]
+            assert messages[1]["role"] == "user"
+            assert "55.751244, 37.618423" in messages[1]["content"]
+            assert "Шаг 1:" in messages[1]["content"]  # Should have detailed steps for live location
 
     anyio.run(_test)

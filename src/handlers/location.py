@@ -78,9 +78,9 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return  # Don't send initial fact yet, wait for interval selection
         
         # For static locations, send immediate fact
-        # Get fact from OpenAI
+        # Get fact from OpenAI (static location - fast with gpt-4.1)
         openai_client = get_openai_client()
-        response = await openai_client.get_nearby_fact(lat, lon)
+        response = await openai_client.get_nearby_fact(lat, lon, is_live_location=False)
 
         # Parse the response to extract place and fact
         lines = response.split("\n")
@@ -181,9 +181,9 @@ async def handle_interval_callback(update: Update, context: ContextTypes.DEFAULT
             parse_mode="Markdown"
         )
         
-        # Send initial fact immediately
+        # Send initial fact immediately (live location - detailed with o4-mini)
         openai_client = get_openai_client()
-        response = await openai_client.get_nearby_fact(lat, lon)
+        response = await openai_client.get_nearby_fact(lat, lon, is_live_location=True)
 
         # Parse the response to extract place and fact
         lines = response.split("\n")

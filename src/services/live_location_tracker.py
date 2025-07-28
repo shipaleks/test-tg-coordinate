@@ -156,7 +156,7 @@ class LiveLocationTracker:
                     
                     openai_client = get_openai_client()
                     response = await openai_client.get_nearby_fact(
-                        session_data.latitude, session_data.longitude
+                        session_data.latitude, session_data.longitude, is_live_location=True
                     )
                     
                     # Parse the response to extract place and fact
