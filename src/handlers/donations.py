@@ -1,6 +1,7 @@
 """Donation handlers for Telegram Stars payments."""
 
 import logging
+import time
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -263,6 +264,8 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
         
         # Add to database
         donors_db = get_donors_db()
+        logger.info(f"Attempting to add donation to database: user_id={user.id}, payment_id={payment_id}, stars={stars_amount}")
+        
         success = donors_db.add_donation(
             user_id=user.id,
             payment_id=payment_id,
@@ -271,6 +274,8 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
             first_name=user.first_name,
             invoice_payload=invoice_payload
         )
+        
+        logger.info(f"Donation database operation result: success={success}")
         
         if success:
             # Get updated donor info
@@ -377,21 +382,53 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             if donor_info:
                 test_results.append(f"👤 *Your donor status:* Found (⭐{donor_info['total_stars']})")
                 
-                # Check premium status
+                # Check premium status with detailed timestamp info
                 is_premium = donors_db.is_premium_user(user_id)
                 status = "🎁 Enhanced access active" if is_premium else "📱 Standard access"
                 test_results.append(f"🧠 *Model access:* {status}")
                 
+                # Show detailed premium info
+                current_time = int(time.time())
+                premium_expires = donor_info.get('premium_expires', 0)
+                if premium_expires > 0:
+                    if premium_expires > current_time:
+                        days_left = (premium_expires - current_time) // (24 * 60 * 60)
+                        test_results.append(f"⏰ *Premium expires:* {days_left} days from now")
+                    else:
+                        test_results.append(f"⏰ *Premium status:* Expired")
+                
                 # Get donation history
                 history = donors_db.get_donation_history(user_id)
                 test_results.append(f"📜 *Donation history:* {len(history)} transactions")
+                
+                # Show latest donation if exists
+                if history:
+                    latest = history[0]  # Most recent first
+                    test_results.append(f"💳 *Latest donation:* {latest['stars_amount']}⭐ on {latest['payment_date']}")
             else:
                 test_results.append("👤 *Your status:* Not a donor yet")
                 test_results.append("🧠 *Model access:* Standard (GPT-4.1 static, o4-mini live)")
+                
+                # Check if there are any donations for this user in donations table
+                import sqlite3
+                with sqlite3.connect(donors_db.db_path) as conn:
+                    donations_count = conn.execute(
+                        "SELECT COUNT(*) FROM donations WHERE user_id = ?", 
+                        (user_id,)
+                    ).fetchone()[0]
+                    if donations_count > 0:
+                        test_results.append(f"⚠️ *Found {donations_count} donations in donations table but no donor record!*")
             
             # Get overall stats
             stats = donors_db.get_stats()
             test_results.append(f"📊 *Database stats:* {stats.get('total_donors', 0)} donors, {stats.get('total_donations', 0)} transactions")
+            
+            # Check raw table counts for debugging
+            import sqlite3
+            with sqlite3.connect(donors_db.db_path) as conn:
+                donors_count = conn.execute("SELECT COUNT(*) FROM donors").fetchone()[0]
+                donations_count = conn.execute("SELECT COUNT(*) FROM donations").fetchone()[0]
+                test_results.append(f"🔍 *Raw counts:* {donors_count} donors, {donations_count} donations in tables")
             
             test_results.append("✅ All database operations working correctly")
             
