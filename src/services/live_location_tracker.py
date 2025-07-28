@@ -213,7 +213,7 @@ class LiveLocationTracker:
                         parse_mode="Markdown",
                     )
 
-                    # Try to parse coordinates and send location for navigation (background fact)
+                    # Try to parse coordinates and send location for navigation using search keywords (background fact)
                     coordinates = await openai_client.parse_coordinates_from_response(
                         response
                     )

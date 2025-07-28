@@ -142,8 +142,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             parse_mode="Markdown",
         )
 
-        # Try to parse coordinates and send location for navigation
-        coordinates = openai_client.parse_coordinates_from_response(response)
+        # Try to parse coordinates and send location for navigation using search keywords
+        coordinates = await openai_client.parse_coordinates_from_response(response)
         if coordinates:
             venue_lat, venue_lon = coordinates
             try:
@@ -287,8 +287,8 @@ async def handle_interval_callback(
             parse_mode="Markdown",
         )
 
-        # Try to parse coordinates and send location for navigation (live location)
-        coordinates = openai_client.parse_coordinates_from_response(response)
+        # Try to parse coordinates and send location for navigation using search keywords (live location)
+        coordinates = await openai_client.parse_coordinates_from_response(response)
         if coordinates:
             venue_lat, venue_lon = coordinates
             try:
