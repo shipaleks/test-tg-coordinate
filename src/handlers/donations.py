@@ -497,16 +497,18 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 safe_path = str(path).replace('*', '\\*').replace('_', '\\_')
                 test_results.append(f"📂 *{safe_path} exists:* Yes (writable: {os.access(path, os.W_OK)})")
         
-        # Format results
-        test_text = "🔧 *Database Diagnostics*\n\n" + "\n".join(test_results)
+        # Format results - temporarily disable Markdown to debug parsing issues
+        test_text = "🔧 Database Diagnostics\n\n" + "\n".join(test_results)
         
-        await update.message.reply_text(test_text, parse_mode="Markdown")
+        # Remove all Markdown formatting to avoid parsing errors
+        clean_text = test_text.replace("*", "").replace("_", "").replace("`", "")
+        
+        await update.message.reply_text(clean_text)
         
     except Exception as e:
         logger.error(f"Error in dbtest command: {e}")
         await update.message.reply_text(
-            f"❌ *Database test failed*\n\n"
-            f"Error: `{str(e)}`\n\n"
-            f"This might indicate a database configuration issue.",
-            parse_mode="Markdown"
+            f"❌ Database test failed\n\n"
+            f"Error: {str(e)}\n\n"
+            f"This might indicate a database configuration issue."
         )
