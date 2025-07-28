@@ -313,6 +313,7 @@ class LiveLocationTracker:
                         session_data.longitude,
                         is_live_location=True,
                         previous_facts=session_data.fact_history,
+                        user_id=user_id,
                     )
 
                     # Parse the response to extract place and fact

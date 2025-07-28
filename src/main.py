@@ -8,8 +8,10 @@ from telegram import KeyboardButton, ReplyKeyboardMarkup, Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
+    CommandHandler,
     ContextTypes,
     MessageHandler,
+    PreCheckoutQueryHandler,
     filters,
 )
 
@@ -17,6 +19,13 @@ from .handlers.location import (
     handle_edited_location,
     handle_interval_callback,
     handle_location,
+)
+from .handlers.donations import (
+    donate_command,
+    handle_donation_callback,
+    handle_pre_checkout_query,
+    handle_successful_payment,
+    stats_command,
 )
 
 # Load environment variables from .env file
@@ -96,9 +105,9 @@ def main() -> None:
     application = Application.builder().token(bot_token).build()
 
     # Add command handlers
-    application.add_handler(
-        MessageHandler(filters.COMMAND & filters.Regex("^/start"), start_command)
-    )
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("donate", donate_command))
+    application.add_handler(CommandHandler("stats", stats_command))
 
     # Add text message handlers
     application.add_handler(
@@ -121,9 +130,18 @@ def main() -> None:
         )
     )
 
-    # Add callback query handler for interval selection
+    # Add callback query handlers
     application.add_handler(
         CallbackQueryHandler(handle_interval_callback, pattern="^interval_")
+    )
+    application.add_handler(
+        CallbackQueryHandler(handle_donation_callback, pattern="^donate_|^premium_info$")
+    )
+    
+    # Add payment handlers
+    application.add_handler(PreCheckoutQueryHandler(handle_pre_checkout_query))
+    application.add_handler(
+        MessageHandler(filters.SUCCESSFUL_PAYMENT, handle_successful_payment)
     )
 
     # Add error handler

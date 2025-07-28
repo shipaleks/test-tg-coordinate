@@ -17,7 +17,8 @@
       "Bash(ls:*)",
       "Bash(rm:*)",
       "Bash(echo \"TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN:0:10...\")",
-      "Bash(echo \"OPENAI_API_KEY=$OPENAI_API_KEY:0:10...\")"
+      "Bash(echo \"OPENAI_API_KEY=$OPENAI_API_KEY:0:10...\")",
+      "WebFetch(domain:dev.to)"
     ],
     "deny": []
   }

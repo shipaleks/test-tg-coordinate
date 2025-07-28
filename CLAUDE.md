@@ -64,8 +64,9 @@ python -m src.main
 
 ### Data Flow
 
-1. **Static Location**: User shares location → immediate o4-mini analysis → fact response → venue/location for navigation
+1. **Static Location**: User shares location → premium check → o3/o4-mini/GPT-4.1 analysis → fact response → venue/location for navigation
 2. **Live Location**: User shares live location → interval selection → initial fact → background loop with numbered facts every N minutes → each fact includes venue/location → session cleanup on stop
+3. **Donations**: `/donate` command → Telegram Stars payment → premium status → o3 model access
 
 ### Live Location System
 
@@ -82,9 +83,20 @@ python -m src.main
 - **Anti-repetition**: Sends previous facts to AI with instruction to find different places
 - **Automatic cleanup**: Removes expired entries and limits cache size (1000 entries max)
 
+### Telegram Stars Donation System
+
+- **Payment Processing**: Full Telegram Stars integration with pre-checkout validation
+- **Premium Benefits**: o3 model access (superior to o4-mini and GPT-4.1)
+- **Duration**: 1 star = 1 day premium (stackable)
+- **Database**: SQLite for donor tracking and premium status
+- **Commands**: `/donate` with 10⭐, 50⭐, 100⭐ options + custom amounts
+- **Security**: Payment ID deduplication and user validation
+
 ### Tech Stack
 - **Python 3.12** with python-telegram-bot 21.7
-- **OpenAI dual models**: o4-mini for detailed facts + GPT-4.1 with WebSearch for coordinates
+- **OpenAI triple models**: o3 for premium users + o4-mini for detailed facts + GPT-4.1 for quick responses
+- **Telegram Stars**: Payment system for premium subscriptions
+- **SQLite**: Local database for donor management and premium status
 - **Navigation**: Telegram venue/location sharing with automatic route building
 - **Geocoding**: Nominatim OSM service as coordinate fallback
 - **Wikipedia**: Legacy API (`w/api.php`) for image search

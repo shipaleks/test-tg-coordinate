@@ -9,6 +9,8 @@ from urllib.parse import quote
 import aiohttp
 from openai import AsyncOpenAI
 
+from .donors_db import get_donors_db
+
 logger = logging.getLogger(__name__)
 
 
@@ -118,6 +120,7 @@ class OpenAIClient:
         lon: float,
         is_live_location: bool = False,
         previous_facts: list = None,
+        user_id: int = None,
     ) -> str:
         """Get an interesting fact about a location.
 
@@ -126,6 +129,7 @@ class OpenAIClient:
             lon: Longitude coordinate
             is_live_location: If True, use o4-mini for detailed facts. If False, use gpt-4.1 for speed.
             previous_facts: List of previously sent facts to avoid repetition (for live location)
+            user_id: User ID to check premium status for o3 model access
 
         Returns:
             A location name and an interesting fact about it
@@ -134,6 +138,15 @@ class OpenAIClient:
             Exception: If OpenAI API call fails
         """
         try:
+            # Check if user has premium access for o3 model
+            is_premium_user = False
+            if user_id:
+                try:
+                    donors_db = get_donors_db()
+                    is_premium_user = donors_db.is_premium_user(user_id)
+                except Exception as e:
+                    logger.warning(f"Failed to check premium status for user {user_id}: {e}")
+            
             system_prompt = (
                 "Вы — профессиональный экскурсовод с глубокими знаниями различных мест по всему миру. "
                 "Ваша задача — пошагово проанализировать координаты и предоставить интересный факт о местности.\n\n"
@@ -243,20 +256,37 @@ class OpenAIClient:
                     "Интересный факт: [Краткий, но увлекательный факт, 60-80 слов]"
                 )
 
-            # Choose model based on location type
+            # Choose model based on location type and premium status
+            model_to_use = "o4-mini"  # Default model
+            max_tokens_limit = 10000
+            
+            if is_premium_user:
+                # Premium users get o3 for both live and static locations
+                model_to_use = "o3"
+                max_tokens_limit = 12000  # o3 can handle more tokens
+                logger.info(f"Using o3 model for premium user {user_id}")
+            elif is_live_location:
+                # Regular users get o4-mini for live locations
+                model_to_use = "o4-mini"
+                max_tokens_limit = 10000
+            else:
+                # Regular users get gpt-4.1 for static locations (fast)
+                model_to_use = "gpt-4.1"
+                max_tokens_limit = 400
+            
             response = None
-            if is_live_location:
-                # Use o4-mini for live location (detailed facts)
+            if is_live_location or is_premium_user:
+                # Use advanced models (o3 for premium, o4-mini for regular live location)
                 try:
                     response = await self.client.chat.completions.create(
-                        model="o4-mini",
+                        model=model_to_use,
                         messages=[
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},
                         ],
-                        max_completion_tokens=10000,  # Large limit for o4-mini extensive reasoning + detailed response
+                        max_completion_tokens=max_tokens_limit,
                     )
-                    logger.info(f"o4-mini (live location) response: {response}")
+                    logger.info(f"{model_to_use} ({'premium' if is_premium_user else 'live location'}) response: {response}")
                     content = (
                         response.choices[0].message.content
                         if response.choices
@@ -265,13 +295,13 @@ class OpenAIClient:
 
                     if not content:
                         logger.warning(
-                            "o4-mini returned empty content, falling back to gpt-4.1"
+                            f"{model_to_use} returned empty content, falling back to gpt-4.1"
                         )
-                        raise ValueError("Empty content from o4-mini")
+                        raise ValueError(f"Empty content from {model_to_use}")
 
                 except Exception as e:
                     logger.warning(
-                        f"o4-mini failed ({e}), falling back to gpt-4.1 for live location"
+                        f"{model_to_use} failed ({e}), falling back to gpt-4.1"
                     )
                     response = await self.client.chat.completions.create(
                         model="gpt-4.1",
@@ -282,7 +312,7 @@ class OpenAIClient:
                         max_tokens=800,
                         temperature=0.7,
                     )
-                    logger.info(f"gpt-4.1 fallback for live location: {response}")
+                    logger.info(f"gpt-4.1 fallback response: {response}")
                     content = (
                         response.choices[0].message.content
                         if response.choices
@@ -787,13 +817,14 @@ class OpenAIClient:
         images = await self.get_wikipedia_images(search_keywords, max_images=1)
         return images[0] if images else None
 
-    async def get_nearby_fact_with_history(self, lat: float, lon: float, cache_key: str | None = None) -> str:
+    async def get_nearby_fact_with_history(self, lat: float, lon: float, cache_key: str | None = None, user_id: int = None) -> str:
         """Get fact for static location with history tracking to avoid repetition.
         
         Args:
             lat: Latitude coordinate
             lon: Longitude coordinate  
             cache_key: Cache key for the location (coordinates or search keywords)
+            user_id: User ID to check premium status for o3 model access
             
         Returns:
             A location name and an interesting fact about it
@@ -811,7 +842,7 @@ class OpenAIClient:
         logger.info(f"Calling get_nearby_fact with {len(previous_facts)} previous facts")
         if previous_facts:
             logger.info(f"Previous facts being sent to AI: {previous_facts}")
-        fact_response = await self.get_nearby_fact(lat, lon, is_live_location=False, previous_facts=previous_facts)
+        fact_response = await self.get_nearby_fact(lat, lon, is_live_location=False, previous_facts=previous_facts, user_id=user_id)
         
         # Parse the response to extract place and fact for history
         if cache_key:

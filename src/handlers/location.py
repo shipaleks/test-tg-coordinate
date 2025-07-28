@@ -267,7 +267,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.info(f"Static location - using coordinate-based cache key: '{cache_key}'")
         
         # Get fact with history using coordinate key
-        response = await openai_client.get_nearby_fact_with_history(lat, lon, cache_key)
+        response = await openai_client.get_nearby_fact_with_history(lat, lon, cache_key, user_id)
         
         # Parse the response to extract place and fact
         logger.info(f"Final response for static location: {response[:100]}...")
@@ -414,7 +414,7 @@ async def handle_interval_callback(
 
         # Send initial fact immediately (live location - detailed with o4-mini)
         openai_client = get_openai_client()
-        response = await openai_client.get_nearby_fact(lat, lon, is_live_location=True)
+        response = await openai_client.get_nearby_fact(lat, lon, is_live_location=True, user_id=user_id)
 
         # Parse the response to extract place and fact
         lines = response.split("\n")
