@@ -60,7 +60,8 @@ class OpenAIClient:
                 "Интересный факт: [Увлекательный и достоверный факт]"
             )
 
-            # Try o3 first, fallback to gpt-4.1 if not available
+            # Try o3 first, fallback to gpt-4.1 if not available or empty response
+            response = None
             try:
                 response = await self.client.chat.completions.create(
                     model="o3",  # Using o3 reasoning model
@@ -70,8 +71,17 @@ class OpenAIClient:
                     ],
                     max_completion_tokens=2000,  # Give o3 plenty of tokens for deep reasoning and detailed response
                 )
+                
+                logger.info(f"o3 response: {response}")
+                content = response.choices[0].message.content if response.choices else None
+                
+                # Check if o3 returned empty content and fallback if needed
+                if not content:
+                    logger.warning(f"o3 returned empty content, falling back to gpt-4.1")
+                    raise ValueError("Empty content from o3")
+                    
             except Exception as e:
-                logger.warning(f"o3 failed, falling back to gpt-4.1: {e}")
+                logger.warning(f"o3 failed ({e}), falling back to gpt-4.1")
                 response = await self.client.chat.completions.create(
                     model="gpt-4.1",  # Fallback to gpt-4.1
                     messages=[
@@ -81,16 +91,11 @@ class OpenAIClient:
                     max_tokens=400,
                     temperature=0.7,
                 )
+                logger.info(f"gpt-4.1 fallback response: {response}")
+                content = response.choices[0].message.content if response.choices else None
 
-            logger.info(f"OpenAI response: {response}")
-            logger.info(f"Response choices: {response.choices}")
-            if response.choices:
-                logger.info(f"First choice: {response.choices[0]}")
-                logger.info(f"Message content: {response.choices[0].message.content}")
-
-            content = response.choices[0].message.content
             if not content:
-                logger.error(f"Empty content in response: {response}")
+                logger.error(f"Empty content even after fallback: {response}")
                 raise ValueError("Empty response from OpenAI")
 
             logger.info(f"Generated fact for location {lat},{lon}")
