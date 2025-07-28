@@ -235,11 +235,20 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
             return  # Don't send initial fact yet, wait for interval selection
 
-        # For static locations, send immediate fact
-        # Get fact from OpenAI (static location - fast with gpt-4.1)
+        # For static locations, send immediate fact with history tracking
         openai_client = get_openai_client()
+        
+        # First, get a basic fact to extract search keywords
         response = await openai_client.get_nearby_fact(lat, lon, is_live_location=False)
-
+        
+        # Try to extract search keywords for history
+        search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
+        search_keywords = search_match.group(1).strip() if search_match else None
+        
+        # Now get fact with history if we have search keywords
+        if search_keywords:
+            response = await openai_client.get_nearby_fact_with_history(lat, lon, search_keywords)
+        
         # Parse the response to extract place and fact
         lines = response.split("\n")
         place = "рядом с вами"
@@ -264,10 +273,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Format the response for static location
         formatted_response = f"📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
 
-        # Try to get search keywords and send fact with images
-        search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
-        if search_match:
-            search_keywords = search_match.group(1).strip()
+        # Send fact with images using search keywords
+        if search_keywords:
             await send_fact_with_images(
                 context.bot, 
                 chat_id, 

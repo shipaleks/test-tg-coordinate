@@ -3,12 +3,101 @@
 import logging
 import os
 import re
+import time
 from urllib.parse import quote
 
 import aiohttp
 from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
+
+
+class StaticLocationHistory:
+    """Simple in-memory cache for static location facts to avoid repetition."""
+    
+    def __init__(self, max_entries: int = 1000, ttl_hours: int = 24):
+        """Initialize the history cache.
+        
+        Args:
+            max_entries: Maximum number of entries to keep in cache
+            ttl_hours: Time to live for entries in hours
+        """
+        self._cache = {}  # {search_keywords: {"facts": [facts], "timestamp": time}}
+        self._max_entries = max_entries
+        self._ttl_seconds = ttl_hours * 3600
+    
+    def get_previous_facts(self, search_keywords: str) -> list[str]:
+        """Get previous facts for a location.
+        
+        Args:
+            search_keywords: Search keywords identifying the location
+            
+        Returns:
+            List of previous facts (empty if none or expired)
+        """
+        self._cleanup_expired()
+        
+        entry = self._cache.get(search_keywords)
+        if entry and (time.time() - entry["timestamp"]) < self._ttl_seconds:
+            return entry["facts"][-5:]  # Return last 5 facts like live location
+        return []
+    
+    def add_fact(self, search_keywords: str, place: str, fact: str):
+        """Add a new fact to the history.
+        
+        Args:
+            search_keywords: Search keywords identifying the location
+            place: Place name
+            fact: The fact text
+        """
+        self._cleanup_expired()
+        
+        if search_keywords not in self._cache:
+            self._cache[search_keywords] = {"facts": [], "timestamp": time.time()}
+        
+        # Add fact in same format as live location
+        fact_entry = f"{place}: {fact}"
+        self._cache[search_keywords]["facts"].append(fact_entry)
+        self._cache[search_keywords]["timestamp"] = time.time()
+        
+        # Keep only last 10 facts per location to prevent memory bloat
+        if len(self._cache[search_keywords]["facts"]) > 10:
+            self._cache[search_keywords]["facts"] = self._cache[search_keywords]["facts"][-10:]
+        
+        logger.debug(f"Added fact to static location history: {place}")
+    
+    def _cleanup_expired(self):
+        """Remove expired entries and limit cache size."""
+        current_time = time.time()
+        
+        # Remove expired entries
+        expired_keys = [
+            key for key, entry in self._cache.items()
+            if (current_time - entry["timestamp"]) >= self._ttl_seconds
+        ]
+        for key in expired_keys:
+            del self._cache[key]
+        
+        # Limit cache size
+        if len(self._cache) > self._max_entries:
+            # Remove oldest entries
+            sorted_items = sorted(
+                self._cache.items(), 
+                key=lambda x: x[1]["timestamp"]
+            )
+            keys_to_remove = [item[0] for item in sorted_items[:len(self._cache) - self._max_entries]]
+            for key in keys_to_remove:
+                del self._cache[key]
+    
+    def get_cache_stats(self) -> dict:
+        """Get cache statistics for debugging."""
+        self._cleanup_expired()
+        total_facts = sum(len(entry["facts"]) for entry in self._cache.values())
+        return {
+            "locations": len(self._cache),
+            "total_facts": total_facts,
+            "oldest_entry": min((entry["timestamp"] for entry in self._cache.values()), default=0)
+        }
 
 
 class OpenAIClient:
@@ -21,6 +110,7 @@ class OpenAIClient:
             api_key: OpenAI API key. If None, will use OPENAI_API_KEY env var.
         """
         self.client = AsyncOpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
+        self.static_history = StaticLocationHistory()
 
     async def get_nearby_fact(
         self,
@@ -684,6 +774,57 @@ class OpenAIClient:
         """
         images = await self.get_wikipedia_images(search_keywords, max_images=1)
         return images[0] if images else None
+
+    async def get_nearby_fact_with_history(self, lat: float, lon: float, search_keywords: str | None = None) -> str:
+        """Get fact for static location with history tracking to avoid repetition.
+        
+        Args:
+            lat: Latitude coordinate
+            lon: Longitude coordinate  
+            search_keywords: Search keywords for the location (for history tracking)
+            
+        Returns:
+            A location name and an interesting fact about it
+        """
+        # Get previous facts for this location if we have search keywords
+        previous_facts = []
+        if search_keywords:
+            previous_facts = self.static_history.get_previous_facts(search_keywords)
+            if previous_facts:
+                logger.info(f"Found {len(previous_facts)} previous facts for {search_keywords}")
+        
+        # Get fact using existing method but with previous facts
+        fact_response = await self.get_nearby_fact(lat, lon, is_live_location=False, previous_facts=previous_facts)
+        
+        # Parse the response to extract place and fact for history
+        if search_keywords:
+            lines = fact_response.split("\n")
+            place = "рядом с вами"
+            fact = fact_response
+            
+            # Try to parse structured response
+            for i, line in enumerate(lines):
+                if line.startswith("Локация:"):
+                    place = line.replace("Локация:", "").strip()
+                elif line.startswith("Интересный факт:"):
+                    # Join all lines after Интересный факт: as the fact might be multiline
+                    fact_lines = []
+                    fact_lines.append(line.replace("Интересный факт:", "").strip())
+                    for j in range(i + 1, len(lines)):
+                        if lines[j].strip():
+                            fact_lines.append(lines[j].strip())
+                    fact = " ".join(fact_lines)
+                    break
+            
+            # Add to history
+            self.static_history.add_fact(search_keywords, place, fact)
+            
+            # Log cache stats periodically
+            stats = self.static_history.get_cache_stats()
+            if stats["locations"] > 0:
+                logger.debug(f"Static location cache: {stats['locations']} locations, {stats['total_facts']} total facts")
+        
+        return fact_response
 
 
 # Global client instance - will be initialized lazily
