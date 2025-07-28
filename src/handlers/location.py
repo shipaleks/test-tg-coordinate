@@ -28,7 +28,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         context: Bot context
     """
     if not update.message or not update.message.location:
-        logger.warning("Received location handler call without location data")
+        logger.warning(f"Received location handler call without location data. Update: {update}")
+        logger.warning(f"Update.message: {update.message if update.message else 'None'}")
+        if update.message:
+            logger.warning(f"Message.location: {update.message.location if hasattr(update.message, 'location') else 'No location attr'}")
         return
 
     location = update.message.location
@@ -37,7 +40,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
-    logger.info(f"Received location: {lat}, {lon} from user {user_id}")
+    logger.info(f"Received location: {lat}, {lon} from user {user_id}, live_period: {location.live_period if location.live_period else 'None'}")
 
     try:
         # Send typing indicator
@@ -242,7 +245,10 @@ async def handle_edited_location(update: Update, context: ContextTypes.DEFAULT_T
         context: Bot context
     """
     if not update.edited_message or not update.edited_message.location:
-        logger.warning("Received edited location handler call without location data")
+        logger.warning(f"Received edited location handler call without location data. Update: {update}")
+        logger.warning(f"Update.edited_message: {update.edited_message if update.edited_message else 'None'}")
+        if update.edited_message:
+            logger.warning(f"Edited_message.location: {update.edited_message.location if hasattr(update.edited_message, 'location') else 'No location attr'}")
         return
 
     location = update.edited_message.location
