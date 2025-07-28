@@ -29,57 +29,49 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
         image_urls = await openai_client.get_wikipedia_images(search_keywords, max_images=4)  # Max 4 for media group
         
         if image_urls:
-            # Try sending as media group first
+            # Try sending text first, then media group
             try:
-                # Check if caption is too long (Telegram limit is ~1024 characters)
-                if len(formatted_response) > 900:  # Leave some margin
-                    # Send text first, then images without text
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=formatted_response,
-                        parse_mode="Markdown"
-                    )
-                    
-                    # Send images without captions
-                    media_list = []
-                    for image_url in image_urls:
-                        media_list.append(InputMediaPhoto(media=image_url, caption=f"📸 {place}"))
-                    
-                    await bot.send_media_group(
-                        chat_id=chat_id,
-                        media=media_list
-                    )
-                    logger.info(f"Sent live text + {len(image_urls)} Wikipedia images separately for {place}")
-                else:
-                    # Caption is short enough, send as media group with caption
-                    media_list = []
-                    for i, image_url in enumerate(image_urls):
-                        if i == 0:
-                            # First image gets the full fact as caption
-                            media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
-                        else:
-                            # Other images get place name as caption
-                            media_list.append(InputMediaPhoto(media=image_url, caption=f"📸 {place}"))
-                    
-                    await bot.send_media_group(
-                        chat_id=chat_id,
-                        media=media_list
-                    )
-                    logger.info(f"Sent {len(image_urls)} Wikipedia images with live fact caption for {place}")
+                logger.info(f"Attempting to send live fact with {len(image_urls)} images for {place}")
+                logger.debug(f"Live formatted response length: {len(formatted_response)} chars")
+                
+                # Always send text first to ensure it's not lost
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=formatted_response,
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Successfully sent live text message for {place}")
+                
+                # Then send images with simple captions
+                media_list = []
+                for image_url in image_urls:
+                    media_list.append(InputMediaPhoto(media=image_url, caption=f"📸 {place}"))
+                
+                await bot.send_media_group(
+                    chat_id=chat_id,
+                    media=media_list
+                )
+                logger.info(f"Successfully sent {len(image_urls)} Wikipedia images for live fact {place}")
                 return
                 
             except Exception as media_group_error:
-                logger.warning(f"Failed to send live fact media group: {media_group_error}")
+                logger.error(f"Failed to send live fact text + media group: {media_group_error}")
+                logger.error(f"Live fact error type: {type(media_group_error)}")
                 
-                # Fallback: try sending images one by one
+                # Check if text was sent successfully by trying to send it again
                 try:
-                    # Send text first
                     await bot.send_message(
                         chat_id=chat_id,
-                        text=formatted_response,
+                        text=f"⚠️ Изображения не загрузились, но вот факт:\n\n{formatted_response}",
                         parse_mode="Markdown"
                     )
-                    
+                    logger.info(f"Sent fallback live text-only message for {place}")
+                    return
+                except Exception as text_fallback_error:
+                    logger.error(f"Failed to send live fact fallback text: {text_fallback_error}")
+                
+                # Last resort: try sending individual images
+                try:
                     # Try to send individual images (up to 2 to avoid spam)
                     successful_images = 0
                     for image_url in image_urls[:2]:  # Limit to 2 images
@@ -95,13 +87,13 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                             continue
                     
                     if successful_images > 0:
-                        logger.info(f"Sent live fact with {successful_images} individual images for {place}")
+                        logger.info(f"Sent {successful_images} individual live images (no text) for {place}")
                     else:
-                        logger.info(f"Sent live fact without images (all image URLs failed) for {place}")
+                        logger.warning(f"All live image sending methods failed for {place}")
                     return
                     
                 except Exception as individual_fallback_error:
-                    logger.warning(f"Failed to send individual live fact images fallback: {individual_fallback_error}")
+                    logger.error(f"Failed to send individual live fact images fallback: {individual_fallback_error}")
         
         # No images found or all fallbacks failed, send just the text
         await bot.send_message(
