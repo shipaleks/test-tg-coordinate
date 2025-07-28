@@ -50,11 +50,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "_Каждый факт — это маленькое открытие рядом с вами!_ ✨"
     )
 
-    # Create location sharing keyboard with live location first
+    # Create location sharing keyboard with better dark theme visibility
     keyboard = [
-        [KeyboardButton("📱 Как поделиться Live Location")],
-        [KeyboardButton("🔴 Поделиться локацией", request_location=True)],
-        [KeyboardButton("🌟 Поддержать проект")],
+        [KeyboardButton("📱💡 Как поделиться Live Location")],
+        [KeyboardButton("🔴📍 Поделиться локацией", request_location=True)],
+        [KeyboardButton("⭐💝 Поддержать проект")],
     ]
     reply_markup = ReplyKeyboardMarkup(
         keyboard, resize_keyboard=True, one_time_keyboard=False
@@ -113,12 +113,12 @@ def main() -> None:
     # Add text message handlers
     application.add_handler(
         MessageHandler(
-            filters.TEXT & filters.Regex("^📱 Как поделиться Live Location$"), info_command
+            filters.TEXT & filters.Regex("^📱💡 Как поделиться Live Location$"), info_command
         )
     )
     application.add_handler(
         MessageHandler(
-            filters.TEXT & filters.Regex("^🌟 Поддержать проект$"), donate_command
+            filters.TEXT & filters.Regex("^⭐💝 Поддержать проект$"), donate_command
         )
     )
 
