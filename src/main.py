@@ -26,6 +26,7 @@ from .handlers.donations import (
     handle_pre_checkout_query,
     handle_successful_payment,
     stats_command,
+    dbtest_command,
 )
 
 # Load environment variables from .env file
@@ -109,6 +110,7 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("donate", donate_command))
     application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("dbtest", dbtest_command))
 
     # Add text message handlers
     application.add_handler(

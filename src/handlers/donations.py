@@ -337,7 +337,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             f"👥 Донатеров: {stats.get('total_donors', 0)}\n"
             f"💰 Всего донатов: {stats.get('total_donations', 0)}\n"
             f"⭐ Собрано звезд: {stats.get('total_stars', 0)}\n"
-            f"💎 Активных премиум: {stats.get('active_premium', 0)}"
+            f"🎁 С бонусом: {stats.get('active_premium', 0)}"
         )
         
         await update.message.reply_text(stats_text, parse_mode="Markdown")
@@ -345,3 +345,80 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception as e:
         logger.error(f"Error in stats command: {e}")
         await update.message.reply_text("❌ Ошибка получения статистики")
+
+
+async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /dbtest command - database diagnostics."""
+    try:
+        donors_db = get_donors_db()
+        user_id = update.effective_user.id
+        
+        # Test database connection and basic operations
+        test_results = []
+        
+        # 1. Check database file location
+        db_path = str(donors_db.db_path)
+        test_results.append(f"📁 *Database path:* `{db_path}`")
+        
+        # 2. Check if file exists and is writable
+        import os
+        if os.path.exists(db_path):
+            if os.access(db_path, os.W_OK):
+                test_results.append("✅ Database file exists and writable")
+            else:
+                test_results.append("⚠️ Database file exists but not writable")
+        else:
+            test_results.append("🆕 Database file will be created on first use")
+        
+        # 3. Test basic database operations
+        try:
+            # Get user info (should work even for non-donors)
+            donor_info = donors_db.get_donor_info(user_id)
+            if donor_info:
+                test_results.append(f"👤 *Your donor status:* Found (⭐{donor_info['total_stars']})")
+                
+                # Check premium status
+                is_premium = donors_db.is_premium_user(user_id)
+                status = "🎁 Enhanced access active" if is_premium else "📱 Standard access"
+                test_results.append(f"🧠 *Model access:* {status}")
+                
+                # Get donation history
+                history = donors_db.get_donation_history(user_id)
+                test_results.append(f"📜 *Donation history:* {len(history)} transactions")
+            else:
+                test_results.append("👤 *Your status:* Not a donor yet")
+                test_results.append("🧠 *Model access:* Standard (GPT-4.1 static, o4-mini live)")
+            
+            # Get overall stats
+            stats = donors_db.get_stats()
+            test_results.append(f"📊 *Database stats:* {stats.get('total_donors', 0)} donors, {stats.get('total_donations', 0)} transactions")
+            
+            test_results.append("✅ All database operations working correctly")
+            
+        except Exception as db_error:
+            test_results.append(f"❌ Database operation failed: {str(db_error)}")
+        
+        # 4. Check Railway volume (if applicable)
+        volume_status = "🔍 Checking volume status..."
+        if "/data" in db_path:
+            test_results.append("🚀 *Deployment:* Railway with persistent volume")
+            if os.path.exists("/data") and os.access("/data", os.W_OK):
+                test_results.append("✅ Railway volume mounted and accessible")
+            else:
+                test_results.append("⚠️ Railway volume path not accessible")
+        else:
+            test_results.append("💻 *Deployment:* Local development mode")
+        
+        # Format results
+        test_text = "🔧 *Database Diagnostics*\n\n" + "\n".join(test_results)
+        
+        await update.message.reply_text(test_text, parse_mode="Markdown")
+        
+    except Exception as e:
+        logger.error(f"Error in dbtest command: {e}")
+        await update.message.reply_text(
+            f"❌ *Database test failed*\n\n"
+            f"Error: `{str(e)}`\n\n"
+            f"This might indicate a database configuration issue.",
+            parse_mode="Markdown"
+        )
