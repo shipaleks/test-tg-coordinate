@@ -468,16 +468,18 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 import stat
                 stats = os.stat("/data")
                 mode = oct(stat.S_IMODE(stats.st_mode))
-                test_results.append(f"📂 */data permissions:* {mode}")
-                test_results.append(f"📂 */data owner UID:* {stats.st_uid}")
+                test_results.append(f"📂 */data permissions:* `{mode}`")
+                test_results.append(f"📂 */data owner UID:* `{stats.st_uid}`")
                 
                 # Try to list contents
                 contents = os.listdir("/data")
                 test_results.append(f"📂 */data contents:* {len(contents)} items")
                 if contents:
-                    test_results.append(f"📂 *Files:* {', '.join(contents[:5])}")
+                    safe_contents = [str(f).replace('*', '\\*').replace('_', '\\_') for f in contents[:5]]
+                    test_results.append(f"📂 *Files:* {', '.join(safe_contents)}")
             except Exception as perm_error:
-                test_results.append(f"⚠️ *Permission check error:* {str(perm_error)[:50]}")
+                error_msg = str(perm_error)[:50].replace('*', '\\*').replace('_', '\\_')
+                test_results.append(f"⚠️ *Permission check error:* {error_msg}")
         else:
             test_results.append("📂 */data exists:* No")
         
@@ -492,7 +494,8 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         
         for path in possible_paths:
             if path and os.path.exists(path):
-                test_results.append(f"📂 *{path} exists:* Yes (writable: {os.access(path, os.W_OK)})")
+                safe_path = str(path).replace('*', '\\*').replace('_', '\\_')
+                test_results.append(f"📂 *{safe_path} exists:* Yes (writable: {os.access(path, os.W_OK)})")
         
         # Format results
         test_text = "🔧 *Database Diagnostics*\n\n" + "\n".join(test_results)
