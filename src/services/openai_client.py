@@ -101,7 +101,7 @@ class OpenAIClient:
                     "- Архитектурные особенности или культурное значение (только если точно знаете)\n\n"
                     "Финальный ответ в формате:\n"
                     "Локация: [Конкретное название места]\n"
-                    "Координаты: [latitude], [longitude] (если знаете точные координаты достопримечательности)\n"
+                    "Поиск: [Ключевые слова для точного поиска места: название + город + район]\n"
                     "Интересный факт: [Развернутый факт с историческими подробностями, примерно 100-120 слов]"
                 )
             else:
@@ -120,7 +120,7 @@ class OpenAIClient:
                     "- Достоверные особенности места\n\n"
                     "Финальный ответ в формате:\n"
                     "Локация: [Конкретное название места]\n"
-                    "Координаты: [latitude], [longitude] (если знаете точные координаты достопримечательности)\n"
+                    "Поиск: [Ключевые слова для точного поиска места: название + город + район]\n"
                     "Интересный факт: [Краткий, но достоверный факт, 60-80 слов]"
                 )
 
@@ -380,10 +380,39 @@ class OpenAIClient:
 
         return coords1_precision > coords2_precision
 
+    async def get_coordinates_from_search_keywords(
+        self, search_keywords: str
+    ) -> tuple[float, float] | None:
+        """Get coordinates using search keywords via Nominatim.
+
+        Args:
+            search_keywords: Search keywords from GPT response
+
+        Returns:
+            Tuple of (latitude, longitude) if found, None otherwise
+        """
+        logger.info(f"Searching coordinates for keywords: {search_keywords}")
+
+        # Try Nominatim first (faster and often more accurate for landmarks)
+        nominatim_coords = await self.get_coordinates_from_nominatim(search_keywords)
+        if nominatim_coords:
+            logger.info(f"Found Nominatim coordinates: {nominatim_coords}")
+            return nominatim_coords
+
+        # Fallback to WebSearch if Nominatim fails
+        logger.info(f"Nominatim failed, trying WebSearch for: {search_keywords}")
+        websearch_coords = await self.get_precise_coordinates(search_keywords, "")
+        if websearch_coords:
+            logger.info(f"Found WebSearch coordinates: {websearch_coords}")
+            return websearch_coords
+
+        logger.warning(f"No coordinates found for keywords: {search_keywords}")
+        return None
+
     async def parse_coordinates_from_response(
         self, response: str
     ) -> tuple[float, float] | None:
-        """Parse coordinates from OpenAI response with enhanced accuracy.
+        """Parse coordinates from OpenAI response using search keywords.
 
         Args:
             response: OpenAI response text
@@ -392,70 +421,29 @@ class OpenAIClient:
             Tuple of (latitude, longitude) if found, None otherwise
         """
         try:
-            # First, try to extract coordinates directly from response
-            coord_pattern = r"Координаты:\s*([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)"
-            match = re.search(coord_pattern, response)
-            original_coords = None  # Store for later comparison
+            # First, try to extract search keywords from new format
+            search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
+            if search_match:
+                search_keywords = search_match.group(1).strip()
+                logger.info(f"Found search keywords: {search_keywords}")
 
-            if match:
-                lat = float(match.group(1))
-                lon = float(match.group(2))
+                # Use new keyword-based search
+                coords = await self.get_coordinates_from_search_keywords(search_keywords)
+                if coords:
+                    return coords
 
-                # Basic validation: latitude should be -90 to 90, longitude -180 to 180
-                if -90 <= lat <= 90 and -180 <= lon <= 180:
-                    logger.info(f"Parsed coordinates from response: {lat}, {lon}")
-                    original_coords = (lat, lon)  # Store valid coordinates
-
-                    # Always try to get more precise coordinates instead of trusting GPT coordinates
-                    logger.info(f"Found GPT coordinates ({lat}, {lon}), but will search for more precise ones")
-                else:
-                    logger.warning(f"Invalid coordinates in response: {lat}, {lon}")
-
-            # If no coordinates found or invalid, try to extract location name and search for precise coordinates
+            # Fallback: try to extract location name if no search keywords
             place_match = re.search(r"Локация:\s*(.+?)(?:\n|$)", response)
             if place_match:
                 place_name = place_match.group(1).strip()
+                logger.info(f"No search keywords found, using location name: {place_name}")
 
-                # Extract context from the fact
-                fact_match = re.search(
-                    r"Интересный факт:\s*(.+?)(?:\n|$)", response, re.DOTALL
-                )
-                area_description = (
-                    fact_match.group(1).strip()[:200] if fact_match else ""
-                )
+                # Use location name as search keywords
+                coords = await self.get_coordinates_from_search_keywords(place_name)
+                if coords:
+                    return coords
 
-                logger.info(f"Searching for precise coordinates for: {place_name}")
-
-                # Store original coordinates for comparison
-                original_coords = None
-                if match:
-                    original_lat = float(match.group(1))
-                    original_lon = float(match.group(2))
-                    if -90 <= original_lat <= 90 and -180 <= original_lon <= 180:
-                        original_coords = (original_lat, original_lon)
-
-                # Try WebSearch with GPT-4.1 first
-                precise_coords = await self.get_precise_coordinates(
-                    place_name, area_description
-                )
-                if precise_coords:
-                    # Always prefer WebSearch coordinates over GPT coordinates
-                    logger.info(f"Using WebSearch coordinates: {precise_coords}")
-                    return precise_coords
-
-                # Fallback to Nominatim geocoding service
-                logger.info(f"Trying Nominatim fallback for: {place_name}")
-                nominatim_coords = await self.get_coordinates_from_nominatim(place_name)
-                if nominatim_coords:
-                    logger.info(f"Using Nominatim coordinates: {nominatim_coords}")
-                    return nominatim_coords
-
-                # Last resort: use original GPT coordinates if we found them
-                if original_coords:
-                    logger.warning(f"Using GPT coordinates as last resort: {original_coords}")
-                    return original_coords
-
-            logger.debug("No coordinates found in response and no location to search")
+            logger.debug("No search keywords or location name found in response")
             return None
 
         except (ValueError, AttributeError) as e:

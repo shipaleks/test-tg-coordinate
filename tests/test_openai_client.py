@@ -166,41 +166,41 @@ def test_parse_coordinates_from_response(openai_client):
     """Test parsing coordinates from OpenAI response."""
 
     async def _test():
-        # Test coordinates with successful WebSearch
-        response_with_coords = (
+        # Test new format with search keywords
+        response_with_search = (
             "Локация: Тестовое место\n"
-            "Координаты: 55.7415, 37.6056\n"
+            "Поиск: Тестовое место Москва центр\n"
             "Интересный факт: Тестовое место для проверки."
         )
         
-        # Mock WebSearch to return more precise coordinates
+        # Mock search keywords method
         with patch.object(
             openai_client,
-            "get_precise_coordinates",
+            "get_coordinates_from_search_keywords",
             new_callable=AsyncMock,
-            return_value=(55.741555, 37.605666),  # More precise
+            return_value=(55.7415, 37.6056),
         ):
             coords = await openai_client.parse_coordinates_from_response(
-                response_with_coords
+                response_with_search
             )
-            assert coords == (55.741555, 37.605666)  # WebSearch coordinates, not GPT
+            assert coords == (55.7415, 37.6056)
             
-        # Test fallback to GPT coordinates when WebSearch and Nominatim fail
+        # Test fallback to location name when no search keywords
+        response_without_search = (
+            "Локация: Тестовое место\n"
+            "Интересный факт: Тестовое место для проверки."
+        )
+        
         with patch.object(
             openai_client,
-            "get_precise_coordinates",
+            "get_coordinates_from_search_keywords",
             new_callable=AsyncMock,
-            return_value=None,
-        ), patch.object(
-            openai_client,
-            "get_coordinates_from_nominatim",
-            new_callable=AsyncMock,
-            return_value=None,
+            return_value=(55.7415, 37.6056),
         ):
             coords = await openai_client.parse_coordinates_from_response(
-                response_with_coords
+                response_without_search
             )
-            assert coords == (55.7415, 37.6056)  # GPT coordinates as last resort
+            assert coords == (55.7415, 37.6056)
 
         # Test response without coordinates - will try to search for precise coordinates
         # Mock both fallback methods to return None
@@ -381,3 +381,56 @@ def test_coordinates_precision_comparison(openai_client):
     
     assert not openai_client._coordinates_are_more_precise(coords1, coords2)
     assert not openai_client._coordinates_are_more_precise(coords2, coords1)
+
+
+def test_get_coordinates_from_search_keywords(openai_client):
+    """Test getting coordinates from search keywords."""
+
+    async def _test():
+        # Test successful Nominatim search
+        with patch.object(
+            openai_client,
+            "get_coordinates_from_nominatim",
+            new_callable=AsyncMock,
+            return_value=(55.7539, 37.6208),
+        ):
+            coords = await openai_client.get_coordinates_from_search_keywords(
+                "Красная площадь Москва"
+            )
+            assert coords == (55.7539, 37.6208)
+
+        # Test fallback to WebSearch when Nominatim fails
+        with patch.object(
+            openai_client,
+            "get_coordinates_from_nominatim",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch.object(
+            openai_client,
+            "get_precise_coordinates",
+            new_callable=AsyncMock,
+            return_value=(55.7540, 37.6209),
+        ):
+            coords = await openai_client.get_coordinates_from_search_keywords(
+                "Неизвестное место Москва"
+            )
+            assert coords == (55.7540, 37.6209)
+
+        # Test when both methods fail
+        with patch.object(
+            openai_client,
+            "get_coordinates_from_nominatim",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch.object(
+            openai_client,
+            "get_precise_coordinates",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            coords = await openai_client.get_coordinates_from_search_keywords(
+                "Несуществующее место"
+            )
+            assert coords is None
+
+    anyio.run(_test)
