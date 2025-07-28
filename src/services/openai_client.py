@@ -752,14 +752,20 @@ class OpenAIClient:
                     all_potential_images.sort(reverse=True, key=lambda x: x[0])
                     
                     if all_potential_images:
-                        # Return up to max_images best images with improved URLs
+                        # Return up to max_images best images with multiple URL formats
                         selected_images = []
-                        for score, image_title in all_potential_images[:max_images]:
-                            # Use different URL format that's more reliable for Telegram
-                            # Add width parameter to ensure reasonable image size
-                            image_url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(image_title)}?width=800"
+                        for score, image_title in all_potential_images[:max_images * 2]:  # Try more images to account for failures
+                            if len(selected_images) >= max_images:
+                                break
+                            
+                            # Clean image title - remove File: prefix if present
+                            clean_title = image_title[5:] if image_title.startswith('File:') else image_title
+                            
+                            # Use the most reliable URL format for Telegram
+                            # This format works better and handles redirects properly
+                            image_url = f"https://commons.wikimedia.org/wiki/Special:Redirect/file/{quote(clean_title)}?width=800"
                             selected_images.append(image_url)
-                            logger.debug(f"Selected image: {image_title} (score: {score})")
+                            logger.debug(f"Selected image: {image_title} (score: {score}) -> {image_url}")
                         
                         return selected_images
         

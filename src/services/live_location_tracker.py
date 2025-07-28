@@ -73,6 +73,28 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
             except Exception as media_group_error:
                 logger.error(f"Failed to send live fact text + media group: {media_group_error}")
                 logger.error(f"Live fact error type: {type(media_group_error)}")
+                logger.error(f"Live image URLs that failed: {[img.media for img in media_list]}")
+                
+                # Try with fewer images if we had multiple images
+                if len(image_urls) > 2:
+                    logger.info(f"Retrying live fact with fewer images (2 instead of {len(image_urls)})")
+                    try:
+                        # Retry with only first 2 images
+                        retry_media_list = []
+                        for i, image_url in enumerate(image_urls[:2]):
+                            if i == 0:
+                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
+                            else:
+                                retry_media_list.append(InputMediaPhoto(media=image_url))
+                        
+                        await bot.send_media_group(
+                            chat_id=chat_id,
+                            media=retry_media_list
+                        )
+                        logger.info(f"Successfully sent {len(retry_media_list)} live images on retry for {place}")
+                        return
+                    except Exception as retry_error:
+                        logger.error(f"Live fact retry with fewer images also failed: {retry_error}")
                 
                 # Check if text was sent successfully by trying to send it again
                 try:

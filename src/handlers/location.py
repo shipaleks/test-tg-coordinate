@@ -82,6 +82,29 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
             except Exception as media_group_error:
                 logger.error(f"Failed to send text + media group: {media_group_error}")
                 logger.error(f"Error type: {type(media_group_error)}")
+                logger.error(f"Image URLs that failed: {[img.media for img in media_list]}")
+                
+                # Try with fewer images if we had multiple images
+                if len(image_urls) > 2:
+                    logger.info(f"Retrying with fewer images (2 instead of {len(image_urls)})")
+                    try:
+                        # Retry with only first 2 images
+                        retry_media_list = []
+                        for i, image_url in enumerate(image_urls[:2]):
+                            if i == 0:
+                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
+                            else:
+                                retry_media_list.append(InputMediaPhoto(media=image_url))
+                        
+                        await bot.send_media_group(
+                            chat_id=chat_id,
+                            media=retry_media_list,
+                            reply_to_message_id=reply_to_message_id
+                        )
+                        logger.info(f"Successfully sent {len(retry_media_list)} images on retry for {place}")
+                        return
+                    except Exception as retry_error:
+                        logger.error(f"Retry with fewer images also failed: {retry_error}")
                 
                 # Check if text was sent successfully by trying to send it again
                 # (This is a fallback in case the text sending also failed)
