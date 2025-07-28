@@ -26,8 +26,10 @@ class DonorsDatabase:
             # Check if we're running on Railway (multiple detection methods)
             is_railway = (
                 os.environ.get("RAILWAY_ENVIRONMENT") is not None or
+                os.environ.get("RAILWAY_ENVIRONMENT_NAME") is not None or
                 os.environ.get("RAILWAY_PROJECT_ID") is not None or
-                os.environ.get("RAILWAY_DEPLOYMENT_ID") is not None
+                os.environ.get("RAILWAY_SERVICE_ID") is not None or
+                os.environ.get("RAILWAY_VOLUME_ID") is not None
             )
             
             # Allow forcing volume path via environment variable
@@ -39,6 +41,14 @@ class DonorsDatabase:
             if is_railway or force_volume or (os.path.exists(volume_path) and os.access(volume_path, os.W_OK)):
                 db_path = os.path.join(volume_path, "donors.db")
                 logger.info(f"Using Railway volume for database: {db_path} (Railway: {is_railway}, Forced: {force_volume})")
+                
+                # Ensure the volume directory is accessible
+                if not os.path.exists(volume_path):
+                    logger.error(f"Volume path {volume_path} does not exist!")
+                elif not os.access(volume_path, os.W_OK):
+                    logger.error(f"Volume path {volume_path} is not writable!")
+                else:
+                    logger.info(f"Volume path {volume_path} is accessible and writable")
             else:
                 db_path = "donors.db"
                 logger.info(f"Using local database: {db_path} (Railway: {is_railway}, Forced: {force_volume})")
@@ -50,8 +60,10 @@ class DonorsDatabase:
         """Initialize the database schema."""
         try:
             with self._lock:
-                with sqlite3.connect(self.db_path) as conn:
-                    conn.execute("""
+                # Try to create/connect to the database
+                try:
+                    with sqlite3.connect(self.db_path) as conn:
+                        conn.execute("""
                         CREATE TABLE IF NOT EXISTS donors (
                             user_id INTEGER PRIMARY KEY,
                             telegram_username TEXT,
@@ -92,9 +104,64 @@ class DonorsDatabase:
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_payment_id ON donations (payment_id)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences (user_id)")
                     
-                    conn.commit()
-                    logger.info("Donors database initialized successfully")
+                        conn.commit()
+                        logger.info("Donors database initialized successfully")
+                        
+                except Exception as volume_error:
+                    logger.error(f"Failed to initialize database at {self.db_path}: {volume_error}")
                     
+                    # If we were trying to use volume but failed, fallback to local database
+                    if "/data" in str(self.db_path):
+                        logger.info("Falling back to local database due to volume error")
+                        self.db_path = Path("donors.db")
+                        
+                        # Retry with local database
+                        with sqlite3.connect(self.db_path) as conn:
+                            conn.execute("""
+                                CREATE TABLE IF NOT EXISTS donors (
+                                    user_id INTEGER PRIMARY KEY,
+                                    telegram_username TEXT,
+                                    first_name TEXT,
+                                    total_stars INTEGER DEFAULT 0,
+                                    first_donation_date INTEGER,
+                                    last_donation_date INTEGER,
+                                    premium_expires INTEGER DEFAULT 0,
+                                    created_at INTEGER DEFAULT CURRENT_TIMESTAMP
+                                )
+                            """)
+                            
+                            conn.execute("""
+                                CREATE TABLE IF NOT EXISTS donations (
+                                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    user_id INTEGER,
+                                    payment_id TEXT UNIQUE,
+                                    stars_amount INTEGER,
+                                    payment_date INTEGER,
+                                    invoice_payload TEXT,
+                                    FOREIGN KEY (user_id) REFERENCES donors (user_id)
+                                )
+                            """)
+                            
+                            conn.execute("""
+                                CREATE TABLE IF NOT EXISTS user_preferences (
+                                    user_id INTEGER PRIMARY KEY,
+                                    language TEXT DEFAULT 'en',
+                                    created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
+                                    updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
+                                )
+                            """)
+                            
+                            # Create indexes
+                            conn.execute("CREATE INDEX IF NOT EXISTS idx_donors_user_id ON donors (user_id)")
+                            conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_user_id ON donations (user_id)")
+                            conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_payment_id ON donations (payment_id)")
+                            conn.execute("CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences (user_id)")
+                            
+                            conn.commit()
+                            logger.info("Fallback local database initialized successfully")
+                    else:
+                        raise volume_error
+                        
         except Exception as e:
             logger.error(f"Failed to initialize donors database: {e}")
             raise

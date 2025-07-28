@@ -438,9 +438,10 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # 4. Check Railway volume and environment
         import os
         railway_env_vars = {
-            "RAILWAY_ENVIRONMENT": os.environ.get("RAILWAY_ENVIRONMENT", "Not set"),
+            "RAILWAY_ENVIRONMENT_NAME": os.environ.get("RAILWAY_ENVIRONMENT_NAME", "Not set"),
             "RAILWAY_PROJECT_ID": os.environ.get("RAILWAY_PROJECT_ID", "Not set"),
-            "RAILWAY_DEPLOYMENT_ID": os.environ.get("RAILWAY_DEPLOYMENT_ID", "Not set")
+            "RAILWAY_SERVICE_ID": os.environ.get("RAILWAY_SERVICE_ID", "Not set"),
+            "RAILWAY_VOLUME_ID": os.environ.get("RAILWAY_VOLUME_ID", "Not set")
         }
         
         if "/data" in db_path:
