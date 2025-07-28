@@ -501,10 +501,21 @@ class OpenAIClient:
         clean_keywords = search_keywords.replace(' + ', ' ').replace('+', ' ').strip()
         
         # Try different variations of search terms
-        search_variations = [
-            clean_keywords,
-            clean_keywords.split()[0] if clean_keywords.split() else clean_keywords,  # First word only
-        ]
+        search_variations = [clean_keywords]
+        
+        # Add word combinations
+        words = clean_keywords.split()
+        if len(words) > 1:
+            # Try first two words
+            search_variations.append(' '.join(words[:2]))
+            # Try first word only
+            search_variations.append(words[0])
+            # Try last word (often the most specific)
+            search_variations.append(words[-1])
+            # Try removing common words like "France", "Paris", etc.
+            filtered_words = [w for w in words if w not in ['France', 'Paris', 'London', 'Moscow', 'Москва', 'Россия']]
+            if filtered_words and len(filtered_words) != len(words):
+                search_variations.append(' '.join(filtered_words))
         
         # Add specific variations for common patterns
         if any(word in clean_keywords.lower() for word in ['metro', 'station', 'метро', 'станция']):
@@ -515,21 +526,27 @@ class OpenAIClient:
             if metro_clean:
                 search_variations.append(metro_clean)
         
+        # Remove duplicates while preserving order
+        search_variations = list(dict.fromkeys(search_variations))
+        
         for lang in languages:
             for search_term in search_variations:
                 if not search_term:
                     continue
                     
                 try:
+                    logger.debug(f"Trying Wikipedia search: '{search_term}' in {lang}")
                     image_url = await self._search_wikipedia_image(search_term, lang)
                     if image_url:
                         logger.info(f"Found Wikipedia image for '{search_term}' in {lang}: {image_url}")
                         return image_url
+                    else:
+                        logger.debug(f"No image found for '{search_term}' in {lang}")
                 except Exception as e:
                     logger.debug(f"Wikipedia search failed for '{search_term}' in {lang}: {e}")
                     continue
         
-        logger.info(f"No Wikipedia image found for: {search_keywords}")
+        logger.info(f"No Wikipedia image found for: {search_keywords} (tried {len(search_variations)} variations across {len(languages)} languages)")
         return None
 
     async def _search_wikipedia_image(self, search_term: str, lang: str) -> str | None:
@@ -557,10 +574,13 @@ class OpenAIClient:
                     pages = search_data.get('pages', [])
                     
                     if not pages:
+                        logger.debug(f"No pages found for '{search_term}' in {lang}")
                         return None
                     
+                    logger.debug(f"Found {len(pages)} pages for '{search_term}' in {lang}")
+                    
                     # Try first few pages
-                    for page in pages[:3]:
+                    for page in pages[:5]:  # Try more pages
                         page_title = page.get('title')
                         if not page_title:
                             continue
@@ -575,6 +595,11 @@ class OpenAIClient:
                             media_data = await media_response.json()
                             items = media_data.get('items', [])
                             
+                            logger.debug(f"Found {len(items)} media items for page '{page_title}'")
+                            
+                            # Collect potential images
+                            potential_images = []
+                            
                             # Look for good images
                             for item in items:
                                 if item.get('type') != 'image':
@@ -586,28 +611,36 @@ class OpenAIClient:
                                 skip_patterns = [
                                     'commons-logo', 'edit-icon', 'wikimedia', 'stub',
                                     'ambox', 'crystal', 'nuvola', 'dialog', 'system',
-                                    'red_x', 'green_check', 'question_mark'
+                                    'red_x', 'green_check', 'question_mark', 'infobox',
+                                    'arrow', 'symbol', 'disambiguation', 'flag'
                                 ]
                                 
                                 if any(pattern in title for pattern in skip_patterns):
                                     continue
                                 
-                                # Prefer images with good extensions
-                                if any(ext in title for ext in ['.jpg', '.jpeg', '.png', '.webp']):
-                                    image_url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(item['title'])}"
-                                    return image_url
+                                # Prefer images with good extensions and score them
+                                score = 0
+                                if any(ext in title for ext in ['.jpg', '.jpeg']):
+                                    score += 3
+                                elif any(ext in title for ext in ['.png', '.webp']):
+                                    score += 2
+                                
+                                # Prefer images that contain keywords from search term
+                                search_words = search_term.lower().split()
+                                for word in search_words:
+                                    if word in title and len(word) > 2:  # Avoid short words
+                                        score += 1
+                                
+                                potential_images.append((score, item['title']))
                             
-                            # If no preferred images, try first image
-                            for item in items:
-                                if item.get('type') == 'image':
-                                    title = item.get('title', '').lower()
-                                    skip_patterns = [
-                                        'commons-logo', 'edit-icon', 'wikimedia', 'stub',
-                                        'ambox', 'crystal', 'nuvola', 'dialog', 'system'
-                                    ]
-                                    if not any(pattern in title for pattern in skip_patterns):
-                                        image_url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(item['title'])}"
-                                        return image_url
+                            # Sort by score and return best image
+                            potential_images.sort(reverse=True, key=lambda x: x[0])
+                            
+                            if potential_images:
+                                best_image = potential_images[0][1]
+                                image_url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(best_image)}"
+                                logger.debug(f"Selected image: {best_image} (score: {potential_images[0][0]})")
+                                return image_url
         
         except Exception as e:
             logger.debug(f"Error searching Wikipedia {lang} for '{search_term}': {e}")
