@@ -135,7 +135,7 @@ def test_get_nearby_fact_live_location_model(openai_client):
             model_used = call_args[1]["model"]
             assert model_used == "o4-mini"
             assert "temperature" not in call_args[1]
-            assert call_args[1]["max_completion_tokens"] == 3000
+            assert call_args[1]["max_completion_tokens"] == 10000
             assert "max_tokens" not in call_args[1]
 
             messages = call_args[1]["messages"]

@@ -93,7 +93,7 @@ class OpenAIClient:
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},
                         ],
-                        max_completion_tokens=3000,  # Increased limit - o4-mini needs more tokens for reasoning + response
+                        max_completion_tokens=10000,  # Large limit for o4-mini extensive reasoning + detailed response
                     )
                     logger.info(f"o4-mini (live location) response: {response}")
                     content = response.choices[0].message.content if response.choices else None
