@@ -64,7 +64,7 @@ class DonorsDatabase:
                 try:
                     with sqlite3.connect(self.db_path) as conn:
                         conn.execute("""
-                        CREATE TABLE IF NOT EXISTS donors (
+                            CREATE TABLE IF NOT EXISTS donors (
                             user_id INTEGER PRIMARY KEY,
                             telegram_username TEXT,
                             first_name TEXT,
@@ -74,10 +74,10 @@ class DonorsDatabase:
                             premium_expires INTEGER DEFAULT 0,
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
-                    """)
+                        """)
                     
-                    conn.execute("""
-                        CREATE TABLE IF NOT EXISTS donations (
+                        conn.execute("""
+                            CREATE TABLE IF NOT EXISTS donations (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             user_id INTEGER,
                             payment_id TEXT UNIQUE,
@@ -86,17 +86,17 @@ class DonorsDatabase:
                             invoice_payload TEXT,
                             FOREIGN KEY (user_id) REFERENCES donors (user_id)
                         )
-                    """)
+                        """)
                     
-                    # User preferences table for language settings
-                    conn.execute("""
-                        CREATE TABLE IF NOT EXISTS user_preferences (
+                        # User preferences table for language settings
+                        conn.execute("""
+                            CREATE TABLE IF NOT EXISTS user_preferences (
                             user_id INTEGER PRIMARY KEY,
                             language TEXT DEFAULT 'en',
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                             updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
-                    """)
+                        """)
                     
                         # Create indexes for better performance
                         conn.execute("CREATE INDEX IF NOT EXISTS idx_donors_user_id ON donors (user_id)")
