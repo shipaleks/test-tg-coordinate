@@ -91,9 +91,11 @@ def test_get_nearby_fact_prompt_format(openai_client):
             call_args = mock_create.call_args
 
             assert call_args[1]["model"] == "o3"
-            assert call_args[1]["max_tokens"] == 400
+            assert call_args[1]["max_completion_tokens"] == 400
             # o3 reasoning model doesn't use temperature parameter
             assert "temperature" not in call_args[1]
+            # o3 uses max_completion_tokens instead of max_tokens
+            assert "max_tokens" not in call_args[1]
 
             messages = call_args[1]["messages"]
             assert len(messages) == 2

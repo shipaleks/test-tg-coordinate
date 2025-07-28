@@ -66,7 +66,7 @@ class OpenAIClient:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                max_tokens=400,  # Increased for detailed reasoning and responses
+                max_completion_tokens=400,  # o3 model uses max_completion_tokens instead of max_tokens
             )
 
             content = response.choices[0].message.content
