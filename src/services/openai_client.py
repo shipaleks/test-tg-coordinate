@@ -69,7 +69,7 @@ class OpenAIClient:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
-                    max_tokens=3000,  # Give plenty of tokens to prevent truncation
+                    max_completion_tokens=3000,  # o4-mini uses max_completion_tokens like o3
                 )
                 
                 logger.info(f"o4-mini response: {response}")
