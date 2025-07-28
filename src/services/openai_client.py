@@ -60,28 +60,28 @@ class OpenAIClient:
                 "Интересный факт: [Увлекательный и достоверный факт]"
             )
 
-            # Try o3 first, fallback to gpt-4.1 if not available or empty response
+            # Try o4-mini first, fallback to gpt-4.1 if not available or empty response
             response = None
             try:
                 response = await self.client.chat.completions.create(
-                    model="o3",  # Using o3 reasoning model
+                    model="o4-mini",  # Using o4-mini for faster and more efficient responses
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
-                    max_completion_tokens=2000,  # Give o3 plenty of tokens for deep reasoning and detailed response
+                    max_tokens=3000,  # Give plenty of tokens to prevent truncation
                 )
                 
-                logger.info(f"o3 response: {response}")
+                logger.info(f"o4-mini response: {response}")
                 content = response.choices[0].message.content if response.choices else None
                 
-                # Check if o3 returned empty content and fallback if needed
+                # Check if o4-mini returned empty content and fallback if needed
                 if not content:
-                    logger.warning(f"o3 returned empty content, falling back to gpt-4.1")
-                    raise ValueError("Empty content from o3")
+                    logger.warning(f"o4-mini returned empty content, falling back to gpt-4.1")
+                    raise ValueError("Empty content from o4-mini")
                     
             except Exception as e:
-                logger.warning(f"o3 failed ({e}), falling back to gpt-4.1")
+                logger.warning(f"o4-mini failed ({e}), falling back to gpt-4.1")
                 response = await self.client.chat.completions.create(
                     model="gpt-4.1",  # Fallback to gpt-4.1
                     messages=[

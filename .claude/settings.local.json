@@ -4,7 +4,10 @@
       "Bash(python -m pytest tests/test_openai_client.py -v)",
       "Bash(python -m pytest tests/ -v)",
       "Bash(python:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "WebFetch(domain:platform.openai.com)"
     ],
     "deny": []
   }

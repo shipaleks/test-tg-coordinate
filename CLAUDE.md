@@ -24,7 +24,7 @@ python -m src.main
 
 ### Core Components
 
-**NearbyFactBot** is a Telegram bot that provides location-based facts using OpenAI o3 reasoning model. The architecture supports both static location queries and live location tracking.
+**NearbyFactBot** is a Telegram bot that provides location-based facts using OpenAI o4-mini model. The architecture supports both static location queries and live location tracking.
 
 ### Key Modules
 
@@ -48,7 +48,7 @@ python -m src.main
 - **Session cleanup**: Automatic termination when live sharing stops
 
 #### `src/services/openai_client.py`
-- OpenAI o3 reasoning model integration for fact generation
+- OpenAI o4-mini integration for fast and efficient fact generation
 - Step-by-step reasoning prompts optimized for thorough location analysis
 - Russian-language prompts with structured thinking process
 - Structured response parsing (Location + Fact format)
@@ -56,7 +56,7 @@ python -m src.main
 
 ### Data Flow
 
-1. **Static Location**: User shares location → immediate o3 reasoning analysis → fact response
+1. **Static Location**: User shares location → immediate o4-mini analysis → fact response
 2. **Live Location**: User shares live location → interval selection → initial fact → background loop with numbered facts every N minutes → session cleanup on stop
 
 ### Live Location System
@@ -69,7 +69,7 @@ python -m src.main
 
 ### Tech Stack
 - **Python 3.12** with python-telegram-bot 21.7
-- **OpenAI o3** reasoning model for enhanced fact generation
+- **OpenAI o4-mini** for fast and efficient fact generation
 - **AsyncIO** for concurrent live location processing
 - **Railway** deployment with GitHub Actions CI/CD
 - **pytest** with AsyncMock for testing
