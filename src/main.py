@@ -135,7 +135,7 @@ def main() -> None:
         CallbackQueryHandler(handle_interval_callback, pattern="^interval_")
     )
     application.add_handler(
-        CallbackQueryHandler(handle_donation_callback, pattern="^donate_|^premium_info$")
+        CallbackQueryHandler(handle_donation_callback, pattern="^donate_")
     )
     
     # Add payment handlers

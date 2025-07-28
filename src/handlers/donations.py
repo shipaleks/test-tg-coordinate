@@ -38,9 +38,6 @@ async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "• 🤖 Оплачивать OpenAI API для качественных фактов\n"
         "• 🚀 Развивать новые функции бота\n"
         "• 📡 Поддерживать сервер 24/7\n\n"
-        "💎 *Бонус для донатеров:*\n"
-        "• Доступ к модели o3 для живых локаций (более детальные факты)\n"
-        "• 1 звезда = 1 день премиума\n\n"
         "💝 *Любая поддержка добровольна и очень ценится!*"
     )
     
@@ -56,11 +53,6 @@ async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         ],
     ]
     
-    # Add premium info button if not premium
-    if not is_premium:
-        keyboard.append([
-            InlineKeyboardButton("❓ Что дает премиум?", callback_data="premium_info")
-        ])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -79,38 +71,6 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
     user = query.from_user
     chat_id = query.message.chat_id
     
-    if query.data == "premium_info":
-        info_text = (
-            "💎 *Премиум функции*\n\n"
-            "🧠 *OpenAI o3 модель для живых локаций:*\n"
-            "• Более глубокий анализ мест при прогулках\n"
-            "• Детальнее исторические факты\n"
-            "• Лучше понимание контекста локации\n"
-            "• Качественнее рассуждения AI\n\n"
-            "⏰ *Длительность:*\n"
-            "• 1 звезда = 1 день премиума\n"
-            "• Время суммируется при донатах\n\n"
-            "Выберите сумму поддержки:"
-        )
-        
-        keyboard = [
-            [
-                InlineKeyboardButton("10⭐", callback_data="donate_10"),
-                InlineKeyboardButton("50⭐", callback_data="donate_50"),
-                InlineKeyboardButton("100⭐", callback_data="donate_100"),
-            ],
-            [
-                InlineKeyboardButton("💰 Другая сумма", callback_data="donate_custom"),
-            ],
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            info_text,
-            parse_mode="Markdown",
-            reply_markup=reply_markup
-        )
-        return
     
     # Handle donation amounts
     if query.data.startswith("donate_"):
@@ -141,8 +101,48 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
             return
         
         if amount_str == "back":
-            # Go back to main donate screen
-            await donate_command(update, context)
+            # Go back to main donate screen - we need to recreate the original message
+            user = query.from_user
+            donors_db = get_donors_db()
+            is_premium = donors_db.is_premium_user(user.id)
+            donor_info = donors_db.get_donor_info(user.id)
+            
+            # Create status text
+            if is_premium and donor_info:
+                status_text = f"✨ *Спасибо за поддержку!*\n📊 Всего звезд: {donor_info['total_stars']}⭐\n\n"
+            elif donor_info:
+                status_text = f"💫 *Спасибо за поддержку!*\n📊 Всего звезд: {donor_info['total_stars']}⭐\n\n"
+            else:
+                status_text = ""
+            
+            donate_text = (
+                "🌟 *Поддержать проект*\n\n"
+                + status_text +
+                "Ваша поддержка помогает:\n"
+                "• 🤖 Оплачивать OpenAI API для качественных фактов\n"
+                "• 🚀 Развивать новые функции бота\n"
+                "• 📡 Поддерживать сервер 24/7\n\n"
+                "💝 *Любая поддержка добровольна и очень ценится!*"
+            )
+            
+            # Create donation buttons
+            keyboard = [
+                [
+                    InlineKeyboardButton("10⭐", callback_data="donate_10"),
+                    InlineKeyboardButton("50⭐", callback_data="donate_50"),
+                    InlineKeyboardButton("100⭐", callback_data="donate_100"),
+                ],
+                [
+                    InlineKeyboardButton("💰 Другая сумма", callback_data="donate_custom"),
+                ],
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                donate_text, 
+                parse_mode="Markdown", 
+                reply_markup=reply_markup
+            )
             return
         
         try:
@@ -175,15 +175,8 @@ async def send_donation_invoice(bot, chat_id: int, user, stars_amount: int, repl
         # Create invoice payload for tracking
         payload = f"donate_{user.id}_{stars_amount}"
         
-        # Determine premium days for description
-        premium_days = stars_amount
-        
         title = f"Поддержка проекта {stars_amount}⭐"
-        description = (
-            f"Спасибо за поддержку! Вы получите {premium_days} "
-            f"{'день' if premium_days == 1 else 'дня' if premium_days < 5 else 'дней'} "
-            f"премиум доступа с моделью o3."
-        )
+        description = f"Спасибо за поддержку проекта! Ваши {stars_amount} звезд помогут улучшить качество бота."
         
         # Create price in Telegram Stars
         prices = [LabeledPrice(label=f"{stars_amount} Telegram Stars", amount=stars_amount)]
@@ -288,16 +281,16 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
             donor_info = donors_db.get_donor_info(user.id)
             total_stars = donor_info['total_stars'] if donor_info else stars_amount
             
-            # Create success message
+            # Create success message (скрытый бонус не упоминаем)
             success_text = (
                 f"🎉 *Спасибо за поддержку!*\n\n"
                 f"💫 Получено: {stars_amount}⭐\n"
-                f"📊 Всего звезд: {total_stars}⭐\n"
-                f"💎 Премиум активен на {stars_amount} "
-                f"{'день' if stars_amount == 1 else 'дня' if stars_amount < 5 else 'дней'}\n\n"
-                f"🧠 *Теперь доступна модель o3 для живых локаций!*\n"
-                f"Более детальные факты при использовании live location\n\n"
-                f"✨ Спасибо за то, что делаете проект лучше!"
+                f"📊 Всего звезд: {total_stars}⭐\n\n"
+                f"✨ Ваша поддержка поможет:\n"
+                f"• Улучшить качество фактов\n"
+                f"• Развивать новые функции\n" 
+                f"• Поддерживать проект 24/7\n\n"
+                f"🙏 Спасибо за то, что делаете проект лучше!"
             )
             
             await update.message.reply_text(success_text, parse_mode="Markdown")

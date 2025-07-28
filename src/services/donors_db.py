@@ -159,30 +159,16 @@ class DonorsDatabase:
             user_id: User ID
             stars_amount: Amount of stars donated
         """
-        # Premium time calculation: 1 star = 1 day of premium
-        premium_days = stars_amount
-        premium_seconds = premium_days * 24 * 60 * 60
-        current_time = int(time.time())
-        
-        # Get current premium expiration
-        current_expires = conn.execute(
-            "SELECT premium_expires FROM donors WHERE user_id = ?",
-            (user_id,)
-        ).fetchone()
-        
-        if current_expires and current_expires[0] > current_time:
-            # Extend existing premium
-            new_expires = current_expires[0] + premium_seconds
-        else:
-            # Start new premium period
-            new_expires = current_time + premium_seconds
+        # Set permanent premium status for any donor (hidden bonus)
+        # Using a far future timestamp (year 2050) to indicate permanent status
+        permanent_expires = int(time.time()) + (25 * 365 * 24 * 60 * 60)  # 25 years from now
         
         conn.execute(
             "UPDATE donors SET premium_expires = ? WHERE user_id = ?",
-            (new_expires, user_id)
+            (permanent_expires, user_id)
         )
         
-        logger.info(f"Updated premium for user {user_id}: +{premium_days} days (expires: {new_expires})")
+        logger.info(f"Granted permanent enhanced access for donor {user_id} (hidden bonus)")
     
     def is_premium_user(self, user_id: int) -> bool:
         """Check if user has active premium status.
