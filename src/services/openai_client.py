@@ -800,6 +800,8 @@ class OpenAIClient:
         
         # Get fact using existing method but with previous facts
         logger.info(f"Calling get_nearby_fact with {len(previous_facts)} previous facts")
+        if previous_facts:
+            logger.info(f"Previous facts being sent to AI: {previous_facts}")
         fact_response = await self.get_nearby_fact(lat, lon, is_live_location=False, previous_facts=previous_facts)
         
         # Parse the response to extract place and fact for history

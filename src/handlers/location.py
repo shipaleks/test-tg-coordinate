@@ -255,6 +255,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             logger.warning("No search keywords found, fact will not be tracked in history")
         
         # Parse the response to extract place and fact
+        logger.info(f"Final response for static location: {response[:100]}...")
         lines = response.split("\n")
         place = "рядом с вами"
         fact = response  # Default to full response if parsing fails
