@@ -101,7 +101,7 @@ def test_get_nearby_fact_prompt_format(openai_client):
             # o4-mini uses max_completion_tokens and no temperature (like o3)
             elif model_used == "o4-mini":
                 assert "temperature" not in call_args[1]
-                assert call_args[1]["max_completion_tokens"] == 3000
+                assert call_args[1]["max_completion_tokens"] == 5000
                 assert "max_tokens" not in call_args[1]
 
             messages = call_args[1]["messages"]
