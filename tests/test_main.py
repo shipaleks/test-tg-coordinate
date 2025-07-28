@@ -72,17 +72,17 @@ def test_start_command(mock_update, mock_context):
         # Check keyboard buttons
         keyboard = reply_markup.keyboard
         assert len(keyboard) == 2  # Two rows
-        assert len(keyboard[0]) == 1  # First row has 1 button (location)
-        assert len(keyboard[1]) == 1  # Second row has 1 button (info)
+        assert len(keyboard[0]) == 1  # First row has 1 button (info)
+        assert len(keyboard[1]) == 1  # Second row has 1 button (location)
 
-        # Check location button
-        location_button = keyboard[0][0]
+        # Check info button (now first)
+        info_button = keyboard[0][0]
+        assert info_button.text == "📱 Как поделиться Live Location"
+
+        # Check location button (now second)
+        location_button = keyboard[1][0]
         assert location_button.text == "🔴 Поделиться локацией"
         assert location_button.request_location is True
-
-        # Check info button
-        info_button = keyboard[1][0]
-        assert info_button.text == "📖 Как использовать бота"
 
     anyio.run(_test)
 
@@ -100,7 +100,7 @@ def test_info_command(mock_update, mock_context):
 
         # Check that info text contains key information
         text = call_args[0][0]  # First positional argument
-        assert "📖 *Как использовать бота:*" in text
+        assert "📱 *Как поделиться Live Location:*" in text
         assert "Живая локация — основной режим" in text
         assert "Персональный экскурсовод" in text
         assert "Share Live Location" in text

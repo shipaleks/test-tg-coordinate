@@ -43,8 +43,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     # Create location sharing keyboard with live location first
     keyboard = [
+        [KeyboardButton("📱 Как поделиться Live Location")],
         [KeyboardButton("🔴 Поделиться локацией", request_location=True)],
-        [KeyboardButton("📖 Как использовать бота")],
     ]
     reply_markup = ReplyKeyboardMarkup(
         keyboard, resize_keyboard=True, one_time_keyboard=False
@@ -58,7 +58,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle info button press."""
     info_text = (
-        "📖 *Как использовать бота:*\n\n"
+        "📱 *Как поделиться Live Location:*\n\n"
         "🔴 *Живая локация — основной режим:*\n"
         "1️⃣ Скрепка 📎 → Location → Share Live Location\n"
         "2️⃣ Выберите время отслеживания (15 мин - 8 часов)\n"
@@ -103,7 +103,7 @@ def main() -> None:
     # Add text message handlers
     application.add_handler(
         MessageHandler(
-            filters.TEXT & filters.Regex("^📖 Как использовать бота$"), info_command
+            filters.TEXT & filters.Regex("^📱 Как поделиться Live Location$"), info_command
         )
     )
 

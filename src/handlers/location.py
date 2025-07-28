@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 def get_location_keyboard() -> ReplyKeyboardMarkup:
     """Get the location sharing keyboard."""
     keyboard = [
+        [KeyboardButton("📱 Как поделиться Live Location")],
         [KeyboardButton("🔴 Поделиться локацией", request_location=True)],
-        [KeyboardButton("📖 Как использовать бота")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
