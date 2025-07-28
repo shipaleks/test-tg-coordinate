@@ -175,6 +175,7 @@ class OpenAIClient:
                     if ":" in fact:
                         location = fact.split(":")[0].strip()
                         mentioned_locations.append(location)
+                        logger.info(f"Extracted banned location from history: '{location}'")
                 
                 previous_facts_text = (
                     "\n\n🚫 СТРОГО ЗАПРЕЩЕНО повторять эти места:\n"
