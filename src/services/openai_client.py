@@ -60,18 +60,18 @@ class OpenAIClient:
                 "Интересный факт: [Увлекательный и достоверный факт]"
             )
 
-            # Try o3 first, fallback to gpt-4o if not available
+            # Try o3 first, fallback to gpt-4.1 if not available
             try:
                 response = await self.client.chat.completions.create(
-                    model="o3-mini",  # Try o3-mini instead of o3
+                    model="o3",  # Using o3 reasoning model
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
-                    max_tokens=400,  # Use max_tokens for o3-mini
+                    max_completion_tokens=400,  # o3 uses max_completion_tokens
                 )
             except Exception as e:
-                logger.warning(f"o3-mini failed, falling back to gpt-4.1: {e}")
+                logger.warning(f"o3 failed, falling back to gpt-4.1: {e}")
                 response = await self.client.chat.completions.create(
                     model="gpt-4.1",  # Fallback to gpt-4.1
                     messages=[
