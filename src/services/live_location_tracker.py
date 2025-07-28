@@ -149,7 +149,7 @@ class LiveLocationTracker:
             await asyncio.sleep(interval_seconds)
 
             while True:
-                # Check if session is still active and not expired
+                # Check if session is still active and not expired before sending fact
                 current_time = datetime.now()
                 time_since_update = current_time - session_data.last_update
 
@@ -214,7 +214,7 @@ class LiveLocationTracker:
                     )
 
                     # Try to parse coordinates and send location for navigation (background fact)
-                    coordinates = openai_client.parse_coordinates_from_response(
+                    coordinates = await openai_client.parse_coordinates_from_response(
                         response
                     )
                     if coordinates:
