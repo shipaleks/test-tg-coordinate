@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/test_openai_client.py -v)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(python:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": []
+  }
+}

@@ -90,17 +90,19 @@ def test_get_nearby_fact_prompt_format(openai_client):
             mock_create.assert_called_once()
             call_args = mock_create.call_args
 
-            assert call_args[1]["model"] == "gpt-4.1"
-            assert call_args[1]["max_tokens"] == 300
-            assert call_args[1]["temperature"] == 0.7
+            assert call_args[1]["model"] == "o3"
+            assert call_args[1]["max_tokens"] == 400
+            # o3 reasoning model doesn't use temperature parameter
+            assert "temperature" not in call_args[1]
 
             messages = call_args[1]["messages"]
             assert len(messages) == 2
             assert messages[0]["role"] == "system"
-            assert "professional tour guide" in messages[0]["content"]
-            assert "300 meters" in messages[0]["content"]
+            assert "экскурсовод" in messages[0]["content"]
+            assert "рассуждения" in messages[0]["content"]
             assert messages[1]["role"] == "user"
             assert "55.751244, 37.618423" in messages[1]["content"]
+            assert "Шаг 1:" in messages[1]["content"]
             assert "Локация:" in messages[1]["content"]
             assert "Интересный факт:" in messages[1]["content"]
 

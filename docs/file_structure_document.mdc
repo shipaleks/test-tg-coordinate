@@ -3,3 +3,26 @@ description:
 globs:
 alwaysApply: false
 ---
+Папка → назначение
+
+Папка	Назначение
+src/	Исходный код бота как Python-пакет
+src/handlers/	Хэндлеры Telegram-сообщений и команд
+src/services/	Обёртки над внешними API (OpenAI и геоданные)
+tests/	Юнит- и интеграционные тесты (pytest)
+.github/workflows/	CI/CD: GitHub Actions → Railway deploy
+infra/	Dockerfile, Procfile и другие infra-файлы для Railway
+docs/	Проектная документация (PRD, tech stack, ADR)
+
+Главные файлы
+	•	src/main.py — точка входа; инициализирует Application, регистрирует хэндлеры.
+	•	src/services/openai_client.py — функция get_nearby_fact(lat, lon) обращается к GPT.
+	•	Procfile — команда запуска процесса в Railway (python -m src.main).
+	•	Dockerfile — минимальный контейнер для prod.
+	•	pyproject.toml — зависимости, конфиг Ruff/Black.
+	•	.env.example — перечень требуемых переменных окружения (API ключи).
+
+Генерируй новые файлы здесь
+	•	src/
+	•	tests/
+	•	docs/

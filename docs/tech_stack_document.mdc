@@ -3,3 +3,5 @@ description:
 globs:
 alwaysApply: false
 ---
+Deployment	Railway (2025-05)	Хостинг контейнера, CI/CD из GitHub	https://docs.railway.app/
+Линтер / Форматтер	ruff 0.4.0 (lint) + black 24.3.0 (fmt)	Статический анализ и автоформатирование кода	https://docs.astral.sh/ruff/, https://black.readthedocs.io/
