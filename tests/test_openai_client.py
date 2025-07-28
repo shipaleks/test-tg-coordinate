@@ -101,7 +101,7 @@ def test_get_nearby_fact_prompt_format(openai_client):
             # o3 uses max_completion_tokens and no temperature
             elif model_used == "o3":
                 assert "temperature" not in call_args[1]
-                assert call_args[1]["max_completion_tokens"] == 400
+                assert call_args[1]["max_completion_tokens"] == 800
                 assert "max_tokens" not in call_args[1]
 
             messages = call_args[1]["messages"]
