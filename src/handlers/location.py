@@ -38,21 +38,43 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
         if image_urls:
             # Try sending as media group first
             try:
-                media_list = []
-                for i, image_url in enumerate(image_urls):
-                    if i == 0:
-                        # First image gets the full fact as caption
-                        media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
-                    else:
-                        # Other images get place name as caption
+                # Check if caption is too long (Telegram limit is ~1024 characters)
+                if len(formatted_response) > 900:  # Leave some margin
+                    # Send text first, then images without text
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=formatted_response,
+                        parse_mode="Markdown",
+                        reply_to_message_id=reply_to_message_id
+                    )
+                    
+                    # Send images without captions
+                    media_list = []
+                    for image_url in image_urls:
                         media_list.append(InputMediaPhoto(media=image_url, caption=f"📸 {place}"))
-                
-                await bot.send_media_group(
-                    chat_id=chat_id,
-                    media=media_list,
-                    reply_to_message_id=reply_to_message_id
-                )
-                logger.info(f"Sent {len(image_urls)} Wikipedia images with fact for {place}")
+                    
+                    await bot.send_media_group(
+                        chat_id=chat_id,
+                        media=media_list
+                    )
+                    logger.info(f"Sent text + {len(image_urls)} Wikipedia images separately for {place}")
+                else:
+                    # Caption is short enough, send as media group with caption
+                    media_list = []
+                    for i, image_url in enumerate(image_urls):
+                        if i == 0:
+                            # First image gets the full fact as caption
+                            media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
+                        else:
+                            # Other images get place name as caption
+                            media_list.append(InputMediaPhoto(media=image_url, caption=f"📸 {place}"))
+                    
+                    await bot.send_media_group(
+                        chat_id=chat_id,
+                        media=media_list,
+                        reply_to_message_id=reply_to_message_id
+                    )
+                    logger.info(f"Sent {len(image_urls)} Wikipedia images with fact caption for {place}")
                 return
                 
             except Exception as media_group_error:
