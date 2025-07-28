@@ -441,7 +441,8 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "RAILWAY_ENVIRONMENT_NAME": os.environ.get("RAILWAY_ENVIRONMENT_NAME", "Not set"),
             "RAILWAY_PROJECT_ID": os.environ.get("RAILWAY_PROJECT_ID", "Not set"),
             "RAILWAY_SERVICE_ID": os.environ.get("RAILWAY_SERVICE_ID", "Not set"),
-            "RAILWAY_VOLUME_ID": os.environ.get("RAILWAY_VOLUME_ID", "Not set")
+            "RAILWAY_VOLUME_ID": os.environ.get("RAILWAY_VOLUME_ID", "Not set"),
+            "RAILWAY_VOLUME_MOUNT_PATH": os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "Not set")
         }
         
         if "/data" in db_path:

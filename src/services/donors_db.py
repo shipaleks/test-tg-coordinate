@@ -36,7 +36,12 @@ class DonorsDatabase:
             force_volume = os.environ.get("FORCE_VOLUME_PATH", "").lower() == "true"
             
             # Check for custom volume path from environment variable
-            volume_path = os.environ.get("VOLUME_PATH", "/data")
+            # Use Railway's official volume mount path first, then fallback to custom or default
+            volume_path = (
+                os.environ.get("RAILWAY_VOLUME_MOUNT_PATH") or 
+                os.environ.get("VOLUME_PATH") or 
+                "/data"
+            )
             
             # If on Railway OR volume forced OR if volume path exists and is writable
             if is_railway or force_volume or (os.path.exists(volume_path) and os.access(volume_path, os.W_OK)):
