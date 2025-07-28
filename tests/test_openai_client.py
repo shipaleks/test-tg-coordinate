@@ -399,32 +399,22 @@ def test_get_coordinates_from_search_keywords(openai_client):
             )
             assert coords == (55.7539, 37.6208)
 
-        # Test fallback to WebSearch when Nominatim fails
+        # Test simplified search when complex keywords fail
         with patch.object(
             openai_client,
             "get_coordinates_from_nominatim",
             new_callable=AsyncMock,
-            return_value=None,
-        ), patch.object(
-            openai_client,
-            "get_precise_coordinates",
-            new_callable=AsyncMock,
-            return_value=(55.7540, 37.6209),
+            side_effect=[None, (55.7540, 37.6209)],  # First call fails, second succeeds
         ):
             coords = await openai_client.get_coordinates_from_search_keywords(
-                "Неизвестное место Москва"
+                "Complex Place Name + Paris + Detail"
             )
             assert coords == (55.7540, 37.6209)
 
-        # Test when both methods fail
+        # Test when all methods fail
         with patch.object(
             openai_client,
             "get_coordinates_from_nominatim",
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch.object(
-            openai_client,
-            "get_precise_coordinates",
             new_callable=AsyncMock,
             return_value=None,
         ):

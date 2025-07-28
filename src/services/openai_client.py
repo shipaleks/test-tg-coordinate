@@ -101,7 +101,7 @@ class OpenAIClient:
                     "- Архитектурные особенности или культурное значение (только если точно знаете)\n\n"
                     "Финальный ответ в формате:\n"
                     "Локация: [Конкретное название места]\n"
-                    "Поиск: [Ключевые слова для точного поиска места: название + город + район]\n"
+                    "Поиск: [Ключевые слова для точного поиска: ОРИГИНАЛЬНОЕ название на местном языке + город + страна. Например: 'Louvre Museum Paris France' или 'Красная площадь Москва Россия']\n"
                     "Интересный факт: [Развернутый факт с историческими подробностями, примерно 100-120 слов]"
                 )
             else:
@@ -120,7 +120,7 @@ class OpenAIClient:
                     "- Достоверные особенности места\n\n"
                     "Финальный ответ в формате:\n"
                     "Локация: [Конкретное название места]\n"
-                    "Поиск: [Ключевые слова для точного поиска места: название + город + район]\n"
+                    "Поиск: [Ключевые слова для точного поиска: ОРИГИНАЛЬНОЕ название на местном языке + город + страна. Например: 'Louvre Museum Paris France' или 'Красная площадь Москва Россия']\n"
                     "Интересный факт: [Краткий, но достоверный факт, 60-80 слов]"
                 )
 
@@ -222,48 +222,9 @@ class OpenAIClient:
             Tuple of (latitude, longitude) if found, None otherwise
         """
         try:
-            search_prompt = (
-                f"Найдите точные GPS координаты для: {place_name}\n"
-                f"Контекст: {area_description}\n\n"
-                "Используйте веб-поиск для получения максимально точных координат.\n"
-                "Ответьте ТОЛЬКО в формате: latitude,longitude\n"
-                "Например: 55.7539,37.6208"
-            )
 
-            response = await self.client.chat.completions.create(
-                model="gpt-4.1",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Вы — точный геолокационный сервис. Используйте веб-поиск для поиска координат.",
-                    },
-                    {"role": "user", "content": search_prompt},
-                ],
-                tools=[{"type": "web_search"}],
-                max_tokens=100,
-                temperature=0.1,  # Low temperature for precision
-            )
-
-            content = response.choices[0].message.content if response.choices else None
-            if not content:
-                return None
-
-            # Parse coordinates from response
-            coord_match = re.search(
-                r"([-+]?\d*\.?\d+),([-+]?\d*\.?\d+)", content.strip()
-            )
-            if coord_match:
-                lat = float(coord_match.group(1))
-                lon = float(coord_match.group(2))
-
-                # Validate coordinates
-                if -90 <= lat <= 90 and -180 <= lon <= 180:
-                    logger.info(
-                        f"Found precise coordinates for {place_name}: {lat}, {lon}"
-                    )
-                    return lat, lon
-
-            logger.warning(f"Could not parse valid coordinates from: {content}")
+            # WebSearch tool is deprecated and no longer works
+            logger.warning("WebSearch tool is deprecated, skipping web search")
             return None
 
         except Exception as e:
@@ -399,12 +360,18 @@ class OpenAIClient:
             logger.info(f"Found Nominatim coordinates: {nominatim_coords}")
             return nominatim_coords
 
-        # Fallback to WebSearch if Nominatim fails
-        logger.info(f"Nominatim failed, trying WebSearch for: {search_keywords}")
-        websearch_coords = await self.get_precise_coordinates(search_keywords, "")
-        if websearch_coords:
-            logger.info(f"Found WebSearch coordinates: {websearch_coords}")
-            return websearch_coords
+        # Try variations of search keywords if Nominatim fails
+        logger.info(f"Nominatim failed for: {search_keywords}")
+
+        # Try simpler search - just the main place name
+        if " + " in search_keywords or "+" in search_keywords:
+            # Extract first part before + sign
+            simple_keywords = search_keywords.split("+")[0].strip()
+            logger.info(f"Trying simplified search: {simple_keywords}")
+            simple_coords = await self.get_coordinates_from_nominatim(simple_keywords)
+            if simple_coords:
+                logger.info(f"Found coordinates with simplified search: {simple_coords}")
+                return simple_coords
 
         logger.warning(f"No coordinates found for keywords: {search_keywords}")
         return None
