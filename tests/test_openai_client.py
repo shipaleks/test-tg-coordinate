@@ -416,11 +416,11 @@ def test_get_coordinates_from_search_keywords(openai_client):
     anyio.run(_test)
 
 
-def test_get_wikipedia_image(openai_client):
-    """Test getting images from Wikipedia."""
+def test_get_wikipedia_images(openai_client):
+    """Test getting multiple images from Wikipedia."""
 
     async def _test():
-        # Test with a well-known landmark that should have an image
+        # Test with a well-known landmark that should have multiple images
         with patch('aiohttp.ClientSession') as mock_session:
             # Mock Wikipedia search response (now using legacy API format)
             mock_search_response = MagicMock()
@@ -439,6 +439,7 @@ def test_get_wikipedia_image(openai_client):
             mock_media_response.json = AsyncMock(return_value={
                 'items': [
                     {'type': 'image', 'title': 'File:Eiffel_Tower.jpg'},
+                    {'type': 'image', 'title': 'File:Eiffel_Tower_2.jpg'},
                     {'type': 'image', 'title': 'File:Commons-logo.png'}  # Should be skipped
                 ]
             })
@@ -456,10 +457,12 @@ def test_get_wikipedia_image(openai_client):
             ]
             
             # Test the function
-            image_url = await openai_client.get_wikipedia_image("Eiffel Tower Paris France")
+            image_urls = await openai_client.get_wikipedia_images("Eiffel Tower Paris France", max_images=3)
             
-            # Should return the image URL (URL encoded)
-            assert image_url == "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower.jpg"
+            # Should return multiple image URLs (URL encoded)
+            assert len(image_urls) == 2  # Only 2 good images, commons-logo filtered out
+            assert "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower.jpg" in image_urls
+            assert "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower_2.jpg" in image_urls
             
         # Test with search keywords that won't be found
         with patch('aiohttp.ClientSession') as mock_session:
@@ -475,6 +478,30 @@ def test_get_wikipedia_image(openai_client):
             mock_session_instance.get.return_value.__aenter__ = AsyncMock(return_value=mock_search_response)
             mock_session_instance.get.return_value.__aexit__ = AsyncMock(return_value=None)
             
+            image_urls = await openai_client.get_wikipedia_images("NonexistentPlace")
+            assert image_urls == []
+
+    anyio.run(_test)
+
+
+def test_get_wikipedia_image_backward_compatibility(openai_client):
+    """Test backward compatibility of single image method."""
+
+    async def _test():
+        # Mock the get_wikipedia_images method
+        with patch.object(openai_client, 'get_wikipedia_images', new_callable=AsyncMock) as mock_get_images:
+            # Test when images are found
+            mock_get_images.return_value = [
+                "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower.jpg",
+                "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower_2.jpg"
+            ]
+            
+            image_url = await openai_client.get_wikipedia_image("Eiffel Tower Paris France")
+            assert image_url == "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower.jpg"
+            mock_get_images.assert_called_once_with("Eiffel Tower Paris France", max_images=1)
+            
+            # Test when no images are found
+            mock_get_images.return_value = []
             image_url = await openai_client.get_wikipedia_image("NonexistentPlace")
             assert image_url is None
 

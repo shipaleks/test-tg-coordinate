@@ -6,11 +6,64 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from telegram import Bot
+from telegram import Bot, InputMediaPhoto
 
 from .openai_client import get_openai_client
 
 logger = logging.getLogger(__name__)
+
+
+async def send_live_fact_with_images(bot, chat_id, formatted_response, search_keywords, place):
+    """Send live fact message with Wikipedia images if available.
+    
+    Args:
+        bot: Telegram bot instance
+        chat_id: Chat ID to send to
+        formatted_response: Formatted text response
+        search_keywords: Keywords to search images for
+        place: Place name for caption
+    """
+    try:
+        # Try to get Wikipedia images
+        openai_client = get_openai_client()
+        image_urls = await openai_client.get_wikipedia_images(search_keywords, max_images=4)  # Max 4 for media group
+        
+        if image_urls:
+            # Send images as media group with the fact as caption on first image
+            media_list = []
+            for i, image_url in enumerate(image_urls):
+                if i == 0:
+                    # First image gets the full fact as caption
+                    media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
+                else:
+                    # Other images get place name as caption
+                    media_list.append(InputMediaPhoto(media=image_url, caption=f"📸 {place}"))
+            
+            await bot.send_media_group(
+                chat_id=chat_id,
+                media=media_list
+            )
+            logger.info(f"Sent {len(image_urls)} Wikipedia images with live fact for {place}")
+        else:
+            # No images found, send just the text
+            await bot.send_message(
+                chat_id=chat_id,
+                text=formatted_response,
+                parse_mode="Markdown"
+            )
+            logger.info(f"Sent live fact without images for {place}")
+            
+    except Exception as e:
+        logger.warning(f"Failed to send live fact with images: {e}")
+        # Fallback to text-only message
+        try:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=formatted_response,
+                parse_mode="Markdown"
+            )
+        except Exception as fallback_error:
+            logger.error(f"Failed to send fallback live fact message: {fallback_error}")
 
 
 @dataclass
@@ -207,28 +260,24 @@ class LiveLocationTracker:
                     # Save fact to history to avoid repetition
                     session_data.fact_history.append(f"{place}: {fact}")
 
-                    # Send the fact
-                    await bot.send_message(
-                        chat_id=session_data.chat_id,
-                        text=formatted_response,
-                        parse_mode="Markdown",
-                    )
-
-                    # Try to get and send Wikipedia image for background fact
+                    # Send the fact with images
                     search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
                     if search_match:
                         search_keywords = search_match.group(1).strip()
-                        try:
-                            image_url = await openai_client.get_wikipedia_image(search_keywords)
-                            if image_url:
-                                await bot.send_photo(
-                                    chat_id=session_data.chat_id,
-                                    photo=image_url,
-                                    caption=f"📸 {place}",
-                                )
-                                logger.info(f"Sent Wikipedia image for background fact: {place}")
-                        except Exception as img_error:
-                            logger.warning(f"Failed to send Wikipedia image for background fact: {img_error}")
+                        await send_live_fact_with_images(
+                            bot, 
+                            session_data.chat_id, 
+                            formatted_response, 
+                            search_keywords, 
+                            place
+                        )
+                    else:
+                        # No search keywords, send just text
+                        await bot.send_message(
+                            chat_id=session_data.chat_id,
+                            text=formatted_response,
+                            parse_mode="Markdown",
+                        )
 
                     # Try to parse coordinates and send location for navigation using search keywords (background fact)
                     coordinates = await openai_client.parse_coordinates_from_response(

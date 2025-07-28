@@ -485,14 +485,15 @@ class OpenAIClient:
             logger.warning(f"Error parsing coordinates: {e}")
             return None
 
-    async def get_wikipedia_image(self, search_keywords: str) -> str | None:
-        """Get image from Wikipedia using search keywords.
+    async def get_wikipedia_images(self, search_keywords: str, max_images: int = 5) -> list[str]:
+        """Get multiple images from Wikipedia using search keywords.
         
         Args:
             search_keywords: Search keywords from GPT response
+            max_images: Maximum number of images to return (default 5)
             
         Returns:
-            Image URL if found, None otherwise
+            List of image URLs (up to max_images)
         """
         # Languages to try (in order of preference)
         languages = ['en', 'ru', 'fr', 'de', 'es', 'it']
@@ -529,35 +530,50 @@ class OpenAIClient:
         # Remove duplicates while preserving order
         search_variations = list(dict.fromkeys(search_variations))
         
+        found_images = []
+        
         for lang in languages:
+            if len(found_images) >= max_images:
+                break
+                
             for search_term in search_variations:
-                if not search_term:
+                if not search_term or len(found_images) >= max_images:
                     continue
                     
                 try:
                     logger.debug(f"Trying Wikipedia search: '{search_term}' in {lang}")
-                    image_url = await self._search_wikipedia_image(search_term, lang)
-                    if image_url:
-                        logger.info(f"Found Wikipedia image for '{search_term}' in {lang}: {image_url}")
-                        return image_url
+                    images = await self._search_wikipedia_images(search_term, lang, max_images - len(found_images))
+                    if images:
+                        # Filter out duplicates
+                        for img in images:
+                            if img not in found_images:
+                                found_images.append(img)
+                                if len(found_images) >= max_images:
+                                    break
+                        logger.info(f"Found {len(images)} Wikipedia images for '{search_term}' in {lang}")
                     else:
-                        logger.debug(f"No image found for '{search_term}' in {lang}")
+                        logger.debug(f"No images found for '{search_term}' in {lang}")
                 except Exception as e:
                     logger.debug(f"Wikipedia search failed for '{search_term}' in {lang}: {e}")
                     continue
         
-        logger.info(f"No Wikipedia image found for: {search_keywords} (tried {len(search_variations)} variations across {len(languages)} languages)")
-        return None
+        if found_images:
+            logger.info(f"Found {len(found_images)} Wikipedia images for: {search_keywords}")
+        else:
+            logger.info(f"No Wikipedia images found for: {search_keywords} (tried {len(search_variations)} variations across {len(languages)} languages)")
+        
+        return found_images
 
-    async def _search_wikipedia_image(self, search_term: str, lang: str) -> str | None:
-        """Search for image on specific Wikipedia language.
+    async def _search_wikipedia_images(self, search_term: str, lang: str, max_images: int = 5) -> list[str]:
+        """Search for images on specific Wikipedia language.
         
         Args:
             search_term: Term to search for
             lang: Language code (en, ru, fr, etc.)
+            max_images: Maximum number of images to return
             
         Returns:
-            Image URL if found, None otherwise
+            List of image URLs (up to max_images)
         """
         try:
             # Use legacy API for search (REST API often returns 404)
@@ -576,9 +592,12 @@ class OpenAIClient:
                     
                     if not search_results:
                         logger.debug(f"No search results found for '{search_term}' in {lang}")
-                        return None
+                        return []
                     
                     logger.debug(f"Found {len(search_results)} search results for '{search_term}' in {lang}")
+                    
+                    # Collect all potential images from multiple pages
+                    all_potential_images = []
                     
                     # Try first few pages
                     for result in search_results[:5]:  # Try more pages
@@ -599,9 +618,6 @@ class OpenAIClient:
                             items = media_data.get('items', [])
                             
                             logger.debug(f"Found {len(items)} media items for page '{page_title}'")
-                            
-                            # Collect potential images
-                            potential_images = []
                             
                             # Look for good images
                             for item in items:
@@ -634,22 +650,38 @@ class OpenAIClient:
                                     if word in title and len(word) > 2:  # Avoid short words
                                         score += 1
                                 
-                                potential_images.append((score, item['title']))
-                            
-                            # Sort by score and return best image
-                            potential_images.sort(reverse=True, key=lambda x: x[0])
-                            
-                            if potential_images:
-                                best_image = potential_images[0][1]
-                                image_url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(best_image)}"
-                                logger.debug(f"Selected image: {best_image} (score: {potential_images[0][0]})")
-                                return image_url
+                                all_potential_images.append((score, item['title']))
+                    
+                    # Sort by score and return best images
+                    all_potential_images.sort(reverse=True, key=lambda x: x[0])
+                    
+                    if all_potential_images:
+                        # Return up to max_images best images
+                        selected_images = []
+                        for score, image_title in all_potential_images[:max_images]:
+                            image_url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(image_title)}"
+                            selected_images.append(image_url)
+                            logger.debug(f"Selected image: {image_title} (score: {score})")
+                        
+                        return selected_images
         
         except Exception as e:
             logger.debug(f"Error searching Wikipedia {lang} for '{search_term}': {e}")
-            return None
+            return []
         
-        return None
+        return []
+
+    async def get_wikipedia_image(self, search_keywords: str) -> str | None:
+        """Get single image from Wikipedia using search keywords (backward compatibility).
+        
+        Args:
+            search_keywords: Search keywords from GPT response
+            
+        Returns:
+            Image URL if found, None otherwise
+        """
+        images = await self.get_wikipedia_images(search_keywords, max_images=1)
+        return images[0] if images else None
 
 
 # Global client instance - will be initialized lazily
