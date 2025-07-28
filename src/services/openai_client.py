@@ -260,23 +260,26 @@ class OpenAIClient:
             model_to_use = "o4-mini"  # Default model
             max_tokens_limit = 10000
             
-            if is_premium_user:
-                # Premium users get o3 for both live and static locations
-                model_to_use = "o3"
-                max_tokens_limit = 12000  # o3 can handle more tokens
-                logger.info(f"Using o3 model for premium user {user_id}")
-            elif is_live_location:
-                # Regular users get o4-mini for live locations
-                model_to_use = "o4-mini"
-                max_tokens_limit = 10000
+            if is_live_location:
+                if is_premium_user:
+                    # Premium users get o3 for live locations (detailed analysis)
+                    model_to_use = "o3"
+                    max_tokens_limit = 12000  # o3 can handle more tokens
+                    logger.info(f"Using o3 model for premium user {user_id} (live location)")
+                else:
+                    # Regular users get o4-mini for live locations
+                    model_to_use = "o4-mini"
+                    max_tokens_limit = 10000
             else:
-                # Regular users get gpt-4.1 for static locations (fast)
+                # Both premium and regular users get gpt-4.1 for static locations (speed priority)
                 model_to_use = "gpt-4.1"
                 max_tokens_limit = 400
+                if is_premium_user:
+                    logger.info(f"Using gpt-4.1 for premium user {user_id} (static location - speed priority)")
             
             response = None
-            if is_live_location or is_premium_user:
-                # Use advanced models (o3 for premium, o4-mini for regular live location)
+            if is_live_location:
+                # Use advanced models for live locations (o3 for premium, o4-mini for regular)
                 try:
                     response = await self.client.chat.completions.create(
                         model=model_to_use,
@@ -286,7 +289,7 @@ class OpenAIClient:
                         ],
                         max_completion_tokens=max_tokens_limit,
                     )
-                    logger.info(f"{model_to_use} ({'premium' if is_premium_user else 'live location'}) response: {response}")
+                    logger.info(f"{model_to_use} (live location{' premium' if is_premium_user else ''}) response: {response}")
                     content = (
                         response.choices[0].message.content
                         if response.choices

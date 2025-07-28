@@ -13,12 +13,22 @@ logger = logging.getLogger(__name__)
 class DonorsDatabase:
     """SQLite database for managing donors and their premium access."""
     
-    def __init__(self, db_path: str = "donors.db"):
+    def __init__(self, db_path: str = None):
         """Initialize the donors database.
         
         Args:
-            db_path: Path to the SQLite database file
+            db_path: Path to the SQLite database file. If None, uses environment or default path.
         """
+        if db_path is None:
+            # Use Railway volume path if available, otherwise default
+            import os
+            volume_path = "/data"
+            if os.path.exists(volume_path) and os.access(volume_path, os.W_OK):
+                db_path = os.path.join(volume_path, "donors.db")
+                logger.info(f"Using Railway volume for database: {db_path}")
+            else:
+                db_path = "donors.db"
+                logger.info(f"Using local database: {db_path}")
         self.db_path = Path(db_path)
         self._lock = threading.Lock()
         self._init_database()

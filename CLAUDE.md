@@ -86,7 +86,7 @@ python -m src.main
 ### Telegram Stars Donation System
 
 - **Payment Processing**: Full Telegram Stars integration with pre-checkout validation
-- **Premium Benefits**: o3 model access (superior to o4-mini and GPT-4.1)
+- **Premium Benefits**: o3 model access for live locations (enhanced analysis during walks)
 - **Duration**: 1 star = 1 day premium (stackable)
 - **Database**: SQLite for donor tracking and premium status
 - **Commands**: `/donate` with 10⭐, 50⭐, 100⭐ options + custom amounts
@@ -94,7 +94,7 @@ python -m src.main
 
 ### Tech Stack
 - **Python 3.12** with python-telegram-bot 21.7
-- **OpenAI triple models**: o3 for premium users + o4-mini for detailed facts + GPT-4.1 for quick responses
+- **OpenAI triple models**: o3 for premium live locations + o4-mini for regular live + GPT-4.1 for all static
 - **Telegram Stars**: Payment system for premium subscriptions
 - **SQLite**: Local database for donor management and premium status
 - **Navigation**: Telegram venue/location sharing with automatic route building
@@ -102,7 +102,7 @@ python -m src.main
 - **Wikipedia**: Legacy API (`w/api.php`) for image search
 - **AsyncIO** for concurrent live location processing
 - **aiohttp** for external API calls
-- **Railway** deployment with GitHub Actions CI/CD
+- **Railway** deployment with GitHub Actions CI/CD + Volume for SQLite persistence
 - **pytest** with AsyncMock for testing
 - **ruff + black** for linting and formatting
 
@@ -117,3 +117,21 @@ python -m src.main
 - `OPENAI_API_KEY`: Required for fact generation
 - `WEBHOOK_URL`: Optional, switches to webhook mode for production
 - `PORT`: Optional, defaults to 8000 for webhook mode
+
+### Railway Deployment Setup
+
+#### SQLite Persistence Configuration
+1. **Create Volume in Railway Dashboard:**
+   - Go to your project → Volumes
+   - Create new volume with mount path: `/data`
+   - Name: `donors-db` (or any descriptive name)
+
+2. **Volume Auto-Detection:**
+   - Code automatically detects `/data` volume availability
+   - Falls back to local storage for development
+   - Database file: `/data/donors.db` (production) or `donors.db` (local)
+
+#### Volume Benefits
+- **Persistent Storage**: Donor data survives deployments and restarts
+- **Zero Configuration**: Auto-detection handles production vs development
+- **Scalable**: SQLite with proper indexing handles concurrent access
