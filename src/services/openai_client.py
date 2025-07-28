@@ -165,9 +165,9 @@ class OpenAIClient:
                 "Весь ответ должен быть на русском языке."
             )
 
-            # Handle previous facts for live location
+            # Handle previous facts for both live and static locations
             previous_facts_text = ""
-            if is_live_location and previous_facts:
+            if previous_facts:
                 previous_facts_text = (
                     "\n\nРАНЕЕ РАССКАЗАННЫЕ ФАКТЫ (НЕ ПОВТОРЯЙТЕ):\n"
                     + "\n".join(
@@ -791,9 +791,12 @@ class OpenAIClient:
         if search_keywords:
             previous_facts = self.static_history.get_previous_facts(search_keywords)
             if previous_facts:
-                logger.info(f"Found {len(previous_facts)} previous facts for {search_keywords}")
+                logger.info(f"Found {len(previous_facts)} previous facts for {search_keywords}: {previous_facts}")
+            else:
+                logger.info(f"No previous facts found for {search_keywords}")
         
         # Get fact using existing method but with previous facts
+        logger.info(f"Calling get_nearby_fact with {len(previous_facts)} previous facts")
         fact_response = await self.get_nearby_fact(lat, lon, is_live_location=False, previous_facts=previous_facts)
         
         # Parse the response to extract place and fact for history
@@ -817,12 +820,12 @@ class OpenAIClient:
                     break
             
             # Add to history
+            logger.info(f"Adding fact to history for {search_keywords}: {place}")
             self.static_history.add_fact(search_keywords, place, fact)
             
-            # Log cache stats periodically
+            # Log cache stats after adding
             stats = self.static_history.get_cache_stats()
-            if stats["locations"] > 0:
-                logger.debug(f"Static location cache: {stats['locations']} locations, {stats['total_facts']} total facts")
+            logger.info(f"Static location cache after add: {stats['locations']} locations, {stats['total_facts']} total facts")
         
         return fact_response
 

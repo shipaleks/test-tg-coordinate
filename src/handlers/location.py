@@ -245,9 +245,14 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
         search_keywords = search_match.group(1).strip() if search_match else None
         
+        logger.info(f"Static location - search keywords extracted: '{search_keywords}'")
+        
         # Now get fact with history if we have search keywords
         if search_keywords:
+            logger.info(f"Getting fact with history for keywords: {search_keywords}")
             response = await openai_client.get_nearby_fact_with_history(lat, lon, search_keywords)
+        else:
+            logger.warning("No search keywords found, fact will not be tracked in history")
         
         # Parse the response to extract place and fact
         lines = response.split("\n")
