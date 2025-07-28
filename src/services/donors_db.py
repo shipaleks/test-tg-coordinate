@@ -67,7 +67,7 @@ class DonorsDatabase:
                     conn.execute("""
                         CREATE TABLE IF NOT EXISTS user_preferences (
                             user_id INTEGER PRIMARY KEY,
-                            language TEXT DEFAULT 'ru',
+                            language TEXT DEFAULT 'en',
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                             updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
@@ -319,11 +319,11 @@ class DonorsDatabase:
                     
                     if result:
                         return result[0]
-                    return "ru"  # Default to Russian
+                    return "en"  # Default to English
                     
         except Exception as e:
             logger.error(f"Failed to get user language for user {user_id}: {e}")
-            return "ru"  # Default fallback
+            return "en"  # Default fallback
     
     def set_user_language(self, user_id: int, language: str) -> bool:
         """Set user's preferred language.

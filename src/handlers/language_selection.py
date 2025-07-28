@@ -65,11 +65,11 @@ async def show_language_selection(update: Update, context: ContextTypes.DEFAULT_
     """Show language selection menu to user."""
     user = update.effective_user
     
-    # Get current language for welcome message (default to Russian)
+    # Get current language for welcome message (default to English)
     donors_db = get_donors_db()
     current_lang = donors_db.get_user_language(user.id)
     
-    welcome_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['ru'])['welcome']
+    welcome_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['en'])['welcome']
     
     # Create language selection keyboard
     keyboard = []
@@ -139,7 +139,7 @@ async def handle_language_selection(update: Update, context: ContextTypes.DEFAUL
         if lang_code == "custom":
             # Show custom language input prompt
             current_lang = donors_db.get_user_language(user.id)
-            prompt_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['ru'])['custom_prompt']
+            prompt_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['en'])['custom_prompt']
             
             # Store state for custom language input
             context.user_data['awaiting_custom_language'] = True
@@ -156,7 +156,7 @@ async def handle_language_selection(update: Update, context: ContextTypes.DEFAUL
             
             if success:
                 language_info = LANGUAGES[lang_code]
-                success_text = WELCOME_MESSAGES.get(lang_code, WELCOME_MESSAGES['ru'])['language_set'].format(
+                success_text = WELCOME_MESSAGES.get(lang_code, WELCOME_MESSAGES['en'])['language_set'].format(
                     flag=language_info['flag'],
                     name=language_info['name']
                 )
@@ -191,7 +191,7 @@ async def handle_custom_language_input(update: Update, context: ContextTypes.DEF
     # Validate language input (basic validation)
     if len(language_input) < 2 or len(language_input) > 50:
         current_lang = get_donors_db().get_user_language(user.id)
-        error_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['ru'])['invalid_language']
+        error_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['en'])['invalid_language']
         await update.message.reply_text(error_text)
         return
     
@@ -244,7 +244,7 @@ async def reset_language_command(update: Update, context: ContextTypes.DEFAULT_T
     success = donors_db.reset_user_language(user.id)
     
     if success:
-        reset_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['ru'])['language_reset']
+        reset_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['en'])['language_reset']
         await update.message.reply_text(reset_text)
         logger.info(f"User {user.id} reset their language preference")
     else:

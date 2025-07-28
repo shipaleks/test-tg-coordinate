@@ -33,6 +33,8 @@ LOCATION_MESSAGES = {
         'fact_label': "💡 *Факт:*",
         'live_fact_label': "🔴 *Факт #{number}*",
         'attraction_address': "Достопримечательность: {place}",
+        'static_fact_format': "📍 *Место:* {place}\n\n💡 *Факт:* {fact}",
+        'live_fact_format': "🔴 *Факт #{number}*\n\n📍 *Место:* {place}\n\n💡 *Факт:* {fact}",
         'error_no_info': "😔 *Упс!*\n\nНе удалось найти интересную информацию о данном месте.\nПопробуйте немного сместиться или отправить другую локацию.",
         'near_you': "рядом с вами"
     },
@@ -48,6 +50,8 @@ LOCATION_MESSAGES = {
         'fact_label': "💡 *Fact:*",
         'live_fact_label': "🔴 *Fact #{number}*",
         'attraction_address': "Attraction: {place}",
+        'static_fact_format': "📍 *Place:* {place}\n\n💡 *Fact:* {fact}",
+        'live_fact_format': "🔴 *Fact #{number}*\n\n📍 *Place:* {place}\n\n💡 *Fact:* {fact}",
         'error_no_info': "😔 *Oops!*\n\nCouldn't find interesting information about this location.\nTry moving slightly or sending a different location.",
         'near_you': "near you"
     }
@@ -60,13 +64,13 @@ def get_localized_message(user_id: int, key: str, **kwargs) -> str:
     try:
         donors_db = get_donors_db()
         user_language = donors_db.get_user_language(user_id)
-        messages = LOCATION_MESSAGES.get(user_language, LOCATION_MESSAGES['ru'])
-        message = messages.get(key, LOCATION_MESSAGES['ru'].get(key, key))
+        messages = LOCATION_MESSAGES.get(user_language, LOCATION_MESSAGES['en'])
+        message = messages.get(key, LOCATION_MESSAGES['en'].get(key, key))
         return message.format(**kwargs) if kwargs else message
     except Exception as e:
         logger.warning(f"Error getting localized message: {e}")
-        # Fallback to Russian
-        message = LOCATION_MESSAGES['ru'].get(key, key)
+        # Fallback to English
+        message = LOCATION_MESSAGES['en'].get(key, key)
         return message.format(**kwargs) if kwargs else message
 
 
@@ -271,21 +275,21 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             keyboard = [
                 [
                     InlineKeyboardButton(
-                        "Каждые 5 минут",
+                        get_localized_message(user_id, 'interval_5min'),
                         callback_data=f"interval_5_{lat}_{lon}_{location.live_period}",
                     ),
                     InlineKeyboardButton(
-                        "Каждые 10 минут",
+                        get_localized_message(user_id, 'interval_10min'),
                         callback_data=f"interval_10_{lat}_{lon}_{location.live_period}",
                     ),
                 ],
                 [
                     InlineKeyboardButton(
-                        "Каждые 30 минут",
+                        get_localized_message(user_id, 'interval_30min'),
                         callback_data=f"interval_30_{lat}_{lon}_{location.live_period}",
                     ),
                     InlineKeyboardButton(
-                        "Каждые 60 минут",
+                        get_localized_message(user_id, 'interval_60min'),
                         callback_data=f"interval_60_{lat}_{lon}_{location.live_period}",
                     ),
                 ],
@@ -293,11 +297,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             # Send interval selection message
-            interval_response = (
-                "🔴 *Живая локация получена!*\n\n"
-                f"📍 Отслеживание на {location.live_period // 60} минут\n\n"
-                "Как часто присылать интересные факты?"
-            )
+            interval_response = get_localized_message(user_id, 'live_location_received', minutes=location.live_period // 60)
 
             await update.message.reply_text(
                 text=interval_response,
@@ -324,7 +324,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         
         # Parse the response to extract place and fact
         logger.info(f"Final response for static location: {response[:100]}...")
-        place = "рядом с вами"  # Default location
+        place = get_localized_message(user_id, 'near_you')  # Default location
         fact = response  # Default to full response if parsing fails
         final_search_keywords = None
 
@@ -374,7 +374,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 final_search_keywords = legacy_search_match.group(1).strip()
 
         # Format the response for static location
-        formatted_response = f"📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
+        formatted_response = get_localized_message(user_id, 'static_fact_format', place=place, fact=fact)
         
         # Send fact with images using extracted search keywords
         if final_search_keywords:
@@ -406,7 +406,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     latitude=venue_lat,
                     longitude=venue_lon,
                     title=place,
-                    address=f"Достопримечательность: {place}",
+                    address=get_localized_message(user_id, 'attraction_address', place=place),
                     reply_to_message_id=update.message.message_id,
                 )
                 logger.info(
@@ -432,11 +432,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.error(f"Error processing location for user {user_id}: {e}")
 
         # Send error message to user
-        error_response = (
-            "😔 *Упс!*\n\n"
-            "Не удалось найти интересную информацию о данном месте.\n"
-            "Попробуйте отправить другую локацию!"
-        )
+        error_response = get_localized_message(user_id, 'error_no_info')
 
         await update.message.reply_text(
             text=error_response,
@@ -481,13 +477,9 @@ async def handle_interval_callback(
         )
 
         # Update the message to show confirmation
-        confirmation_text = (
-            "🔴 *Живая локация активирована!*\n\n"
-            f"📍 Отслеживание: {live_period // 60} минут\n"
-            f"⏰ Факты каждые: {interval_minutes} минут\n\n"
-            "🚀 Сейчас пришлю первый факт, затем буду присылать автоматически!\n\n"
-            "Остановите sharing чтобы завершить сессию."
-        )
+        confirmation_text = get_localized_message(user_id, 'live_activated', 
+                                                 minutes=live_period // 60, 
+                                                 interval=interval_minutes)
 
         await query.edit_message_text(text=confirmation_text, parse_mode="Markdown")
 
@@ -496,7 +488,7 @@ async def handle_interval_callback(
         response = await openai_client.get_nearby_fact(lat, lon, is_live_location=True, user_id=user_id)
 
         # Parse the response to extract place and fact
-        place = "рядом с вами"  # Default location
+        place = get_localized_message(user_id, 'near_you')  # Default location
         fact = response  # Default to full response if parsing fails
         search_keywords = ""
 
@@ -549,9 +541,7 @@ async def handle_interval_callback(
             fact_number = 1  # Fallback
 
         # Format the initial fact with number
-        initial_fact_response = (
-            f"🔴 *Факт #{fact_number}*\n\n📍 *Место:* {place}\n\n💡 *Факт:* {fact}"
-        )
+        initial_fact_response = get_localized_message(user_id, 'live_fact_format', number=fact_number, place=place, fact=fact)
 
         # Save initial fact to history
         if user_id in tracker._active_sessions:
@@ -599,7 +589,7 @@ async def handle_interval_callback(
                     latitude=venue_lat,
                     longitude=venue_lon,
                     title=place,
-                    address=f"Достопримечательность: {place}",
+                    address=get_localized_message(user_id, 'attraction_address', place=place),
                 )
                 logger.info(
                     f"Sent venue location for live session navigation: {place} at {venue_lat}, {venue_lon}"
@@ -628,7 +618,7 @@ async def handle_interval_callback(
     except Exception as e:
         logger.error(f"Error handling interval callback: {e}")
         await query.edit_message_text(
-            text="😔 Произошла ошибка при настройке живой локации. Попробуйте еще раз.",
+            text="😔 An error occurred while setting up live location. Please try again.",
             parse_mode="Markdown",
         )
 
@@ -693,10 +683,10 @@ async def handle_stop_live_location(
         if tracker.is_user_tracking(user_id):
             await tracker.stop_live_location(user_id)
 
-            # Send confirmation message
+            # Send confirmation message (default to English since we can't get user_id from this context)
             stop_response = (
-                "✅ *Живая локация остановлена*\n\n"
-                "Спасибо что пользуетесь NearbyFactBot! 🗺️✨"
+                "✅ *Live location stopped*\n\n"
+                "Thank you for using NearbyFactBot! 🗺️✨"
             )
 
             await context.bot.send_message(

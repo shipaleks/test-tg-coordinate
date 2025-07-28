@@ -98,9 +98,12 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                 
                 # Check if text was sent successfully by trying to send it again
                 try:
+                    # Import localization function to avoid circular imports
+                    from ..handlers.location import get_localized_message
+                    fallback_message = get_localized_message(0, 'image_fallback')  # Use user_id=0 for generic message
                     await bot.send_message(
                         chat_id=chat_id,
-                        text=f"⚠️ Изображения не загрузились, но вот факт:\n\n{formatted_response}",
+                        text=f"{fallback_message}{formatted_response}",
                         parse_mode="Markdown"
                     )
                     logger.info(f"Sent fallback live text-only message for {place}")
@@ -313,11 +316,12 @@ class LiveLocationTracker:
                         session_data.longitude,
                         is_live_location=True,
                         previous_facts=session_data.fact_history,
-                        user_id=user_id,
+                        user_id=session_data.user_id,
                     )
 
                     # Parse the response to extract place and fact
-                    place = "рядом с вами"  # Default location
+                    from ..handlers.location import get_localized_message
+                    place = get_localized_message(session_data.user_id, 'near_you')  # Default location
                     fact = response  # Default to full response if parsing fails
                     search_keywords = ""
 
@@ -364,11 +368,9 @@ class LiveLocationTracker:
                                 break
 
                     # Format the response with live location indicator and fact number
-                    formatted_response = (
-                        f"🔴 *Факт #{session_data.fact_count}*\n\n"
-                        f"📍 *Место:* {place}\n\n"
-                        f"💡 *Факт:* {fact}"
-                    )
+                    # Import get_localized_message at top of function to avoid circular imports
+                    from ..handlers.location import get_localized_message
+                    formatted_response = get_localized_message(session_data.user_id, 'live_fact_format', number=session_data.fact_count, place=place, fact=fact)
 
                     # Save fact to history to avoid repetition
                     session_data.fact_history.append(f"{place}: {fact}")
@@ -415,7 +417,7 @@ class LiveLocationTracker:
                                 latitude=venue_lat,
                                 longitude=venue_lon,
                                 title=place,
-                                address=f"Достопримечательность: {place}",
+                                address=get_localized_message(session_data.user_id, 'attraction_address', place=place),
                             )
                             logger.info(
                                 f"Sent venue location for background fact navigation: {place} at {venue_lat}, {venue_lon}"
@@ -448,13 +450,13 @@ class LiveLocationTracker:
                         f"Error sending live location fact to user {session_data.user_id}: {e}"
                     )
 
-                    # Send error message with fact number
+                    # Send error message with fact number  
                     session_data.fact_count += 1
-                    error_response = (
-                        f"🔴 *Факт #{session_data.fact_count}*\n\n"
-                        "😔 *Упс!*\n\n"
-                        "Не удалось найти интересную информацию о текущем месте."
-                    )
+                    from ..handlers.location import get_localized_message
+                    error_response = get_localized_message(session_data.user_id, 'live_fact_format', 
+                                                         number=session_data.fact_count, 
+                                                         place="", 
+                                                         fact=get_localized_message(session_data.user_id, 'error_no_info'))
 
                     try:
                         await bot.send_message(

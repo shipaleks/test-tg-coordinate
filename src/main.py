@@ -123,8 +123,8 @@ async def send_welcome_message(user_id: int, chat_id: int, bot, language: str = 
         donors_db = get_donors_db()
         language = donors_db.get_user_language(user_id)
     
-    # Get localized messages (default to Russian)
-    messages = LOCALIZED_MESSAGES.get(language, LOCALIZED_MESSAGES['ru'])
+    # Get localized messages (default to English)
+    messages = LOCALIZED_MESSAGES.get(language, LOCALIZED_MESSAGES['en'])
     
     welcome_text = messages['welcome']
     buttons = messages['buttons']
@@ -168,8 +168,8 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     donors_db = get_donors_db()
     language = donors_db.get_user_language(user.id)
     
-    # Get localized info text (default to Russian)
-    messages = LOCALIZED_MESSAGES.get(language, LOCALIZED_MESSAGES['ru'])
+    # Get localized info text (default to English) 
+    messages = LOCALIZED_MESSAGES.get(language, LOCALIZED_MESSAGES['en'])
     info_text = messages['info_text']
 
     await update.message.reply_text(info_text, parse_mode="Markdown")

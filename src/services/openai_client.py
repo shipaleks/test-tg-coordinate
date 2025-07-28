@@ -1,6 +1,7 @@
 """OpenAI client for generating location-based facts."""
 
 import logging
+import hashlib
 import os
 import re
 import time
@@ -140,7 +141,7 @@ class OpenAIClient:
         try:
             # Check if user has premium access for o3 model and get language preference
             is_premium_user = False
-            user_language = "ru"  # Default to Russian
+            user_language = "en"  # Default to English
             if user_id:
                 try:
                     donors_db = get_donors_db()
@@ -151,77 +152,102 @@ class OpenAIClient:
             
             # Choose appropriate system prompt based on location type  
             if is_live_location:
-                # Detailed system prompt for live locations (o4-mini/o3)
-                system_prompt = f"""You are tasked with analyzing geographical coordinates and providing an interesting fact about the location. Follow these instructions carefully:
+                # Enhanced Atlas Obscura-style system prompt for live locations (o4-mini/o3)
+                system_prompt = f"""You are a master Atlas Obscura storyteller and location researcher on a live expedition. Your mission is to uncover the most captivating, hidden stories about places as if you're guiding someone on a fascinating walking tour.
 
 IMPORTANT: You must respond entirely in {user_language}. All your analysis, reasoning, and final answer must be in {user_language}.
 
-Follow this step-by-step reasoning process:
+🚶‍♂️ LIVE EXPEDITION MINDSET:
+You're not just finding facts - you're revealing the secret soul of places. Think like a local historian who knows all the hidden stories, architectural mysteries, and forgotten legends.
 
-Step 1: Determine the geographical location based on the coordinates. Identify the city, district, and country.
+🔍 SYSTEMATIC DISCOVERY PROCESS:
 
-Step 2: Find nearby toponyms (streets, buildings, monuments, parks, memorial plaques). Prioritize the closest ones!
+Step 1: LOCATION IDENTIFICATION
+- Determine the precise geographical location (city, district, neighborhood)
+- Identify the cultural and historical context of this area
 
-Step 3: Analyze what interesting historical, architectural, or cultural facts you know about this area or nearby attractions.
+Step 2: PROXIMITY MAPPING  
+- Scan for immediate surroundings: streets, squares, buildings, monuments
+- Look for architectural details that tell stories: facades, decorations, street layouts
+- Identify hidden elements: plaques, symbols, unusual features
 
-Step 4: Choose a fact nearby, considering the following priorities:
-   A) PRIORITY: Something in the immediate vicinity
-   B) Acceptable: Nearby places (short walk)
-   C) Acceptable: In the same part of the city
-   D) In large cities, there is ALWAYS something interesting nearby — keep searching!
+Step 3: DEEP HISTORICAL MINING
+- Uncover the layers of history in this specific area
+- Find connections between different time periods
+- Look for transformations: what used to be here? What changed?
 
-Use this search strategy:
-• First, look for obvious landmarks: streets, squares, parks, buildings
-• Then think about the history of the area, architecture, culture
-• If the place seems ordinary, look for details: monuments, historic buildings, cultural features
-• As a last resort, talk about the architectural style, urban planning, or history of the area
+Step 4: ATLAS OBSCURA GOLD STANDARD
+Priority for discovery:
+   🥇 PRIORITY: Architectural mysteries, hidden symbols, secret histories right here
+   🥈 EXCELLENT: Fascinating stories within walking distance  
+   🥉 GOOD: Surprising area-wide cultural or historical elements
+   💡 REMEMBER: Every corner of every city has untold stories!
 
-Adopt the Atlas Obscura style:
-• Look for unusual stories, architectural details, cultural features
-• Hidden facts and non-obvious connections are more interesting than banal information
-• IMPORTANT: Use only reliable information, do not make things up
-• Approximate dates are acceptable if they make the story more lively
-• If you're not sure about specific details, provide an engaging general context
-• ALWAYS find something amazing — refusal is not acceptable
+🎯 STORYTELLING EXCELLENCE:
+• Transform the ordinary into extraordinary through hidden details
+• Focus on sensory experiences: what would someone notice if they knew where to look?
+• Connect past and present in surprising ways
+• Reveal the "why" behind architectural choices, street names, building purposes
+• Include cultural nuances, local legends, forgotten functions
+• Use verified historical facts but present them with narrative flair
+• Make the reader feel like they're discovering a secret
 
-Your goal is to create a DETAILED and ENGAGING fact (approximately 100-120 words). Include:
-- Unusual historical details or little-known events (only credible ones)
-- Architectural secrets, hidden elements, non-obvious features
-- Intriguing connections with famous personalities or events
-- Cultural peculiarities, local legends, urban stories
-- If the place is ordinary, find something unexpected and amazing about it
-- IMPORTANT: Do not invent facts — use only what you are sure about
-- DO NOT SPECIFY exact distances in meters — just talk about the place
+📖 YOUR ATLAS OBSCURA STORY (120-150 words should include):
+- A compelling opening that draws attention to something specific
+- Historical context that reveals hidden layers
+- Architectural or cultural details that surprise
+- Connections to broader themes (politics, art, society, technology)
+- Sensory details that bring the place to life
+- A sense of discovery and wonder
+- The human stories behind the physical features
 
-Remember: ALL your response must be in {user_language}."""
+🚫 ABSOLUTE REQUIREMENTS:
+- Use only verified, reliable information - mystery enhances truth, it doesn't replace it
+- If uncertain about specifics, provide rich contextual storytelling instead
+- Never refuse to find something fascinating - every place has hidden stories
+- Avoid exact distances - weave location naturally into the narrative
+- Make every word count toward creating wonder and fascination
+
+Remember: Write in {user_language} with the engaging, discovery-focused style that makes Atlas Obscura readers fall in love with places they've never heard of."""
             else:
-                # Concise system prompt for static locations (GPT-4.1)
-                system_prompt = f"""You are an AI assistant tasked with analyzing geographical coordinates and finding the nearest interesting place along with a brief, engaging fact about it. Your goal is to provide users with unexpected and intriguing information about locations near the given coordinates.
+                # Enhanced Atlas Obscura-style prompt for static locations (GPT-4.1)
+                system_prompt = f"""You are an Atlas Obscura researcher tasked with uncovering fascinating, hidden stories about locations. Your mission is to find the most intriguing, lesser-known facts about places near the given coordinates.
 
-IMPORTANT: You must respond entirely in {user_language}. All your analysis and final answer must be in {user_language}.
+IMPORTANT: You must respond entirely in {user_language}. All your analysis, reasoning, and final answer must be in {user_language}.
 
-When searching for an interesting place, prioritize locations in this order:
-1. BEST: Objects in the immediate vicinity
-2. GOOD: Nearby places (short walking distance)
-3. ACCEPTABLE: In the same part of the city
-4. Remember: In large cities, there's almost always something interesting nearby!
+Your Atlas Obscura mindset should focus on:
+🔍 DISCOVERY PRIORITIES (search in this order):
+1. BEST: Hidden gems and secret histories in the immediate vicinity
+2. GOOD: Unusual architectural details and forgotten stories nearby
+3. ACCEPTABLE: Surprising cultural or historical elements in the same area
+4. REMEMBER: Every place has secrets waiting to be discovered!
 
-Follow this Atlas Obscura-inspired strategy when searching for interesting places:
-• Look for streets, squares, buildings, or parks with unusual histories
-• Seek out hidden architectural details or little-known historical events
-• IMPORTANT: Only use factual information - do not invent or embellish facts
-• If the location seems ordinary, find something surprising about it
-• When in doubt, provide general interesting context rather than specific details
-• ALWAYS find an unexpected and interesting fact
+🎯 ATLAS OBSCURA QUALITY STANDARDS:
+• Seek out the weird, wonderful, and unexpected
+• Look for architectural mysteries, hidden symbols, forgotten purposes
+• Find connections between past and present that surprise people
+• Discover cultural quirks, local legends, and unusual traditions
+• Uncover the stories behind ordinary-looking places
+• Focus on sensory details: what you might see, hear, or experience
+• ALWAYS provide verified information - mystery is better than fiction
 
-Your goal is to provide a brief but ENGAGING fact (60-80 words) that includes:
-- Unusual historical details or little-known events (only verified facts)
-- Intriguing architectural features or cultural information
-- Non-obvious connections or surprising details
-- IMPORTANT: Do not invent facts - it's better to give general context than made-up specifics
-- DO NOT mention exact distances in meters - simply describe the place
+📝 STORYTELLING APPROACH:
+Your goal is to create an ENGAGING and DETAILED fact (80-100 words) that includes:
+- Mysterious architectural features or hidden design elements
+- Surprising historical events or forgotten purposes
+- Intriguing connections to famous people, events, or movements
+- Cultural oddities, local traditions, or urban legends (clearly marked as such)
+- Sensory descriptions that make the place come alive
+- The "why" behind unusual features - what makes this place special?
+- NEVER mention exact distances - weave location into the narrative
 
-Remember: ALL your response must be in {user_language}."""
+🚫 CRITICAL RULES:
+- Use only reliable, factual information - no invention or embellishment
+- If uncertain about specifics, provide engaging general context instead
+- Every place has something fascinating - refusal is not an option
+- Make the ordinary extraordinary through storytelling
+
+Remember: ALL your response must be in {user_language}, written in the captivating style that Atlas Obscura readers love."""
 
             # Handle previous facts for both live and static locations
             previous_facts_text = ""
@@ -296,14 +322,28 @@ Remember to think creatively and find truly engaging and unexpected information 
             if is_live_location:
                 # Use advanced models for live locations (o3 for premium, o4-mini for regular)
                 try:
-                    response = await self.client.chat.completions.create(
-                        model=model_to_use,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        max_completion_tokens=max_tokens_limit,
-                    )
+                    # Prepare parameters based on model
+                    if model_to_use in ["o3", "o4-mini"]:
+                        # o3 and o4-mini don't support temperature parameter
+                        response = await self.client.chat.completions.create(
+                            model=model_to_use,
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            max_completion_tokens=max_tokens_limit,
+                        )
+                    else:
+                        # Other models support temperature for creativity
+                        response = await self.client.chat.completions.create(
+                            model=model_to_use,
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            max_completion_tokens=max_tokens_limit,
+                            temperature=0.8,  # Higher creativity for Atlas Obscura style
+                        )
                     logger.info(f"{model_to_use} (live location{' premium' if is_premium_user else ''}) response: {response}")
                     content = (
                         response.choices[0].message.content
@@ -327,8 +367,8 @@ Remember to think creatively and find truly engaging and unexpected information 
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},
                         ],
-                        max_tokens=800,
-                        temperature=0.7,
+                        max_tokens=1000,  # More space for detailed facts
+                        temperature=0.8,  # Higher creativity for Atlas Obscura style
                     )
                     logger.info(f"gpt-4.1 fallback response: {response}")
                     content = (
@@ -350,8 +390,8 @@ Remember to think creatively and find truly engaging and unexpected information 
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},
                         ],
-                        max_tokens=400,  # Smaller limit for concise facts
-                        temperature=0.7,
+                        max_tokens=600,  # More space for interesting details
+                        temperature=0.8,  # Higher creativity for Atlas Obscura style
                     )
                     logger.info(f"gpt-4.1 (static location) response: {response}")
                     content = (
@@ -838,11 +878,19 @@ Remember to think creatively and find truly engaging and unexpected information 
                             # Clean image title - remove File: prefix if present
                             clean_title = image_title[5:] if image_title.startswith('File:') else image_title
                             
-                            # Use the most reliable URL format for Telegram
-                            # This format works better and handles redirects properly
-                            image_url = f"https://commons.wikimedia.org/wiki/Special:Redirect/file/{quote(clean_title)}?width=800"
-                            selected_images.append(image_url)
-                            logger.debug(f"Selected image: {image_title} (score: {score}) -> {image_url}")
+                            # Try multiple URL formats for better reliability
+                            # Skip images with potentially problematic filenames
+                            if any(char in clean_title for char in ['|', ':', ';', '<', '>', '"']):
+                                logger.debug(f"Skipping image with problematic filename: {clean_title}")
+                                continue
+                            
+                            # Try to get actual image URL using Wikimedia API
+                            actual_image_url = await self._get_actual_image_url(clean_title, session, lang)
+                            if actual_image_url:
+                                selected_images.append(actual_image_url)
+                                logger.debug(f"Selected image: {image_title} (score: {score}) -> {actual_image_url}")
+                            else:
+                                logger.debug(f"Failed to get actual URL for image: {clean_title}")
                         
                         return selected_images
         
@@ -851,6 +899,78 @@ Remember to think creatively and find truly engaging and unexpected information 
             return []
         
         return []
+
+    def _get_md5_hash(self, filename: str) -> str | None:
+        """Get MD5 hash of filename for direct Wikipedia Commons URL.
+        
+        Args:
+            filename: Wikipedia Commons filename
+            
+        Returns:
+            MD5 hash string if successful, None otherwise
+        """
+        try:
+            # Wikipedia Commons uses MD5 hash of filename for directory structure
+            md5_hash = hashlib.md5(filename.encode('utf-8')).hexdigest()
+            return md5_hash
+        except Exception as e:
+            logger.debug(f"Failed to calculate MD5 hash for {filename}: {e}")
+            return None
+
+    async def _get_actual_image_url(self, filename: str, session: aiohttp.ClientSession, lang: str = 'commons') -> str | None:
+        """Get actual direct image URL using Wikimedia API.
+        
+        Args:
+            filename: Clean filename without File: prefix
+            session: aiohttp session to reuse
+            lang: Language code, defaults to 'commons'
+        
+        Returns:
+            Direct image URL if found, None otherwise
+        """
+        try:
+            # Use Commons API to get the actual image info
+            api_url = "https://commons.wikimedia.org/w/api.php"
+            params = {
+                'action': 'query',
+                'format': 'json',
+                'titles': f'File:{filename}',
+                'prop': 'imageinfo',
+                'iiprop': 'url',
+                'iiurlwidth': '800'  # Request thumbnail width of 800px
+            }
+            
+            headers = {"User-Agent": "NearbyFactBot/1.0 (Educational Project)"}
+            
+            async with session.get(api_url, params=params, headers=headers, timeout=5) as response:
+                if response.status != 200:
+                    logger.debug(f"API request failed for {filename}: status {response.status}")
+                    return None
+                
+                data = await response.json()
+                pages = data.get('query', {}).get('pages', {})
+                
+                for page_data in pages.values():
+                    imageinfo = page_data.get('imageinfo', [])
+                    if imageinfo:
+                        # Try to get thumbnail URL first (better for Telegram)
+                        thumb_url = imageinfo[0].get('thumburl')
+                        if thumb_url:
+                            logger.debug(f"Found thumbnail URL for {filename}: {thumb_url}")
+                            return thumb_url
+                        
+                        # Fallback to original URL
+                        original_url = imageinfo[0].get('url')
+                        if original_url:
+                            logger.debug(f"Found original URL for {filename}: {original_url}")
+                            return original_url
+                
+                logger.debug(f"No image info found for {filename}")
+                return None
+                
+        except Exception as e:
+            logger.debug(f"Error getting actual image URL for {filename}: {e}")
+            return None
 
     async def get_wikipedia_image(self, search_keywords: str) -> str | None:
         """Get single image from Wikipedia using search keywords (backward compatibility).
