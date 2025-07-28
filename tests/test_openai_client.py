@@ -90,13 +90,13 @@ def test_get_nearby_fact_prompt_format(openai_client):
             mock_create.assert_called_once()
             call_args = mock_create.call_args
 
-            # Check that either o3-mini or gpt-4o was used
+            # Check that either o3-mini or gpt-4.1 was used
             model_used = call_args[1]["model"]
-            assert model_used in ["o3-mini", "gpt-4o"]
+            assert model_used in ["o3-mini", "gpt-4.1"]
             assert call_args[1]["max_tokens"] == 400
             
-            # If gpt-4o is used as fallback, it should have temperature
-            if model_used == "gpt-4o":
+            # If gpt-4.1 is used as fallback, it should have temperature
+            if model_used == "gpt-4.1":
                 assert call_args[1]["temperature"] == 0.7
             # o3-mini doesn't use temperature
             elif model_used == "o3-mini":

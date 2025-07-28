@@ -71,9 +71,9 @@ class OpenAIClient:
                     max_tokens=400,  # Use max_tokens for o3-mini
                 )
             except Exception as e:
-                logger.warning(f"o3-mini failed, falling back to gpt-4o: {e}")
+                logger.warning(f"o3-mini failed, falling back to gpt-4.1: {e}")
                 response = await self.client.chat.completions.create(
-                    model="gpt-4o",  # Fallback to gpt-4o
+                    model="gpt-4.1",  # Fallback to gpt-4.1
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
