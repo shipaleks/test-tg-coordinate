@@ -7,7 +7,14 @@
       "Bash(git add:*)",
       "Bash(git push:*)",
       "Bash(git commit:*)",
-      "WebFetch(domain:platform.openai.com)"
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:docs.python-telegram-bot.org)",
+      "WebFetch(domain:core.telegram.org)",
+      "WebFetch(domain:github.com)",
+      "Bash(ruff check:*)",
+      "Bash(black:*)",
+      "Bash(timeout 30 python -m pytest:*)",
+      "Bash(ls:*)"
     ],
     "deny": []
   }

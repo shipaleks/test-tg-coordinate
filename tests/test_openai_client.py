@@ -271,47 +271,20 @@ def test_parse_coordinates_from_response(openai_client):
 
 
 def test_get_precise_coordinates(openai_client):
-    """Test getting precise coordinates using web search."""
+    """Test getting precise coordinates using web search (deprecated - always returns None)."""
 
     async def _test():
-        # Mock successful coordinate search
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "55.7539,37.6208"
+        # WebSearch is deprecated, so this method should always return None
+        coords = await openai_client.get_precise_coordinates(
+            "Красная площадь", "Центр Москвы"
+        )
+        assert coords is None
 
-        mock_create = AsyncMock(return_value=mock_response)
-
-        with patch.object(openai_client.client.chat.completions, "create", mock_create):
-            coords = await openai_client.get_precise_coordinates(
-                "Красная площадь", "Центр Москвы"
-            )
-
-            assert coords == (55.7539, 37.6208)
-
-            # Verify the call was made with correct parameters
-            mock_create.assert_called_once()
-            call_args = mock_create.call_args
-
-            assert call_args[1]["model"] == "gpt-4.1"
-            assert call_args[1]["tools"] == [{"type": "web_search"}]
-            assert call_args[1]["temperature"] == 0.1
-            assert "Красная площадь" in call_args[1]["messages"][1]["content"]
-
-        # Test invalid response
-        mock_response.choices[0].message.content = "Could not find coordinates"
-        with patch.object(openai_client.client.chat.completions, "create", mock_create):
-            coords = await openai_client.get_precise_coordinates(
-                "Несуществующее место", "Где-то"
-            )
-            assert coords is None
-
-        # Test API error
-        mock_create_error = AsyncMock(side_effect=Exception("API Error"))
-        with patch.object(
-            openai_client.client.chat.completions, "create", mock_create_error
-        ):
-            coords = await openai_client.get_precise_coordinates("Место", "Контекст")
-            assert coords is None
+        # Test with any other input - should still return None
+        coords = await openai_client.get_precise_coordinates(
+            "Несуществующее место", "Где-то"
+        )
+        assert coords is None
 
     anyio.run(_test)
 
@@ -399,7 +372,24 @@ def test_get_coordinates_from_search_keywords(openai_client):
             )
             assert coords == (55.7539, 37.6208)
 
-        # Test simplified search when complex keywords fail
+        # Test metro station fallback search
+        with patch.object(
+            openai_client,
+            "get_coordinates_from_nominatim",
+            new_callable=AsyncMock,
+            side_effect=[None, (48.8356, 2.3454)],  # Original fails, fallback succeeds
+        ) as mock_nominatim:
+            coords = await openai_client.get_coordinates_from_search_keywords(
+                "Censier–Daubenton Metro Paris France"
+            )
+            assert coords == (48.8356, 2.3454)
+            # Verify fallback was called with simplified metro station format
+            assert mock_nominatim.call_count == 2
+            calls = [call.args[0] for call in mock_nominatim.call_args_list]
+            assert "Censier–Daubenton Metro Paris France" in calls
+            assert any("Censier–Daubenton" in call and "station" in call for call in calls)
+
+        # Test complex place name fallback search  
         with patch.object(
             openai_client,
             "get_coordinates_from_nominatim",

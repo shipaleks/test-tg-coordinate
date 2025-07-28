@@ -372,24 +372,64 @@ class OpenAIClient:
         """
         logger.info(f"Searching coordinates for keywords: {search_keywords}")
 
-        # Try Nominatim first (faster and often more accurate for landmarks)
+        # Try original keywords first
         nominatim_coords = await self.get_coordinates_from_nominatim(search_keywords)
         if nominatim_coords:
             logger.info(f"Found Nominatim coordinates: {nominatim_coords}")
             return nominatim_coords
 
-        # Try variations of search keywords if Nominatim fails
-        logger.info(f"Nominatim failed for: {search_keywords}")
+        logger.info(f"Nominatim failed for original keywords: {search_keywords}")
 
-        # Try simpler search - just the main place name
+        # Try multiple fallback patterns for better search coverage
+        fallback_patterns = []
+        
+        # For metro/subway stations, try different formats
+        if "metro" in search_keywords.lower() or "метро" in search_keywords.lower():
+            # Extract station name and try different combinations
+            station_name = search_keywords.replace("Metro", "").replace("metro", "").replace("метро", "").replace("станция", "").strip()
+            if "Paris" in search_keywords:
+                fallback_patterns.extend([
+                    f"{station_name} station Paris",
+                    f"{station_name} Paris metro",
+                    f"{station_name} Paris",
+                    station_name.split()[0] if station_name else ""  # First word only
+                ])
+            elif "France" in search_keywords:
+                fallback_patterns.extend([
+                    f"{station_name} station",
+                    f"{station_name} metro",
+                    station_name.split()[0] if station_name else ""
+                ])
+        
+        # For places with + or complex formatting
         if " + " in search_keywords or "+" in search_keywords:
-            # Extract first part before + sign
-            simple_keywords = search_keywords.split("+")[0].strip()
-            logger.info(f"Trying simplified search: {simple_keywords}")
-            simple_coords = await self.get_coordinates_from_nominatim(simple_keywords)
-            if simple_coords:
-                logger.info(f"Found coordinates with simplified search: {simple_coords}")
-                return simple_coords
+            parts = search_keywords.replace("+", " ").split()
+            fallback_patterns.extend([
+                " ".join(parts[:2]) if len(parts) >= 2 else parts[0],  # First two words
+                parts[0] if parts else "",  # First word only
+            ])
+        
+        # For long place names, try progressively shorter versions
+        words = search_keywords.split()
+        if len(words) > 2:
+            fallback_patterns.extend([
+                " ".join(words[:3]),  # First 3 words
+                " ".join(words[:2]),  # First 2 words
+                words[0]  # First word only
+            ])
+        
+        # Remove empty patterns and duplicates
+        fallback_patterns = [p.strip() for p in fallback_patterns if p and p.strip()]
+        fallback_patterns = list(dict.fromkeys(fallback_patterns))  # Remove duplicates while preserving order
+        
+        # Try each fallback pattern
+        for pattern in fallback_patterns:
+            if pattern and pattern != search_keywords:  # Don't retry the original
+                logger.info(f"Trying fallback search: {pattern}")
+                coords = await self.get_coordinates_from_nominatim(pattern)
+                if coords:
+                    logger.info(f"Found coordinates with fallback search '{pattern}': {coords}")
+                    return coords
 
         logger.warning(f"No coordinates found for keywords: {search_keywords}")
         return None
