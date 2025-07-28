@@ -459,10 +459,10 @@ def test_get_wikipedia_images(openai_client):
             # Test the function
             image_urls = await openai_client.get_wikipedia_images("Eiffel Tower Paris France", max_images=3)
             
-            # Should return multiple image URLs (URL encoded)
+            # Should return multiple image URLs (URL encoded with width parameter)
             assert len(image_urls) == 2  # Only 2 good images, commons-logo filtered out
-            assert "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower.jpg" in image_urls
-            assert "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower_2.jpg" in image_urls
+            assert "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower.jpg?width=800" in image_urls
+            assert "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower_2.jpg?width=800" in image_urls
             
         # Test with search keywords that won't be found
         with patch('aiohttp.ClientSession') as mock_session:
@@ -492,12 +492,12 @@ def test_get_wikipedia_image_backward_compatibility(openai_client):
         with patch.object(openai_client, 'get_wikipedia_images', new_callable=AsyncMock) as mock_get_images:
             # Test when images are found
             mock_get_images.return_value = [
-                "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower.jpg",
-                "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower_2.jpg"
+                "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower.jpg?width=800",
+                "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower_2.jpg?width=800"
             ]
             
             image_url = await openai_client.get_wikipedia_image("Eiffel Tower Paris France")
-            assert image_url == "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower.jpg"
+            assert image_url == "https://commons.wikimedia.org/wiki/Special:FilePath/File%3AEiffel_Tower.jpg?width=800"
             mock_get_images.assert_called_once_with("Eiffel Tower Paris France", max_images=1)
             
             # Test when no images are found

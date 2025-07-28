@@ -656,10 +656,12 @@ class OpenAIClient:
                     all_potential_images.sort(reverse=True, key=lambda x: x[0])
                     
                     if all_potential_images:
-                        # Return up to max_images best images
+                        # Return up to max_images best images with improved URLs
                         selected_images = []
                         for score, image_title in all_potential_images[:max_images]:
-                            image_url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(image_title)}"
+                            # Use different URL format that's more reliable for Telegram
+                            # Add width parameter to ensure reasonable image size
+                            image_url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(image_title)}?width=800"
                             selected_images.append(image_url)
                             logger.debug(f"Selected image: {image_title} (score: {score})")
                         
