@@ -422,11 +422,15 @@ def test_get_wikipedia_image(openai_client):
     async def _test():
         # Test with a well-known landmark that should have an image
         with patch('aiohttp.ClientSession') as mock_session:
-            # Mock Wikipedia search response
+            # Mock Wikipedia search response (now using legacy API format)
             mock_search_response = MagicMock()
             mock_search_response.status = 200
             mock_search_response.json = AsyncMock(return_value={
-                'pages': [{'title': 'Eiffel Tower'}]
+                'query': {
+                    'search': [
+                        {'title': 'Eiffel Tower', 'snippet': 'Famous tower in Paris'}
+                    ]
+                }
             })
             
             # Mock Wikipedia media response  
@@ -461,7 +465,9 @@ def test_get_wikipedia_image(openai_client):
         with patch('aiohttp.ClientSession') as mock_session:
             mock_search_response = MagicMock()
             mock_search_response.status = 200
-            mock_search_response.json = AsyncMock(return_value={'pages': []})
+            mock_search_response.json = AsyncMock(return_value={
+                'query': {'search': []}
+            })
             
             mock_session_instance = MagicMock()
             mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_session_instance)

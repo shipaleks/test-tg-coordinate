@@ -560,32 +560,35 @@ class OpenAIClient:
             Image URL if found, None otherwise
         """
         try:
-            # First, search for the page
-            search_url = f"https://{lang}.wikipedia.org/api/rest_v1/page/search/{quote(search_term)}"
+            # Use legacy API for search (REST API often returns 404)
+            search_url = f"https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={quote(search_term)}&format=json"
             headers = {"User-Agent": "NearbyFactBot/1.0 (Educational Project)"}
             
             async with aiohttp.ClientSession() as session:
-                # Search for pages
+                # Search for pages using legacy API
                 async with session.get(search_url, headers=headers, timeout=5) as response:
                     if response.status != 200:
+                        logger.debug(f"Search failed for '{search_term}' in {lang}: status {response.status}")
                         return None
                     
                     search_data = await response.json()
-                    pages = search_data.get('pages', [])
+                    search_results = search_data.get('query', {}).get('search', [])
                     
-                    if not pages:
-                        logger.debug(f"No pages found for '{search_term}' in {lang}")
+                    if not search_results:
+                        logger.debug(f"No search results found for '{search_term}' in {lang}")
                         return None
                     
-                    logger.debug(f"Found {len(pages)} pages for '{search_term}' in {lang}")
+                    logger.debug(f"Found {len(search_results)} search results for '{search_term}' in {lang}")
                     
                     # Try first few pages
-                    for page in pages[:5]:  # Try more pages
-                        page_title = page.get('title')
+                    for result in search_results[:5]:  # Try more pages
+                        page_title = result.get('title')
                         if not page_title:
                             continue
                         
-                        # Get media list for this page
+                        logger.debug(f"Trying page: {page_title}")
+                        
+                        # Get media list for this page using REST API (this part still works)
                         media_url = f"https://{lang}.wikipedia.org/api/rest_v1/page/media-list/{quote(page_title)}"
                         
                         async with session.get(media_url, headers=headers, timeout=5) as media_response:
