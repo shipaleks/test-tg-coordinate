@@ -260,6 +260,17 @@ ABSOLUTE REQUIREMENTS:
 - Focus on the specific over the general
 - Include what can be seen/experienced today
 
+CRITICAL FOR SEARCH FIELD:
+The Search field is used for GEOCODING (finding coordinates) via Nominatim/OpenStreetMap.
+You MUST format it for optimal geocoding results:
+- Use commas to separate components: "Place Name, Street, City"
+- Include the full city name at the end
+- Avoid descriptive adjectives ("former", "old", "historical")
+- Use official place names, not colloquial ones
+- For buildings: "Building Name, Street Number Street Name, City"
+- For areas: "Landmark Name, District, City"
+- NEVER truncate - always provide full location context
+
 Remember: Atlas Obscura readers already know the obvious history. They want the specific detail that changes how they see a place forever.
 
 LANGUAGE REQUIREMENTS:
@@ -343,7 +354,18 @@ Follow the Atlas Obscura method above to find the most surprising fact about thi
 Present your final answer in this format:
 <answer>
 Location: [Specific name of the place - street address, building name, or precise intersection]
-Search: [Keywords for image search that will find THIS SPECIFIC location, not just any similar place. Include: exact place name + street/district + city. Examples: 'Boulevard de l'Hôpital 95 Paris', 'Малая Бронная 32 Москва', 'конкретное здание улица город']
+Search: [OPTIMIZED FOR NOMINATIM GEOCODING - Follow these rules:
+  - For specific buildings: "[Building Name], [Street Number] [Street Name], [City]"
+    Example: "Cité Fleurie, 65 Boulevard Arago, Paris"
+  - For landmarks: "[Landmark Name], [District/Area], [City]"
+    Example: "Prison de la Santé, 14th arrondissement, Paris"
+  - For metro stations: "[Station Name] metro station, [City]"
+    Example: "Denfert-Rochereau metro station, Paris"
+  - ALWAYS include the city name at the end
+  - Use commas to separate location components
+  - Avoid descriptive words like "former", "old", "historical" that Nominatim ignores
+  - For addresses, use format: "[Number] [Street Name], [City]"
+  - Never truncate to just 2-3 words - include full location context]
 Interesting fact: [Your Atlas Obscura-style fact about THIS EXACT LOCATION. Follow the structure: Surprising opening → Human story → Why it matters → What to see today. Must be 100-120 words, include specific names and dates, and focus on the unexpected.]
 </answer>
 
@@ -366,7 +388,7 @@ Apply the rapid Atlas Obscura search method above to find a surprising fact. If 
 Format your answer:
 <answer>
 Location: [Exact place name - specific building or location, not "area near" or "district of"]
-Search: [Keywords for image search: ORIGINAL local name + identifying features + city. Example: 'Gamla Stan Medieval Wall Stockholm' or 'Банк Швеции средневековая стена']
+Search: [NOMINATIM-OPTIMIZED: Use format "[Place Name], [Street/District], [City]" with commas. Examples: "Tour Eiffel, Champ de Mars, Paris" or "Эрмитаж, Дворцовая площадь, Санкт-Петербург". Avoid adjectives, use official names, always include city]
 Interesting fact: [Your 60-80 word Atlas Obscura fact with this structure: Surprising detail → Quick context with specific date/name → What visitors can see today. Must surprise locals.]
 </answer>
 
