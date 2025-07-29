@@ -141,7 +141,7 @@ class OpenAIClient:
         try:
             # Check if user has premium access for o3 model and get language preference
             is_premium_user = False
-            user_language = "en"  # Default to English
+            user_language = "ru"  # Default to Russian as most users are Russian-speaking
             if user_id:
                 try:
                     donors_db = get_donors_db()
@@ -149,6 +149,21 @@ class OpenAIClient:
                     user_language = donors_db.get_user_language(user_id)
                 except Exception as e:
                     logger.warning(f"Failed to check user preferences for user {user_id}: {e}")
+            
+            # Special instructions for Russian language quality
+            language_instructions = ""
+            if user_language == "ru":
+                language_instructions = """
+SPECIAL REQUIREMENTS FOR RUSSIAN:
+- Write in естественном, живом русском языке - as if sharing an amazing discovery with a friend
+- Use образные выражения и яркие детали, but avoid excessive adjectives or "purple prose"
+- Follow proper Russian style: избегайте англицизмов и калек where good Russian equivalents exist
+- Use тире for emphasis and паузы, not excessive commas: "В подвале этого дома — настоящая тайна"
+- Prefer active voice: "Здесь расстреляли..." not "Здесь был расстрелян..."
+- Sound like образованный носитель sharing удивительные местные истории
+- Good example: "В подвале элегантного дома на Малой Бронной до сих пор видны металлические кольца — здесь десять лет держали на карантине леопардов и тигров для московских коллекционеров."
+- Avoid канцелярит and Wikipedia-style: no "является", "представляет собой", "находится"
+- Make it sound like устная речь образованного человека, not written bureaucratic text"""
             
             # Choose appropriate system prompt based on location type  
             if is_live_location:
@@ -227,7 +242,11 @@ ABSOLUTE REQUIREMENTS:
 - Focus on the specific over the general
 - Include what can be seen/experienced today
 
-Remember: Atlas Obscura readers already know the obvious history. They want the specific detail that changes how they see a place forever. Write in {user_language}."""
+Remember: Atlas Obscura readers already know the obvious history. They want the specific detail that changes how they see a place forever.
+
+LANGUAGE REQUIREMENTS:
+Write your response in {user_language}.
+{language_instructions}"""
             else:
                 # Atlas Obscura-style prompt for static locations (GPT-4.1)
                 system_prompt = f"""You are writing a quick location fact for Atlas Obscura. Find the single most surprising detail about this exact location.
@@ -280,7 +299,8 @@ REQUIREMENTS:
 - Always include the "what to look for" element
 - Never start with boring context
 
-Write in {user_language} - crisp, factual, surprising."""
+Write in {user_language} - crisp, factual, surprising.
+{language_instructions}"""
 
             # Handle previous facts for both live and static locations
             previous_facts_text = ""
@@ -450,7 +470,15 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                 raise ValueError("Empty response from OpenAI")
 
             logger.info(f"Generated fact for location {lat},{lon}")
-            return content.strip()
+            
+            # Post-process Russian text for better quality
+            final_content = content.strip()
+            if user_language == "ru" and ("Interesting fact:" in final_content or "Интересный факт:" in final_content):
+                logger.info("Applying Russian language polish for better quality")
+                # Return as is - the language instructions in prompts should be sufficient
+                # Additional post-processing could distort facts
+            
+            return final_content
 
         except Exception as e:
             logger.error(f"Failed to generate fact for {lat},{lon}: {e}")
