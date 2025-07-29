@@ -321,7 +321,8 @@ class LiveLocationTracker:
             session_end_time = session_data.session_start + timedelta(seconds=session_data.live_period)
             
             # Wait for the specified interval before sending first fact
-            interval_seconds = session_data.fact_interval_minutes * 60
+            # Subtract 1 minute from the interval (5min -> 4min, 10min -> 9min, etc)
+            interval_seconds = (session_data.fact_interval_minutes - 1) * 60
             await asyncio.sleep(interval_seconds)
 
             while True:
