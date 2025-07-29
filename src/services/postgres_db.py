@@ -114,13 +114,7 @@ class PostgresDatabase:
                         logger.warning(f"Payment {payment_id} already exists")
                         return False
                     
-                    # Add donation
-                    await conn.execute("""
-                        INSERT INTO donations (user_id, payment_id, stars_amount, payment_date, invoice_payload)
-                        VALUES ($1, $2, $3, $4, $5)
-                    """, user_id, payment_id, stars_amount, current_time, invoice_payload)
-                    
-                    # Check if donor exists
+                    # First ensure donor exists
                     donor = await conn.fetchrow(
                         "SELECT total_stars FROM donors WHERE user_id = $1",
                         user_id
@@ -140,7 +134,7 @@ class PostgresDatabase:
                         """, user_id, new_total, current_time, telegram_username, 
                             first_name, current_time + (25 * 365 * 24 * 60 * 60))
                     else:
-                        # Create new donor
+                        # Create new donor first (before adding donation due to foreign key)
                         await conn.execute("""
                             INSERT INTO donors 
                             (user_id, telegram_username, first_name, total_stars, 
@@ -148,6 +142,12 @@ class PostgresDatabase:
                             VALUES ($1, $2, $3, $4, $5, $6, $7)
                         """, user_id, telegram_username, first_name, stars_amount, 
                             current_time, current_time, current_time + (25 * 365 * 24 * 60 * 60))
+                    
+                    # Now add donation (after donor exists)
+                    await conn.execute("""
+                        INSERT INTO donations (user_id, payment_id, stars_amount, payment_date, invoice_payload)
+                        VALUES ($1, $2, $3, $4, $5)
+                    """, user_id, payment_id, stars_amount, current_time, invoice_payload)
                     
                     logger.info(f"Added donation: user_id={user_id}, stars={stars_amount}")
                     return True

@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 
 class StaticLocationHistory:
     """Simple in-memory cache for static location facts to avoid repetition."""
-    
+
     def __init__(self, max_entries: int = 1000, ttl_hours: int = 24):
         """Initialize the history cache.
-        
+
         Args:
             max_entries: Maximum number of entries to keep in cache
             ttl_hours: Time to live for entries in hours
@@ -28,51 +28,51 @@ class StaticLocationHistory:
         self._cache = {}  # {search_keywords: {"facts": [facts], "timestamp": time}}
         self._max_entries = max_entries
         self._ttl_seconds = ttl_hours * 3600
-    
+
     def get_previous_facts(self, search_keywords: str) -> list[str]:
         """Get previous facts for a location.
-        
+
         Args:
             search_keywords: Search keywords identifying the location
-            
+
         Returns:
             List of previous facts (empty if none or expired)
         """
         self._cleanup_expired()
-        
+
         entry = self._cache.get(search_keywords)
         if entry and (time.time() - entry["timestamp"]) < self._ttl_seconds:
             return entry["facts"][-5:]  # Return last 5 facts like live location
         return []
-    
+
     def add_fact(self, search_keywords: str, place: str, fact: str):
         """Add a new fact to the history.
-        
+
         Args:
             search_keywords: Search keywords identifying the location
             place: Place name
             fact: The fact text
         """
         self._cleanup_expired()
-        
+
         if search_keywords not in self._cache:
             self._cache[search_keywords] = {"facts": [], "timestamp": time.time()}
-        
+
         # Add fact in same format as live location
         fact_entry = f"{place}: {fact}"
         self._cache[search_keywords]["facts"].append(fact_entry)
         self._cache[search_keywords]["timestamp"] = time.time()
-        
+
         # Keep only last 10 facts per location to prevent memory bloat
         if len(self._cache[search_keywords]["facts"]) > 10:
             self._cache[search_keywords]["facts"] = self._cache[search_keywords]["facts"][-10:]
-        
+
         logger.debug(f"Added fact to static location history: {place}")
-    
+
     def _cleanup_expired(self):
         """Remove expired entries and limit cache size."""
         current_time = time.time()
-        
+
         # Remove expired entries
         expired_keys = [
             key for key, entry in self._cache.items()
@@ -80,18 +80,18 @@ class StaticLocationHistory:
         ]
         for key in expired_keys:
             del self._cache[key]
-        
+
         # Limit cache size
         if len(self._cache) > self._max_entries:
             # Remove oldest entries
             sorted_items = sorted(
-                self._cache.items(), 
+                self._cache.items(),
                 key=lambda x: x[1]["timestamp"]
             )
             keys_to_remove = [item[0] for item in sorted_items[:len(self._cache) - self._max_entries]]
             for key in keys_to_remove:
                 del self._cache[key]
-    
+
     def get_cache_stats(self) -> dict:
         """Get cache statistics for debugging."""
         self._cleanup_expired()
@@ -160,23 +160,23 @@ class OpenAIClient:
                         user_language = donors_db.get_user_language(user_id)
                 except Exception as e:
                     logger.warning(f"Failed to check user preferences for user {user_id}: {e}")
-            
+
             # Special instructions for Russian language quality
             language_instructions = ""
             if user_language == "ru":
                 language_instructions = """
 SPECIAL REQUIREMENTS FOR RUSSIAN:
-- Write in естественном, живом русском языке - as if sharing an amazing discovery with a friend
-- Use образные выражения и яркие детали, but avoid excessive adjectives or "purple prose"
-- Follow proper Russian style: избегайте англицизмов и калек where good Russian equivalents exist
-- Use тире for emphasis and паузы, not excessive commas: "В подвале этого дома — настоящая тайна"
-- Prefer active voice: "Здесь расстреляли..." not "Здесь был расстрелян..."
-- Sound like образованный носитель sharing удивительные местные истории
-- Good example: "В подвале элегантного дома на Малой Бронной до сих пор видны металлические кольца — здесь десять лет держали на карантине леопардов и тигров для московских коллекционеров."
-- Avoid канцелярит and Wikipedia-style: no "является", "представляет собой", "находится"
-- Make it sound like устная речь образованного человека, not written bureaucratic text"""
-            
-            # Choose appropriate system prompt based on location type  
+- Пишите на естественном, живом русском языке - как если бы делились невероятным открытием с другом
+- Используйте образные выражения и яркие детали, но избегайте слишком многочисленных прилагательных, излишне сложных конструкций и надрывной театральности театральности
+- Соблюдайте грамотную русскую речь: избегайте англицизмов и калек в случаях, когда существуют удачные русские слова
+- Используйте для акцентов тире и паузы, а не лишние запятые: "В подвале этого дома — настоящая тайна"
+- Пишите в активном залоге: "Здесь расстреляли...", не "Здесь был расстрелян..."
+- Старйтесь звучать как образованный носитель языка, который делится удивительными местными историями
+- Хороший пример: "В подвале элегантного дома на Малой Бронной до сих пор видны металлические кольца — здесь десять лет держали на карантине леопардов и тигров для московских коллекционеров."
+- Избегайте канцелярита и Wikipedia-стиля: нет фразам "является", "представляет собой", "находится"
+- Стремитесь передать живую речь человека с высшим филологическим образование, а не написанный бюрократический текст"""
+
+            # Choose appropriate system prompt based on location type
             if is_live_location:
                 # Atlas Obscura-style system prompt for live locations (o4-mini/o3)
                 system_prompt = f"""You are writing location facts for Atlas Obscura. Your mission: find the most surprising, specific detail about places that would make even locals say "I never knew that!"
@@ -204,13 +204,13 @@ Search for facts in this priority order:
       - Hidden architectural features (secret rooms, disguised elements)
       - Specific incidents that happened here (crimes, meetings, discoveries)
       - Famous residents/visitors and what they did here specifically
-   
+
    B) If nothing at exact spot, expand to immediate vicinity:
       - Underground features (tunnels, rivers, old foundations)
       - Lost buildings that once stood here and why they matter
       - Street name origins that reveal forgotten history
       - Architectural details visible from this spot with stories
-   
+
    C) If still nothing specific, the broader area's secrets:
       - Neighborhood transformation stories
       - Local legends tied to specific features
@@ -375,7 +375,7 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
             # Choose model based on location type and premium status
             model_to_use = "o4-mini"  # Default model
             max_tokens_limit = 10000
-            
+
             if is_live_location:
                 if is_premium_user:
                     # Premium users get o3 for live locations (detailed analysis)
@@ -392,7 +392,7 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                 max_tokens_limit = 400
                 if is_premium_user:
                     logger.info(f"Using gpt-4.1 for premium user {user_id} (static location - speed priority)")
-            
+
             response = None
             if is_live_location:
                 # Use advanced models for live locations (o3 for premium, o4-mini for regular)
@@ -458,7 +458,7 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                     if previous_facts:
                         logger.info(f"Sending prompt to GPT-4.1 with {len(previous_facts)} previous facts")
                         logger.debug(f"User prompt preview: {user_prompt[:200]}...")
-                    
+
                     response = await self.client.chat.completions.create(
                         model="gpt-4.1",
                         messages=[
@@ -490,14 +490,14 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                 raise ValueError("Empty response from OpenAI")
 
             logger.info(f"Generated fact for location {lat},{lon}")
-            
+
             # Post-process Russian text for better quality
             final_content = content.strip()
             if user_language == "ru" and ("Interesting fact:" in final_content or "Интересный факт:" in final_content):
                 logger.info("Applying Russian language polish for better quality")
                 # Return as is - the language instructions in prompts should be sufficient
                 # Additional post-processing could distort facts
-            
+
             return final_content
 
         except Exception as e:
@@ -659,7 +659,7 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
 
         # Try multiple fallback patterns for better search coverage
         fallback_patterns = []
-        
+
         # For metro/subway stations, try different formats
         if "metro" in search_keywords.lower() or "метро" in search_keywords.lower():
             # Extract station name and try different combinations
@@ -677,7 +677,7 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                     f"{station_name} metro",
                     station_name.split()[0] if station_name else ""
                 ])
-        
+
         # For places with + or complex formatting
         if " + " in search_keywords or "+" in search_keywords:
             parts = search_keywords.replace("+", " ").split()
@@ -685,7 +685,7 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                 " ".join(parts[:2]) if len(parts) >= 2 else parts[0],  # First two words
                 parts[0] if parts else "",  # First word only
             ])
-        
+
         # For long place names, try progressively shorter versions
         words = search_keywords.split()
         if len(words) > 2:
@@ -694,11 +694,11 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                 " ".join(words[:2]),  # First 2 words
                 words[0]  # First word only
             ])
-        
+
         # Remove empty patterns and duplicates
         fallback_patterns = [p.strip() for p in fallback_patterns if p and p.strip()]
         fallback_patterns = list(dict.fromkeys(fallback_patterns))  # Remove duplicates while preserving order
-        
+
         # Try each fallback pattern
         for pattern in fallback_patterns:
             if pattern and pattern != search_keywords:  # Don't retry the original
@@ -727,7 +727,7 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
             answer_match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
             if answer_match:
                 answer_content = answer_match.group(1).strip()
-                
+
                 # Extract search keywords from answer content
                 search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
                 if search_match:
@@ -749,7 +749,7 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                     coords = await self.get_coordinates_from_search_keywords(place_name)
                     if coords:
                         return coords
-            
+
             # Legacy fallback for old format responses (will be removed eventually)
             else:
                 # First, try to extract search keywords from old format
@@ -783,23 +783,23 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
 
     async def get_wikipedia_images(self, search_keywords: str, max_images: int = 5) -> list[str]:
         """Get multiple images from Wikipedia using search keywords.
-        
+
         Args:
             search_keywords: Search keywords from GPT response
             max_images: Maximum number of images to return (default 5)
-            
+
         Returns:
             List of image URLs (up to max_images)
         """
         # Languages to try (in order of preference)
         languages = ['en', 'ru', 'fr', 'de', 'es', 'it']
-        
+
         # Clean up search keywords
         clean_keywords = search_keywords.replace(' + ', ' ').replace('+', ' ').strip()
-        
+
         # Try different variations of search terms
         search_variations = [clean_keywords]
-        
+
         # Add word combinations
         words = clean_keywords.split()
         if len(words) > 1:
@@ -813,7 +813,7 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
             filtered_words = [w for w in words if w not in ['France', 'Paris', 'London', 'Moscow', 'Москва', 'Россия']]
             if filtered_words and len(filtered_words) != len(words):
                 search_variations.append(' '.join(filtered_words))
-        
+
         # Add specific variations for common patterns
         if any(word in clean_keywords.lower() for word in ['metro', 'station', 'метро', 'станция']):
             # For metro stations, try without "metro"/"метро" words
@@ -822,20 +822,20 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                 metro_clean = metro_clean.replace(word, '').strip()
             if metro_clean:
                 search_variations.append(metro_clean)
-        
+
         # Remove duplicates while preserving order
         search_variations = list(dict.fromkeys(search_variations))
-        
+
         found_images = []
-        
+
         for lang in languages:
             if len(found_images) >= max_images:
                 break
-                
+
             for search_term in search_variations:
                 if not search_term or len(found_images) >= max_images:
                     continue
-                    
+
                 try:
                     logger.debug(f"Trying Wikipedia search: '{search_term}' in {lang}")
                     images = await self._search_wikipedia_images(search_term, lang, max_images - len(found_images))
@@ -852,22 +852,22 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                 except Exception as e:
                     logger.debug(f"Wikipedia search failed for '{search_term}' in {lang}: {e}")
                     continue
-        
+
         if found_images:
             logger.info(f"Found {len(found_images)} Wikipedia images for: {search_keywords}")
         else:
             logger.info(f"No Wikipedia images found for: {search_keywords} (tried {len(search_variations)} variations across {len(languages)} languages)")
-        
+
         return found_images
 
     async def _search_wikipedia_images(self, search_term: str, lang: str, max_images: int = 5) -> list[str]:
         """Search for images on specific Wikipedia language.
-        
+
         Args:
             search_term: Term to search for
             lang: Language code (en, ru, fr, etc.)
             max_images: Maximum number of images to return
-            
+
         Returns:
             List of image URLs (up to max_images)
         """
@@ -875,53 +875,53 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
             # Use legacy API for search (REST API often returns 404)
             search_url = f"https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={quote(search_term)}&format=json"
             headers = {"User-Agent": "NearbyFactBot/1.0 (Educational Project)"}
-            
+
             async with aiohttp.ClientSession() as session:
                 # Search for pages using legacy API
                 async with session.get(search_url, headers=headers, timeout=5) as response:
                     if response.status != 200:
                         logger.debug(f"Search failed for '{search_term}' in {lang}: status {response.status}")
                         return None
-                    
+
                     search_data = await response.json()
                     search_results = search_data.get('query', {}).get('search', [])
-                    
+
                     if not search_results:
                         logger.debug(f"No search results found for '{search_term}' in {lang}")
                         return []
-                    
+
                     logger.debug(f"Found {len(search_results)} search results for '{search_term}' in {lang}")
-                    
+
                     # Collect all potential images from multiple pages
                     all_potential_images = []
-                    
+
                     # Try first few pages
                     for result in search_results[:5]:  # Try more pages
                         page_title = result.get('title')
                         if not page_title:
                             continue
-                        
+
                         logger.debug(f"Trying page: {page_title}")
-                        
+
                         # Get media list for this page using REST API (this part still works)
                         media_url = f"https://{lang}.wikipedia.org/api/rest_v1/page/media-list/{quote(page_title)}"
-                        
+
                         async with session.get(media_url, headers=headers, timeout=5) as media_response:
                             if media_response.status != 200:
                                 continue
-                                
+
                             media_data = await media_response.json()
                             items = media_data.get('items', [])
-                            
+
                             logger.debug(f"Found {len(items)} media items for page '{page_title}'")
-                            
+
                             # Look for good images
                             for item in items:
                                 if item.get('type') != 'image':
                                     continue
-                                
+
                                 title = item.get('title', '').lower()
-                                
+
                                 # Skip common non-relevant images
                                 skip_patterns = [
                                     'commons-logo', 'edit-icon', 'wikimedia', 'stub',
@@ -929,44 +929,44 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                                     'red_x', 'green_check', 'question_mark', 'infobox',
                                     'arrow', 'symbol', 'disambiguation', 'flag'
                                 ]
-                                
+
                                 if any(pattern in title for pattern in skip_patterns):
                                     continue
-                                
+
                                 # Prefer images with good extensions and score them
                                 score = 0
                                 if any(ext in title for ext in ['.jpg', '.jpeg']):
                                     score += 3
                                 elif any(ext in title for ext in ['.png', '.webp']):
                                     score += 2
-                                
+
                                 # Prefer images that contain keywords from search term
                                 search_words = search_term.lower().split()
                                 for word in search_words:
                                     if word in title and len(word) > 2:  # Avoid short words
                                         score += 1
-                                
+
                                 all_potential_images.append((score, item['title']))
-                    
+
                     # Sort by score and return best images
                     all_potential_images.sort(reverse=True, key=lambda x: x[0])
-                    
+
                     if all_potential_images:
                         # Return up to max_images best images with multiple URL formats
                         selected_images = []
                         for score, image_title in all_potential_images[:max_images * 2]:  # Try more images to account for failures
                             if len(selected_images) >= max_images:
                                 break
-                            
+
                             # Clean image title - remove File: prefix if present
                             clean_title = image_title[5:] if image_title.startswith('File:') else image_title
-                            
+
                             # Try multiple URL formats for better reliability
                             # Skip images with potentially problematic filenames
                             if any(char in clean_title for char in ['|', ':', ';', '<', '>', '"']):
                                 logger.debug(f"Skipping image with problematic filename: {clean_title}")
                                 continue
-                            
+
                             # Try to get actual image URL using Wikimedia API
                             actual_image_url = await self._get_actual_image_url(clean_title, session, lang)
                             if actual_image_url:
@@ -974,21 +974,21 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                                 logger.debug(f"Selected image: {image_title} (score: {score}) -> {actual_image_url}")
                             else:
                                 logger.debug(f"Failed to get actual URL for image: {clean_title}")
-                        
+
                         return selected_images
-        
+
         except Exception as e:
             logger.debug(f"Error searching Wikipedia {lang} for '{search_term}': {e}")
             return []
-        
+
         return []
 
     def _get_md5_hash(self, filename: str) -> str | None:
         """Get MD5 hash of filename for direct Wikipedia Commons URL.
-        
+
         Args:
             filename: Wikipedia Commons filename
-            
+
         Returns:
             MD5 hash string if successful, None otherwise
         """
@@ -1002,12 +1002,12 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
 
     async def _get_actual_image_url(self, filename: str, session: aiohttp.ClientSession, lang: str = 'commons') -> str | None:
         """Get actual direct image URL using Wikimedia API.
-        
+
         Args:
             filename: Clean filename without File: prefix
             session: aiohttp session to reuse
             lang: Language code, defaults to 'commons'
-        
+
         Returns:
             Direct image URL if found, None otherwise
         """
@@ -1022,17 +1022,17 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                 'iiprop': 'url',
                 'iiurlwidth': '800'  # Request thumbnail width of 800px
             }
-            
+
             headers = {"User-Agent": "NearbyFactBot/1.0 (Educational Project)"}
-            
+
             async with session.get(api_url, params=params, headers=headers, timeout=5) as response:
                 if response.status != 200:
                     logger.debug(f"API request failed for {filename}: status {response.status}")
                     return None
-                
+
                 data = await response.json()
                 pages = data.get('query', {}).get('pages', {})
-                
+
                 for page_data in pages.values():
                     imageinfo = page_data.get('imageinfo', [])
                     if imageinfo:
@@ -1041,26 +1041,26 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                         if thumb_url:
                             logger.debug(f"Found thumbnail URL for {filename}: {thumb_url}")
                             return thumb_url
-                        
+
                         # Fallback to original URL
                         original_url = imageinfo[0].get('url')
                         if original_url:
                             logger.debug(f"Found original URL for {filename}: {original_url}")
                             return original_url
-                
+
                 logger.debug(f"No image info found for {filename}")
                 return None
-                
+
         except Exception as e:
             logger.debug(f"Error getting actual image URL for {filename}: {e}")
             return None
 
     async def get_wikipedia_image(self, search_keywords: str) -> str | None:
         """Get single image from Wikipedia using search keywords (backward compatibility).
-        
+
         Args:
             search_keywords: Search keywords from GPT response
-            
+
         Returns:
             Image URL if found, None otherwise
         """
@@ -1069,13 +1069,13 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
 
     async def get_nearby_fact_with_history(self, lat: float, lon: float, cache_key: str | None = None, user_id: int = None) -> str:
         """Get fact for static location with history tracking to avoid repetition.
-        
+
         Args:
             lat: Latitude coordinate
-            lon: Longitude coordinate  
+            lon: Longitude coordinate
             cache_key: Cache key for the location (coordinates or search keywords)
             user_id: User ID to check premium status for o3 model access
-            
+
         Returns:
             A location name and an interesting fact about it
         """
@@ -1087,19 +1087,19 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                 logger.info(f"Found {len(previous_facts)} previous facts for {cache_key}: {previous_facts}")
             else:
                 logger.info(f"No previous facts found for {cache_key}")
-        
+
         # Get fact using existing method but with previous facts
         logger.info(f"Calling get_nearby_fact with {len(previous_facts)} previous facts")
         if previous_facts:
             logger.info(f"Previous facts being sent to AI: {previous_facts}")
         fact_response = await self.get_nearby_fact(lat, lon, is_live_location=False, previous_facts=previous_facts, user_id=user_id)
-        
+
         # Parse the response to extract place and fact for history
         if cache_key:
             lines = fact_response.split("\n")
             place = "рядом с вами"
             fact = fact_response
-            
+
             # Try to parse structured response
             for i, line in enumerate(lines):
                 if line.startswith("Локация:"):
@@ -1113,15 +1113,15 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                             fact_lines.append(lines[j].strip())
                     fact = " ".join(fact_lines)
                     break
-            
+
             # Add to history
             logger.info(f"Adding fact to history for {cache_key}: {place}")
             self.static_history.add_fact(cache_key, place, fact)
-            
+
             # Log cache stats after adding
             stats = self.static_history.get_cache_stats()
             logger.info(f"Static location cache after add: {stats['locations']} locations, {stats['total_facts']} total facts")
-        
+
         return fact_response
 
 
