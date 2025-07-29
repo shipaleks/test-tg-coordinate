@@ -48,7 +48,7 @@ async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             InlineKeyboardButton("500⭐", callback_data="donate_500"),
         ],
         [
-            InlineKeyboardButton("💰 Другая сумма", callback_data="donate_custom"),
+            InlineKeyboardButton("💰 Other amount", callback_data="donate_custom"),
         ],
     ]
     
@@ -86,14 +86,14 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
                     InlineKeyboardButton("2000⭐", callback_data="donate_2000"),
                 ],
                 [
-                    InlineKeyboardButton("← Назад", callback_data="donate_back"),
+                    InlineKeyboardButton("← Back", callback_data="donate_back"),
                 ],
             ]
             custom_markup = InlineKeyboardMarkup(custom_keyboard)
             
             await query.edit_message_text(
-                "💰 *Выберите сумму:*\n\n"
-                "✨ Любая поддержка очень ценится!",
+                "💰 *Choose amount:*\n\n"
+                "✨ Any support is greatly appreciated!",
                 parse_mode="Markdown",
                 reply_markup=custom_markup
             )
@@ -130,7 +130,7 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
                     InlineKeyboardButton("500⭐", callback_data="donate_500"),
                 ],
                 [
-                    InlineKeyboardButton("💰 Другая сумма", callback_data="donate_custom"),
+                    InlineKeyboardButton("💰 Other amount", callback_data="donate_custom"),
                 ],
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)

@@ -112,6 +112,39 @@ LOCALIZED_MESSAGES = {
             "• Instant fact about current place\n"
             "• Suitable for quick queries"
         )
+    },
+    'fr': {
+        'welcome': (
+            "🗺️ *Bienvenue dans le bot des faits étonnants !*\n\n"
+            "🔴 *Position en direct — votre guide touristique personnel :*\n"
+            "📎 → Location → Share Live Location (15 min - 8 heures)\n"
+            "Faits automatiques toutes les 5-60 minutes pendant votre promenade\n\n"
+            "📍 *Aussi disponible :* envoi unique de position actuelle\n"
+            "Appuyez sur le bouton ci-dessous pour un fait instantané sur le lieu\n\n"
+            "_Chaque fait est une petite découverte près de vous !_ ✨"
+        ),
+        'buttons': {
+            'info': "📱💡 Comment partager Live Location",
+            'location': "🔴📍 Partager la position",
+            'donate': "⭐💝 Soutenir le projet"
+        },
+        'info_text': (
+            "📱 *Comment partager Live Location :*\n\n"
+            "🔴 *Position en direct — mode principal :*\n"
+            "1️⃣ Trombone 📎 → Location → Share Live Location\n"
+            "2️⃣ Choisissez la durée de suivi (15 min - 8 heures)\n"
+            "3️⃣ Réglez la fréquence des faits (toutes les 5-60 minutes)\n"
+            "4️⃣ Promenez-vous et recevez des faits automatiquement !\n\n"
+            "*💡 Pourquoi la position en direct est-elle meilleure ?*\n"
+            "• Guide touristique personnel dans votre poche\n"
+            "• Les faits arrivent automatiquement en vous déplaçant\n"
+            "• Pas besoin d'envoyer constamment votre position\n"
+            "• Parfait pour les promenades touristiques\n\n"
+            "📍 *Position unique :*\n"
+            "• Bouton « 🔴 Partager la position »\n"
+            "• Fait instantané sur le lieu actuel\n"
+            "• Convient pour les demandes rapides"
+        )
     }
     # Add more languages as needed
 }

@@ -877,12 +877,8 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
         fallback_patterns = [p.strip() for p in fallback_patterns if p and p.strip()]
         fallback_patterns = list(dict.fromkeys(fallback_patterns))  # Remove duplicates while preserving order
         
-        # FINAL FALLBACK: If we have city coordinates, return city center as last resort
-        # This is better than returning coordinates from wrong city
-        city_center_fallback = None
-        if city_name and city_name in common_cities:
-            city_lat, city_lon, _ = common_cities[city_name]
-            city_center_fallback = (city_lat, city_lon)
+        # Note: We intentionally don't add city center as fallback
+        # Better to not send coordinates than to send wrong ones
 
         # Try each fallback pattern
         for pattern in fallback_patterns:
@@ -905,11 +901,6 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                     logger.info(f"Found coordinates with fallback search '{pattern}': {coords}")
                     return coords
 
-        # Last resort: if we know the city, return city center rather than wrong city
-        if city_center_fallback:
-            logger.warning(f"No specific coordinates found for '{search_keywords}', using city center: {city_center_fallback}")
-            return city_center_fallback
-            
         logger.warning(f"No coordinates found for keywords: {search_keywords}")
         return None
 

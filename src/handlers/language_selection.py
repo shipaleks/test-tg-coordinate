@@ -106,7 +106,7 @@ async def show_language_selection(update: Update, context: ContextTypes.DEFAULT_
     
     # Custom language option
     keyboard.append([
-        InlineKeyboardButton("🌐 Другой язык / Other language", callback_data="lang_custom"),
+        InlineKeyboardButton("🌐 Other language / Autre langue", callback_data="lang_custom"),
     ])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -145,7 +145,7 @@ async def handle_language_selection(update: Update, context: ContextTypes.DEFAUL
             context.user_data['awaiting_custom_language'] = True
             
             await query.edit_message_text(
-                f"🌐 **Custom Language / Пользовательский язык**\n\n{prompt_text}",
+                f"🌐 **Custom Language / Langue personnalisée**\n\n{prompt_text}",
                 parse_mode="Markdown"
             )
             return

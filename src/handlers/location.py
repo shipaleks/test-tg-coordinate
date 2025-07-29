@@ -55,6 +55,23 @@ LOCATION_MESSAGES = {
         'live_fact_format': "🔴 *Fact #{number}*\n\n📍 *Place:* {place}\n\n💡 *Fact:* {fact}",
         'error_no_info': "😔 *Oops!*\n\nCouldn't find interesting information about this location.\nTry moving slightly or sending a different location.",
         'near_you': "near you"
+    },
+    'fr': {
+        'image_fallback': "⚠️ Les images n'ont pas pu se charger, mais voici le fait :\n\n",
+        'live_location_received': "🔴 *Position en direct reçue !*\n\n📍 Suivi pendant {minutes} minutes\n\nÀ quelle fréquence souhaitez-vous recevoir des faits intéressants ?",
+        'interval_5min': "Toutes les 5 minutes",
+        'interval_10min': "Toutes les 10 minutes",
+        'interval_30min': "Toutes les 30 minutes",
+        'interval_60min': "Toutes les 60 minutes",
+        'live_activated': "🔴 *Position en direct activée !*\n\n📍 Suivi : {minutes} minutes\n⏰ Faits toutes les : {interval} minutes\n\n🚀 Je vais envoyer le premier fait maintenant, puis continuer automatiquement !\n\nArrêtez le partage pour terminer la session.",
+        'place_label': "📍 *Lieu :*",
+        'fact_label': "💡 *Fait :*",
+        'live_fact_label': "🔴 *Fait #{number}*",
+        'attraction_address': "Attraction : {place}",
+        'static_fact_format': "📍 *Lieu :* {place}\n\n💡 *Fait :* {fact}",
+        'live_fact_format': "🔴 *Fait #{number}*\n\n📍 *Lieu :* {place}\n\n💡 *Fait :* {fact}",
+        'error_no_info': "😔 *Oups !*\n\nImpossible de trouver des informations intéressantes sur cet endroit.\nEssayez de vous déplacer légèrement ou d'envoyer une autre position.",
+        'near_you': "près de vous"
     }
     # Add more languages as needed
 }
