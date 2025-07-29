@@ -176,6 +176,8 @@ SPECIAL REQUIREMENTS FOR RUSSIAN:
 - Избегайте канцелярита и Wikipedia-стиля: нет фразам "является", "представляет собой", "находится"
 - Стремитесь передать живую речь человека с высшим филологическим образованием, а не написанный бюрократический текст
 
+ПРАВИЛО ПРОВЕРКИ ФАКТОВ: Если не можете проверить конкретную деталь (имя, дату, событие), опишите общую правду. Лучше сказать "местный купец", чем выдумывать "купец Иванов"
+
 ОСОБЫЕ ТРЕБОВАНИЯ К ТОЧНОСТИ НА РУССКОМ:
 - Проверяйте склонения исторических названий и имён
 - При неуверенности в дате используйте "в начале XX века", "в советские годы", "в 1920-х"
@@ -189,7 +191,29 @@ SPECIAL REQUIREMENTS FOR RUSSIAN:
 - НЕ называйте любое старое здание "бывшей усадьбой" или "особняком купца"
 - ПРОВЕРЯЙТЕ даты московских/петербургских выставок и ярмарок
 - НЕ выдумывайте "тайные знаки", "масонские символы", "скрытые послания"
-- Революция: февраль 1917 ≠ октябрь 1917, не путайте события"""
+- Революция: февраль 1917 ≠ октябрь 1917, не путайте события
+
+ХОРОШИЕ vs ПЛОХИЕ ПРИМЕРЫ НА РУССКОМ:
+❌ ПЛОХО: "Клеймо 'Г. Эйфель 1889' видно на заклёпках" (выдуманные метки)
+✅ ХОРОШО: "Металлические конструкции эпохи выставки 1878 года" (проверенный период)
+
+❌ ПЛОХО: "Мэрия признала это архитектурным феноменом" (упрощение)
+✅ ХОРОШО: "После кампании 1972-74 годов и серии решений разных инстанций" (точно)
+
+❌ ПЛОХО: "30 павильонов" (округлённое число)
+✅ ХОРОШО: "29 мастерских" (точное документированное количество)
+
+❌ ПЛОХО: "Художники забаррикадировали ворота мольбертами" (драматизация)
+✅ ХОРОШО: "Жители и активисты организовали протесты" (документированный факт)
+
+❌ ПЛОХО: "Львиная маска на regard №22" (выдуманная деталь)
+✅ ХОРОШО: "Инспекционный павильон акведука XVII века" (реальное назначение)
+
+ОПИСАНИЕ СЛОЖНЫХ ПРОЦЕССОВ НА РУССКОМ:
+- Правительственные решения: "после долгой борьбы" не "мэрия решила"
+- Многолетние кампании: "кампания 1972-1974 годов" не "однажды в 1973"
+- Множество участников: "активисты, пресса и политики" не только "художники"
+- Правовая сложность: "серия решений на разных уровнях" не один простой акт"""
 
             # Choose appropriate system prompt based on location type
             if is_live_location:
@@ -250,7 +274,7 @@ Every great Atlas Obscura story connects to people:
    - WHEN exactly did the transformation/event occur
      → Use exact dates only when certain; otherwise "in the 1920s" or "during the Soviet period"
 
-FACT-CHECKING RULE: If you can't verify a specific detail (name, date, event), describe the general truth instead. Better to say "a local merchant" than invent "merchant Ivanov"
+FACT-CHECKING RULE: If you can't verify a specific detail (name, date, event), describe the general truth instead. Better to say "a local merchant" than invent "merchant Johnson"
 
 Step 4: IDENTIFY WHAT'S STILL VISIBLE (ONLY REAL FEATURES)
 Atlas Obscura readers want to know what they can see:
@@ -264,10 +288,10 @@ Atlas Obscura readers want to know what they can see:
      → Describe only what's genuinely visible
 
 DESCRIBING COMPLEX HISTORICAL PROCESSES:
-- Government decisions: "после долгой борьбы" not "мэрия решила"
-- Multi-year campaigns: "кампания 1972-1974 годов" not "однажды в 1973"
-- Multiple actors: "активисты, пресса и политики" not just "художники"
-- Legal complexity: "серия решений на разных уровнях" not one simple act
+- Government decisions: "after lengthy negotiations" not "the mayor decided"
+- Multi-year campaigns: "1972-1974 campaign" not "one day in 1973"
+- Multiple actors: "activists, press and politicians" not just "artists"
+- Legal complexity: "series of decisions at different levels" not one simple act
 - Avoid Hollywood dramatization of real events
 
 WRITING YOUR FACT (100-120 words):
@@ -280,20 +304,20 @@ Example approach (showing fact-checking notes):
 Note: This is a template showing where to verify facts. Your actual response should contain only confirmed information.
 
 GOOD vs BAD EXAMPLES:
-❌ BAD: "Клеймо 'G. Eiffel 1889' видно на заклёпках" (inventing marks)
-✅ GOOD: "Металлические конструкции эпохи выставки 1878 года" (verified period)
+❌ BAD: "G. Eiffel 1889 stamp visible on rivets" (inventing marks)
+✅ GOOD: "Iron structures from the 1878 Exhibition" (verified period)
 
-❌ BAD: "Мэрия признала это архитектурным феноменом" (oversimplification)
-✅ GOOD: "После кампании 1972-74 годов и серии решений разных инстанций" (accurate)
+❌ BAD: "The mayor declared it an architectural phenomenon" (oversimplification)
+✅ GOOD: "After the 1972-74 campaign and decisions by multiple authorities" (accurate)
 
-❌ BAD: "30 павильонов" (rounded number)
-✅ GOOD: "29 мастерских" (exact documented count)
+❌ BAD: "30 pavilions" (rounded number)
+✅ GOOD: "29 workshops" (exact documented count)
 
-❌ BAD: "Художники забаррикадировали ворота мольбертами" (dramatization)
-✅ GOOD: "Жители и активисты организовали протесты" (documented fact)
+❌ BAD: "Artists barricaded the gates with easels" (dramatization)
+✅ GOOD: "Residents and activists organized protests" (documented fact)
 
-❌ BAD: "Львиная маска на regard №22" (invented feature)
-✅ GOOD: "Инспекционный павильон акведука XVII века" (real purpose)
+❌ BAD: "Lion mask on regard #22" (invented feature)
+✅ GOOD: "17th century aqueduct inspection chamber" (real purpose)
 
 CRITICAL WRITING RULES:
 • Start with the most surprising specific detail - never with general context
@@ -337,9 +361,9 @@ ABSOLUTE REQUIREMENTS:
 - Include what can be seen/experienced today
 
 CRITICAL FACT-CHECKING REQUIREMENTS:
-- VERIFY DATES: Every date must be historically accurate. If uncertain about exact year, use "в начале XX века" rather than guessing "1923"
+- VERIFY DATES: Every date must be historically accurate. If uncertain about exact year, use "early 20th century" rather than guessing "1923"
   → Common errors: Confusing World Expo years (1878≠1889≠1900), Revolution dates (February≠October 1917)
-- VERIFY NAMES: Use real historical figures and businesses. If unsure of a specific name, describe the role instead ("местный архитектор" not "архитектор Петров")
+- VERIFY NAMES: Use real historical figures and businesses. If unsure of a specific name, describe the role instead ("a local architect" not "architect Smith")
   → NEVER attribute famous names without proof (not everything metal = Eiffel)
 - VERIFY DETAILS: Building features, historical events, and transformations must be documented facts
   → NO invented plaques, inscriptions, marks, or hidden signatures
