@@ -355,7 +355,9 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /dbtest command - database diagnostics."""
     try:
-        donors_db = get_donors_db()
+        # Use async wrapper for all database operations
+        from ..services.async_donors_wrapper import get_async_donors_db
+        donors_db = await get_async_donors_db()
         user_id = update.effective_user.id
         
         # Test database connection and basic operations
@@ -378,12 +380,12 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # 3. Test basic database operations
         try:
             # Get user info (should work even for non-donors)
-            donor_info = donors_db.get_donor_info(user_id)
+            donor_info = await donors_db.get_donor_info(user_id)
             if donor_info:
                 test_results.append(f"👤 *Your donor status:* Found (⭐{donor_info['total_stars']})")
                 
                 # Check premium status with detailed timestamp info
-                is_premium = donors_db.is_premium_user(user_id)
+                is_premium = await donors_db.is_premium_user(user_id)
                 status = "🎁 Enhanced access active" if is_premium else "📱 Standard access"
                 test_results.append(f"🧠 *Model access:* {status}")
                 
@@ -398,7 +400,7 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                         test_results.append(f"⏰ *Premium status:* Expired")
                 
                 # Get donation history
-                history = donors_db.get_donation_history(user_id)
+                history = await donors_db.get_donation_history(user_id)
                 test_results.append(f"📜 *Donation history:* {len(history)} transactions")
                 
                 # Show latest donation if exists
@@ -410,25 +412,28 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 test_results.append("🧠 *Model access:* Standard (GPT-4.1 static, o4-mini live)")
                 
                 # Check if there are any donations for this user in donations table
-                import sqlite3
-                with sqlite3.connect(donors_db.db_path) as conn:
-                    donations_count = conn.execute(
-                        "SELECT COUNT(*) FROM donations WHERE user_id = ?", 
-                        (user_id,)
-                    ).fetchone()[0]
-                    if donations_count > 0:
-                        test_results.append(f"⚠️ *Found {donations_count} donations in donations table but no donor record!*")
+                # Skip SQLite specific checks for PostgreSQL
+                if not os.environ.get("DATABASE_URL"):
+                    import sqlite3
+                    with sqlite3.connect(donors_db.db_path) as conn:
+                        donations_count = conn.execute(
+                            "SELECT COUNT(*) FROM donations WHERE user_id = ?", 
+                            (user_id,)
+                        ).fetchone()[0]
+                        if donations_count > 0:
+                            test_results.append(f"⚠️ *Found {donations_count} donations in donations table but no donor record!*")
             
             # Get overall stats
-            stats = donors_db.get_stats()
+            stats = await donors_db.get_stats()
             test_results.append(f"📊 *Database stats:* {stats.get('total_donors', 0)} donors, {stats.get('total_donations', 0)} transactions")
             
-            # Check raw table counts for debugging
-            import sqlite3
-            with sqlite3.connect(donors_db.db_path) as conn:
-                donors_count = conn.execute("SELECT COUNT(*) FROM donors").fetchone()[0]
-                donations_count = conn.execute("SELECT COUNT(*) FROM donations").fetchone()[0]
-                test_results.append(f"🔍 *Raw counts:* {donors_count} donors, {donations_count} donations in tables")
+            # Check raw table counts for debugging (SQLite only)
+            if not os.environ.get("DATABASE_URL"):
+                import sqlite3
+                with sqlite3.connect(donors_db.db_path) as conn:
+                    donors_count = conn.execute("SELECT COUNT(*) FROM donors").fetchone()[0]
+                    donations_count = conn.execute("SELECT COUNT(*) FROM donations").fetchone()[0]
+                    test_results.append(f"🔍 *Raw counts:* {donors_count} donors, {donations_count} donations in tables")
             
             test_results.append("✅ All database operations working correctly")
             

@@ -28,14 +28,23 @@ class PostgresSyncWrapper:
         """Ensure database is initialized."""
         if not self._initialized:
             try:
-                # Create new event loop for this thread
-                self._loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self._loop)
-                
-                # Initialize database
-                self._db = self._loop.run_until_complete(get_postgres_db())
-                self._initialized = True
-                logger.info("PostgreSQL sync wrapper initialized")
+                # Check if we're in async context (telegram bot handlers)
+                try:
+                    loop = asyncio.get_running_loop()
+                    # We're in async context, can't use run_until_complete
+                    # Mark as initialized and let first operation handle DB init
+                    self._initialized = True
+                    logger.info("PostgreSQL wrapper deferred initialization (async context)")
+                    return
+                except RuntimeError:
+                    # No running loop, we can initialize normally
+                    self._loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(self._loop)
+                    
+                    # Initialize database
+                    self._db = self._loop.run_until_complete(get_postgres_db())
+                    self._initialized = True
+                    logger.info("PostgreSQL sync wrapper initialized")
             except Exception as e:
                 logger.error(f"Failed to initialize PostgreSQL wrapper: {e}")
                 raise
@@ -43,22 +52,32 @@ class PostgresSyncWrapper:
     def _run_async(self, coro):
         """Run async coroutine in sync context."""
         try:
-            # Get or create event loop for current thread
+            # Ensure database is initialized
+            if self._db is None:
+                # Get database asynchronously if needed
+                import inspect
+                if inspect.iscoroutine(coro):
+                    # Create a wrapper to initialize DB first
+                    async def wrapper():
+                        if self._db is None:
+                            self._db = await get_postgres_db()
+                        return await coro
+                    coro = wrapper()
+            
+            # Try to get current event loop
             try:
                 loop = asyncio.get_running_loop()
-                # If we're already in async context, create task
+                # We're in async context, use create_task
+                task = loop.create_task(coro)
+                # Use run_in_executor to avoid blocking
                 import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    future = pool.submit(asyncio.run, coro)
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, coro)
                     return future.result()
             except RuntimeError:
-                # No running loop, use our own
-                if self._loop is None or self._loop.is_closed():
-                    self._loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(self._loop)
+                # No running loop, create one
+                return asyncio.run(coro)
                 
-                # Run coroutine
-                return self._loop.run_until_complete(coro)
         except Exception as e:
             logger.error(f"Error running async operation: {e}")
             raise
