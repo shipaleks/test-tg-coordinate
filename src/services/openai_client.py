@@ -171,10 +171,17 @@ SPECIAL REQUIREMENTS FOR RUSSIAN:
 - Соблюдайте грамотную русскую речь: избегайте англицизмов и калек в случаях, когда существуют удачные русские слова
 - Используйте для акцентов тире и паузы, а не лишние запятые: "В подвале этого дома — настоящая тайна"
 - Пишите в активном залоге: "Здесь расстреляли...", не "Здесь был расстрелян..."
-- Старйтесь звучать как образованный носитель языка, который делится удивительными местными историями
+- Старайтесь звучать как образованный носитель языка, который делится удивительными местными историями
 - Хороший пример: "В подвале элегантного дома на Малой Бронной до сих пор видны металлические кольца — здесь десять лет держали на карантине леопардов и тигров для московских коллекционеров."
 - Избегайте канцелярита и Wikipedia-стиля: нет фразам "является", "представляет собой", "находится"
-- Стремитесь передать живую речь человека с высшим филологическим образование, а не написанный бюрократический текст"""
+- Стремитесь передать живую речь человека с высшим филологическим образованием, а не написанный бюрократический текст
+
+ОСОБЫЕ ТРЕБОВАНИЯ К ТОЧНОСТИ НА РУССКОМ:
+- Проверяйте склонения исторических названий и имён
+- При неуверенности в дате используйте "в начале XX века", "в советские годы", "в 1920-х"
+- Топонимы должны быть точными: "на Арбате" (не "около Арбата"), "у Патриарших прудов" (не "недалеко от Патриарших")
+- Исторические термины должны соответствовать эпохе: "гимназия" (не "школа" для дореволюционного периода)
+- Проверяйте соответствие архитектурных терминов: "особняк", "доходный дом", "усадьба" - не взаимозаменяемы"""
 
             # Choose appropriate system prompt based on location type
             if is_live_location:
@@ -196,6 +203,7 @@ Step 1: PRECISE LOCATION ANALYSIS
 - Note the immediate surroundings: what's visible within 50-100 meters?
 - Identify the neighborhood and its historical character
 - NEVER mention places from a different city than where the coordinates are
+- FACT-CHECK: Verify this location exists at these coordinates before proceeding
 
 Step 2: DEEP RESEARCH FOR THE UNEXPECTED
 Search for facts in this priority order:
@@ -216,12 +224,18 @@ Search for facts in this priority order:
       - Local legends tied to specific features
       - Hidden infrastructure or urban planning secrets
 
-Step 3: FIND THE HUMAN ELEMENT
+Step 3: FIND THE HUMAN ELEMENT (WITH VERIFIED FACTS)
 Every great Atlas Obscura story connects to people:
    - WHO made this decision and WHY (architect's obsession, owner's fear, city planner's vision)
+     → Use documented names or roles ("the monastery's abbot" not "Abbot Fyodor")
    - WHAT specific event happened here (the meeting, the accident, the discovery)
+     → Only mention events with historical documentation
    - HOW this place affected specific people's lives
+     → Use verified accounts, not imagined scenarios
    - WHEN exactly did the transformation/event occur
+     → Use exact dates only when certain; otherwise "in the 1920s" or "during the Soviet period"
+
+FACT-CHECKING RULE: If you can't verify a specific detail (name, date, event), describe the general truth instead. Better to say "a local merchant" than invent "merchant Ivanov"
 
 Step 4: IDENTIFY WHAT'S STILL VISIBLE
 Atlas Obscura readers want to know what they can see:
@@ -234,17 +248,21 @@ WRITING YOUR FACT (100-120 words):
 
 Structure: [Hook with surprising detail] → [Human story behind it] → [Why it matters] → [What to look for today]
 
-Example approach:
-"The elegant apartment building at [location] hides metal rings embedded in its basement walls - remnants from its decade as the city's exotic animal quarantine station. In 1923, smuggler Anton Petrov was arrested here when his 'crate of textiles' turned out to contain three tiger cubs destined for private Moscow collections. The building's unusually thick walls and ventilation system, designed for containing animal sounds and smells, now provide its residents with Stockholm's best sound insulation. Look for the worn grooves in the entrance floor - claw marks from a 1926 escaped leopard that remain unrepaired at residents' request."
+Example approach (showing fact-checking notes):
+"The elegant apartment building at [verify exact address] hides metal rings embedded in its basement walls - remnants from its decade as the city's exotic animal quarantine station [verify this historical use]. In [verify exact year, or use 'early 1920s'], smuggler [use documented name or 'a local smuggler'] was arrested here when his 'crate of textiles' turned out to contain three tiger cubs destined for private collections. The building's unusually thick walls and ventilation system [verify these features exist], designed for containing animal sounds and smells, now provide its residents with excellent sound insulation. Look for [describe only verifiable physical features] - [ensure visitors can actually see this]."
+
+Note: This is a template showing where to verify facts. Your actual response should contain only confirmed information.
 
 CRITICAL WRITING RULES:
 • Start with the most surprising specific detail - never with general context
-• Include at least one proper name (person, business, or specific event)
-• Specify at least one exact date or time period
-• Describe one thing visitors can physically see or find
+• Include at least one proper name (person, business, or specific event) - BUT ONLY IF VERIFIED
+• Specify at least one exact date or time period - USE RANGES IF UNCERTAIN ("1920s" not "1923")
+• Describe one thing visitors can physically see or find - MUST BE ACTUALLY VISIBLE
 • Connect the past to the present - show transformation or continuity
 • Write conversationally but precisely - like telling a friend an amazing secret
 • Every sentence must add new information - no filler
+
+ACCURACY OVER DRAMA: A true but less dramatic fact is always better than an exciting but uncertain detail
 
 AVOIDING REPETITION:
 - If provided with previous facts, you MUST choose a completely different location or aspect
@@ -259,6 +277,21 @@ ABSOLUTE REQUIREMENTS:
 - Always explain WHY something is surprising or significant
 - Focus on the specific over the general
 - Include what can be seen/experienced today
+
+CRITICAL FACT-CHECKING REQUIREMENTS:
+- VERIFY DATES: Every date must be historically accurate. If uncertain about exact year, use "в начале XX века" rather than guessing "1923"
+- VERIFY NAMES: Use real historical figures and businesses. If unsure of a specific name, describe the role instead ("местный архитектор" not "архитектор Петров")
+- VERIFY DETAILS: Building features, historical events, and transformations must be documented facts
+- CROSS-CHECK GEOGRAPHY: Ensure the location you're describing is actually at these coordinates
+- NO EMBELLISHMENT: If a detail sounds too perfect or dramatic, verify it exists
+- UNCERTAIN = OMIT: When in doubt about a specific detail, focus on what you know is true
+
+FACT VERIFICATION CHECKLIST:
+□ Is this building/location really at these exact coordinates?
+□ Did this event actually happen on this date?
+□ Is this person's name and role correct?
+□ Are the architectural/physical details accurate?
+□ Can visitors really see what I'm describing today?
 
 CRITICAL FOR SEARCH FIELD:
 The Search field is used for GEOCODING (finding coordinates) via Nominatim/OpenStreetMap.
@@ -298,17 +331,19 @@ RAPID ATLAS OBSCURA SEARCH (for quick facts):
    E) Local legend with factual basis
 
 3. ESSENTIAL ELEMENTS for Atlas Obscura:
-   - One specific surprising detail (not general history)
-   - At least one exact date or specific person's name
-   - The "I never knew that!" factor
-   - Something visitors can see or find today
+   - One specific surprising detail (not general history) - MUST BE VERIFIED
+   - At least one date or person's name - EXACT IF CERTAIN, APPROXIMATE IF NOT
+   - The "I never knew that!" factor - BASED ON TRUE FACTS
+   - Something visitors can see or find today - PHYSICALLY VERIFIABLE
 
 WRITING FORMAT (60-80 words):
 
 Structure: [Surprising fact] → [Quick context] → [What remains visible]
 
-Example:
-"The ornate bank building here conceals Stockholm's last remaining piece of the medieval city wall in its vault - discovered only in 1987 when a burglar's drill hit unexpectedly hard stone. The 14th-century fortification was incorporated into the bank's security system, making it perhaps the only ATM protected by medieval defenses. Look for the glass panel in the floor near the entrance showing the original stonework."
+Example (with fact-checking approach):
+"The ornate bank building here conceals [city]'s last remaining piece of the medieval city wall in its vault - discovered [in the late 20th century / in 1987 if verified] when [renovation work / a specific incident if documented] revealed unexpectedly old stonework. The [medieval / 14th-century if verified] fortification was incorporated into the bank's [current structure / security system if true]. Look for [only describe what visitors can actually see] near the entrance."
+
+Remember: Include only details you can verify. General truths are better than specific falsehoods.
 
 QUICK WRITING RULES:
 • Lead with the surprise - never with "This building is..."
@@ -327,6 +362,12 @@ REQUIREMENTS:
 - Be specific about location - not "this area"
 - Always include the "what to look for" element
 - Never start with boring context
+
+QUICK FACT VERIFICATION:
+- Double-check: Is this place really at these coordinates?
+- Verify: Are names, dates, and details documented?
+- Confirm: Can visitors actually see what you describe?
+- If uncertain about a detail, describe what you're sure of instead
 
 Write in {user_language} - crisp, factual, surprising.
 {language_instructions}"""
@@ -369,7 +410,17 @@ Search: [OPTIMIZED FOR NOMINATIM GEOCODING - Follow these rules:
 Interesting fact: [Your Atlas Obscura-style fact about THIS EXACT LOCATION. Follow the structure: Surprising opening → Human story → Why it matters → What to see today. Must be 100-120 words, include specific names and dates, and focus on the unexpected.]
 </answer>
 
-Remember: Start with the surprise, not the context. Include specific details. Tell visitors what they can find. Write only the content within <answer> tags."""
+Remember: Start with the surprise, not the context. Include specific details. Tell visitors what they can find. Write only the content within <answer> tags.
+
+FINAL FACT-CHECK BEFORE SUBMITTING:
+□ Have I verified this location exists at these coordinates?
+□ Are all dates either exact (if certain) or approximate (if uncertain)?
+□ Are all names real people/places or described by role if uncertain?
+□ Can visitors actually see/find what I describe?
+□ Have I avoided inventing dramatic details for effect?
+□ Is every fact in my response verifiable?
+
+If any answer is "no", revise to include only verified information."""
             else:
                 # Concise prompt for static location (gpt-4.1)
                 user_prompt = f"""Here are the coordinates to analyze:
@@ -392,7 +443,15 @@ Search: [NOMINATIM-OPTIMIZED: Use format "[Place Name], [Street/District], [City
 Interesting fact: [Your 60-80 word Atlas Obscura fact with this structure: Surprising detail → Quick context with specific date/name → What visitors can see today. Must surprise locals.]
 </answer>
 
-Critical: Lead with the surprise. Include one specific date or name. Tell what's visible today. Only content within <answer> tags."""
+Critical: Lead with the surprise. Include one specific date or name. Tell what's visible today. Only content within <answer> tags.
+
+QUICK FACT-CHECK:
+□ Is this location verified at these coordinates?
+□ Are dates/names real or appropriately generalized?
+□ Can visitors see what I describe?
+□ Have I avoided fictional embellishments?
+
+Accuracy matters more than drama."""
 
             # Choose model based on location type and premium status
             model_to_use = "o4-mini"  # Default model
