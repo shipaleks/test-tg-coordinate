@@ -100,7 +100,7 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                 try:
                     # Import localization function to avoid circular imports
                     from ..handlers.location import get_localized_message
-                    fallback_message = get_localized_message(0, 'image_fallback')  # Use user_id=0 for generic message
+                    fallback_message = await get_localized_message(0, 'image_fallback')  # Use user_id=0 for generic message
                     await bot.send_message(
                         chat_id=chat_id,
                         text=f"{fallback_message}{formatted_response}",
@@ -329,7 +329,7 @@ class LiveLocationTracker:
 
                     # Parse the response to extract place and fact
                     from ..handlers.location import get_localized_message
-                    place = get_localized_message(session_data.user_id, 'near_you')  # Default location
+                    place = await get_localized_message(session_data.user_id, 'near_you')  # Default location
                     fact = response  # Default to full response if parsing fails
                     search_keywords = ""
 
@@ -378,7 +378,7 @@ class LiveLocationTracker:
                     # Format the response with live location indicator and fact number
                     # Import get_localized_message at top of function to avoid circular imports
                     from ..handlers.location import get_localized_message
-                    formatted_response = get_localized_message(session_data.user_id, 'live_fact_format', number=session_data.fact_count, place=place, fact=fact)
+                    formatted_response = await get_localized_message(session_data.user_id, 'live_fact_format', number=session_data.fact_count, place=place, fact=fact)
 
                     # Save fact to history to avoid repetition
                     session_data.fact_history.append(f"{place}: {fact}")
@@ -425,7 +425,7 @@ class LiveLocationTracker:
                                 latitude=venue_lat,
                                 longitude=venue_lon,
                                 title=place,
-                                address=get_localized_message(session_data.user_id, 'attraction_address', place=place),
+                                address=await get_localized_message(session_data.user_id, 'attraction_address', place=place),
                             )
                             logger.info(
                                 f"Sent venue location for background fact navigation: {place} at {venue_lat}, {venue_lon}"
@@ -461,10 +461,11 @@ class LiveLocationTracker:
                     # Send error message with fact number  
                     session_data.fact_count += 1
                     from ..handlers.location import get_localized_message
-                    error_response = get_localized_message(session_data.user_id, 'live_fact_format', 
+                    error_fact = await get_localized_message(session_data.user_id, 'error_no_info')
+                    error_response = await get_localized_message(session_data.user_id, 'live_fact_format', 
                                                          number=session_data.fact_count, 
                                                          place="", 
-                                                         fact=get_localized_message(session_data.user_id, 'error_no_info'))
+                                                         fact=error_fact)
 
                     try:
                         await bot.send_message(

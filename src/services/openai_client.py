@@ -187,8 +187,15 @@ THE ATLAS OBSCURA METHOD - Follow these steps precisely:
 
 Step 1: PRECISE LOCATION ANALYSIS
 - Identify exact coordinates: what building, street corner, or specific spot is here?
+- CRITICAL: Verify you're in the correct city based on coordinates:
+  * ~48.8°N, 2.3°E = Paris
+  * ~55.7°N, 37.6°E = Moscow
+  * ~59.9°N, 30.3°E = St. Petersburg
+  * ~51.5°N, -0.1°E = London
+  * ~40.7°N, -74.0°E = New York
 - Note the immediate surroundings: what's visible within 50-100 meters?
 - Identify the neighborhood and its historical character
+- NEVER mention places from a different city than where the coordinates are
 
 Step 2: DEEP RESEARCH FOR THE UNEXPECTED
 Search for facts in this priority order:
@@ -324,6 +331,8 @@ Write in {user_language} - crisp, factual, surprising.
                 # Detailed prompt for live location (o4-mini/o3)
                 user_prompt = f"""Analyze these coordinates: {lat}, {lon}
 
+CRITICAL: These coordinates are the USER'S CURRENT LOCATION. Only mention places that are actually at or very near (within 500m) these exact coordinates. Do NOT mention famous landmarks from other parts of the city unless they are genuinely visible or directly relevant to this specific spot.
+
 {f'''PREVIOUS FACTS ALREADY MENTIONED:
 {previous_facts_text}
 
@@ -333,9 +342,9 @@ Follow the Atlas Obscura method above to find the most surprising fact about thi
 
 Present your final answer in this format:
 <answer>
-Location: [Specific name of the place - be precise, not generic]
-Search: [Keywords for image search: ORIGINAL name in local language + key identifying words + city. For example: 'Tour Eiffel Paris' or 'Эрмитаж Дворцовая площадь Санкт-Петербург']
-Interesting fact: [Your Atlas Obscura-style fact following the exact structure: Surprising opening → Human story → Why it matters → What to see today. Must be 100-120 words, include specific names and dates, and focus on the unexpected.]
+Location: [Specific name of the place - street address, building name, or precise intersection]
+Search: [Keywords for image search that will find THIS SPECIFIC location, not just any similar place. Include: exact place name + street/district + city. Examples: 'Boulevard de l'Hôpital 95 Paris', 'Малая Бронная 32 Москва', 'конкретное здание улица город']
+Interesting fact: [Your Atlas Obscura-style fact about THIS EXACT LOCATION. Follow the structure: Surprising opening → Human story → Why it matters → What to see today. Must be 100-120 words, include specific names and dates, and focus on the unexpected.]
 </answer>
 
 Remember: Start with the surprise, not the context. Include specific details. Tell visitors what they can find. Write only the content within <answer> tags."""
