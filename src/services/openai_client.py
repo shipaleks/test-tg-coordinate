@@ -551,7 +551,7 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
     async def get_coordinates_from_nominatim(
         self, place_name: str
     ) -> tuple[float, float] | None:
-        """Get coordinates using OpenStreetMap Nominatim service as fallback.
+        """Get coordinates using OpenStreetMap Nominatim service.
 
         Args:
             place_name: Name of the place to search
@@ -559,38 +559,129 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
         Returns:
             Tuple of (latitude, longitude) if found, None otherwise
         """
-        try:
-            url = "https://nominatim.openstreetmap.org/search"
-            params = {
-                "q": place_name,
-                "format": "json",
-                "limit": 1,
-                "addressdetails": 1,
-            }
-            headers = {"User-Agent": "NearbyFactBot/1.0 (Educational Project)"}
-
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    url, params=params, headers=headers, timeout=5
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if data:
-                            lat = float(data[0]["lat"])
-                            lon = float(data[0]["lon"])
-
-                            if -90 <= lat <= 90 and -180 <= lon <= 180:
-                                logger.info(
-                                    f"Found Nominatim coordinates for {place_name}: {lat}, {lon}"
-                                )
-                                return lat, lon
-
-            logger.debug(f"No coordinates found in Nominatim for: {place_name}")
-            return None
-
-        except Exception as e:
-            logger.warning(f"Failed to get Nominatim coordinates for {place_name}: {e}")
-            return None
+        # Try multiple search strategies
+        search_strategies = []
+        
+        # Strategy 1: Try exact search first
+        search_strategies.append({
+            "q": place_name,
+            "format": "json",
+            "limit": 5,  # Get more results to choose from
+            "addressdetails": 1,
+            "namedetails": 1,
+            "extratags": 1,
+            "accept-language": "fr,en,ru",  # Multi-language support
+        })
+        
+        # Strategy 2: Try structured search if comma-separated
+        if "," in place_name:
+            parts = [p.strip() for p in place_name.split(",")]
+            if len(parts) >= 2:
+                # For "Place, Street, City" format
+                structured_params = {
+                    "format": "json",
+                    "limit": 5,
+                    "addressdetails": 1,
+                    "namedetails": 1,
+                }
+                
+                # Detect what each part might be
+                if len(parts) == 3:  # Place, Street, City
+                    structured_params["amenity"] = parts[0]
+                    structured_params["street"] = parts[1]
+                    structured_params["city"] = parts[2]
+                elif len(parts) == 2:  # Street, City or Place, City
+                    # Check if first part looks like a street
+                    street_indicators = ['rue', 'avenue', 'boulevard', 'street', 'road']
+                    if any(indicator in parts[0].lower() for indicator in street_indicators):
+                        structured_params["street"] = parts[0]
+                        structured_params["city"] = parts[1]
+                    else:
+                        structured_params["amenity"] = parts[0]
+                        structured_params["city"] = parts[1]
+                
+                search_strategies.append(structured_params)
+        
+        # Strategy 3: If it's a street address, try parsing it
+        street_match = re.search(r'(\d+)\s+(.+)', place_name)
+        if street_match:
+            number = street_match.group(1)
+            rest = street_match.group(2)
+            if "," in rest:
+                street_parts = rest.split(",")
+                search_strategies.append({
+                    "format": "json",
+                    "limit": 5,
+                    "addressdetails": 1,
+                    "street": f"{number} {street_parts[0].strip()}",
+                    "city": street_parts[-1].strip() if len(street_parts) > 1 else "Paris"
+                })
+        
+        url = "https://nominatim.openstreetmap.org/search"
+        headers = {"User-Agent": "NearbyFactBot/1.0 (Educational Project)"}
+        
+        # Try each strategy
+        async with aiohttp.ClientSession() as session:
+            for i, params in enumerate(search_strategies):
+                try:
+                    logger.debug(f"Trying Nominatim strategy {i+1}/{len(search_strategies)} for: {place_name}")
+                    logger.debug(f"Parameters: {params}")
+                    
+                    async with session.get(
+                        url, params=params, headers=headers, timeout=5
+                    ) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            if data:
+                                # Try to find best match from results
+                                best_result = None
+                                best_score = -1
+                                
+                                for result in data:
+                                    score = 0
+                                    result_type = result.get('type', '')
+                                    result_class = result.get('class', '')
+                                    
+                                    # Prefer certain types
+                                    if result_type in ['building', 'house', 'amenity', 'historic']:
+                                        score += 3
+                                    elif result_type in ['street', 'road']:
+                                        score += 2
+                                    elif result_type in ['suburb', 'neighbourhood']:
+                                        score += 1
+                                    
+                                    # Check if result is in expected city
+                                    display_name = result.get('display_name', '').lower()
+                                    if 'paris' in place_name.lower() and 'paris' in display_name:
+                                        score += 5
+                                    elif 'москва' in place_name.lower() and 'москва' in display_name:
+                                        score += 5
+                                    
+                                    # Prefer results with better importance score
+                                    importance = result.get('importance', 0)
+                                    score += importance
+                                    
+                                    if score > best_score:
+                                        best_score = score
+                                        best_result = result
+                                
+                                if best_result:
+                                    lat = float(best_result["lat"])
+                                    lon = float(best_result["lon"])
+                                    
+                                    if -90 <= lat <= 90 and -180 <= lon <= 180:
+                                        logger.info(
+                                            f"Found Nominatim coordinates for '{place_name}': {lat}, {lon}"
+                                        )
+                                        logger.debug(f"Best result: {best_result.get('display_name')}")
+                                        return lat, lon
+                                    
+                except Exception as e:
+                    logger.debug(f"Strategy {i+1} failed: {e}")
+                    continue
+        
+        logger.debug(f"No coordinates found in Nominatim for: {place_name}")
+        return None
 
     def _coordinates_look_imprecise(self, lat: float, lon: float) -> bool:
         """Check if coordinates look suspiciously imprecise.
@@ -705,23 +796,50 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
 
         # Try multiple fallback patterns for better search coverage
         fallback_patterns = []
-
+        
+        # SMART FALLBACK STRATEGY 1: If we have a street address, try just the street
+        # Example: "Couvent des Capucins, Rue Boissonade, Paris" -> "Rue Boissonade, Paris"
+        if "," in search_keywords:
+            parts = [p.strip() for p in search_keywords.split(",")]
+            if len(parts) >= 2:
+                # Look for street indicators
+                street_indicators = ['rue', 'avenue', 'boulevard', 'street', 'road', 'place', 'square']
+                for i, part in enumerate(parts):
+                    if any(indicator in part.lower() for indicator in street_indicators):
+                        # Found a street, try street + city
+                        if i < len(parts) - 1:
+                            street_with_city = f"{part}, {parts[-1]}"
+                            fallback_patterns.append(street_with_city)
+                        # Also try just the street name with number if present
+                        if re.search(r'\d+', part):
+                            fallback_patterns.append(part)
+                        break
+        
+        # SMART FALLBACK STRATEGY 2: For specific places, try without the descriptor
+        # Example: "Couvent des Capucins" -> "Capucins" + city
+        if city_name:
+            # Remove common descriptors
+            descriptors = ['couvent', 'église', 'temple', 'monastery', 'convent', 'church', 
+                          'prison', 'hôpital', 'hospital', 'école', 'school', 'musée', 'museum']
+            first_part = search_keywords.split(",")[0] if "," in search_keywords else search_keywords
+            for descriptor in descriptors:
+                if descriptor in first_part.lower():
+                    # Try without descriptor
+                    simplified = first_part.lower().replace(descriptor, "").strip()
+                    simplified = re.sub(r'\b(de|des|du|la|le|les|the|of)\b', '', simplified).strip()
+                    if simplified and len(simplified) > 2:
+                        fallback_patterns.append(f"{simplified}, {city_name}")
+                    break
+        
         # For metro/subway stations, try different formats
         if "metro" in search_keywords.lower() or "метро" in search_keywords.lower():
             # Extract station name and try different combinations
             station_name = search_keywords.replace("Metro", "").replace("metro", "").replace("метро", "").replace("станция", "").strip()
-            if "Paris" in search_keywords:
+            if city_name:
                 fallback_patterns.extend([
-                    f"{station_name} station Paris",
-                    f"{station_name} Paris metro",
-                    f"{station_name} Paris",
-                    station_name.split()[0] if station_name else ""  # First word only
-                ])
-            elif "France" in search_keywords:
-                fallback_patterns.extend([
-                    f"{station_name} station",
-                    f"{station_name} metro",
-                    station_name.split()[0] if station_name else ""
+                    f"{station_name} station {city_name}",
+                    f"{station_name} {city_name} metro",
+                    f"{station_name} {city_name}"
                 ])
 
         # For places with + or complex formatting
@@ -758,6 +876,13 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
         # Remove empty patterns and duplicates
         fallback_patterns = [p.strip() for p in fallback_patterns if p and p.strip()]
         fallback_patterns = list(dict.fromkeys(fallback_patterns))  # Remove duplicates while preserving order
+        
+        # FINAL FALLBACK: If we have city coordinates, return city center as last resort
+        # This is better than returning coordinates from wrong city
+        city_center_fallback = None
+        if city_name and city_name in common_cities:
+            city_lat, city_lon, _ = common_cities[city_name]
+            city_center_fallback = (city_lat, city_lon)
 
         # Try each fallback pattern
         for pattern in fallback_patterns:
@@ -780,6 +905,11 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                     logger.info(f"Found coordinates with fallback search '{pattern}': {coords}")
                     return coords
 
+        # Last resort: if we know the city, return city center rather than wrong city
+        if city_center_fallback:
+            logger.warning(f"No specific coordinates found for '{search_keywords}', using city center: {city_center_fallback}")
+            return city_center_fallback
+            
         logger.warning(f"No coordinates found for keywords: {search_keywords}")
         return None
 
