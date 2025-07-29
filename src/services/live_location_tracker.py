@@ -171,6 +171,7 @@ class LiveLocationData:
     fact_count: int = 0  # Counter for facts sent
     fact_history: list = None  # History of sent facts to avoid repetition
     task: asyncio.Task | None = None
+    monitor_task: asyncio.Task | None = None  # Health monitoring task
     session_start: datetime = None  # Track when session started
 
     def __post_init__(self):
@@ -234,6 +235,11 @@ class LiveLocationTracker:
                 task = asyncio.create_task(self._fact_sending_loop(session_data, bot))
                 session_data.task = task
                 
+                # Start health monitor task
+                monitor_task = asyncio.create_task(self._monitor_session_health(session_data, bot))
+                # Store monitor task reference (we'll add this field)
+                session_data.monitor_task = monitor_task
+                
                 # Store the session
                 self._active_sessions[user_id] = session_data
                 
@@ -281,10 +287,20 @@ class LiveLocationTracker:
         """Internal method to stop a session (called with lock held)."""
         if user_id in self._active_sessions:
             session = self._active_sessions[user_id]
+            
+            # Cancel fact sending task
             if session.task and not session.task.done():
                 session.task.cancel()
                 try:
                     await session.task
+                except asyncio.CancelledError:
+                    pass
+            
+            # Cancel monitor task
+            if hasattr(session, 'monitor_task') and session.monitor_task and not session.monitor_task.done():
+                session.monitor_task.cancel()
+                try:
+                    await session.monitor_task
                 except asyncio.CancelledError:
                     pass
 
@@ -330,13 +346,26 @@ class LiveLocationTracker:
                         logger.error(f"Failed to send session end notification: {notify_error}")
                     break
                 
-                # Also check if we haven't received updates in a while (as a backup)
+                # Check if we haven't received updates in a while (user stopped sharing)
+                # Telegram usually sends updates every ~30-60 seconds for live location
+                # If no update for 3 minutes, user likely stopped sharing
                 time_since_update = current_time - session_data.last_update
-                if time_since_update > timedelta(seconds=session_data.live_period + 60):
+                if time_since_update > timedelta(minutes=3):
                     logger.info(
                         f"Live location stopped updating for user {session_data.user_id} "
-                        f"(last update: {session_data.last_update})"
+                        f"(last update: {session_data.last_update}, {time_since_update.total_seconds():.0f}s ago)"
                     )
+                    # Send notification that we detected manual stop
+                    try:
+                        from ..handlers.location import get_localized_message
+                        stop_message = await get_localized_message(session_data.user_id, 'live_manual_stop')
+                        await bot.send_message(
+                            chat_id=session_data.chat_id,
+                            text=stop_message,
+                            parse_mode="Markdown",
+                        )
+                    except Exception as notify_error:
+                        logger.error(f"Failed to send manual stop notification: {notify_error}")
                     break
 
                 # Send fact at current coordinates
@@ -525,6 +554,45 @@ class LiveLocationTracker:
     def is_user_tracking(self, user_id: int) -> bool:
         """Check if a user has an active live location session."""
         return user_id in self._active_sessions
+
+
+    async def _monitor_session_health(
+        self, session_data: LiveLocationData, bot: Bot
+    ) -> None:
+        """Monitor session health and detect when user stops sharing.
+        
+        This task runs in parallel with fact sending and checks more frequently
+        if the user has stopped sharing their live location.
+        """
+        try:
+            while True:
+                # Check every 30 seconds
+                await asyncio.sleep(30)
+                
+                current_time = datetime.now()
+                
+                # Check if session has exceeded its live_period
+                session_end_time = session_data.session_start + timedelta(seconds=session_data.live_period)
+                if current_time >= session_end_time:
+                    # Let the main loop handle expiration
+                    break
+                
+                # Check if we haven't received updates in 3 minutes
+                time_since_update = current_time - session_data.last_update
+                if time_since_update > timedelta(minutes=3):
+                    logger.info(
+                        f"Health monitor detected stopped live location for user {session_data.user_id} "
+                        f"(last update: {time_since_update.total_seconds():.0f}s ago)"
+                    )
+                    # Cancel the main fact sending task
+                    if session_data.task and not session_data.task.done():
+                        session_data.task.cancel()
+                    break
+                    
+        except asyncio.CancelledError:
+            logger.debug(f"Health monitor cancelled for user {session_data.user_id}")
+        except Exception as e:
+            logger.error(f"Error in health monitor for user {session_data.user_id}: {e}")
 
 
 # Global tracker instance
