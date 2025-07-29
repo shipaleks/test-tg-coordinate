@@ -181,7 +181,15 @@ SPECIAL REQUIREMENTS FOR RUSSIAN:
 - При неуверенности в дате используйте "в начале XX века", "в советские годы", "в 1920-х"
 - Топонимы должны быть точными: "на Арбате" (не "около Арбата"), "у Патриарших прудов" (не "недалеко от Патриарших")
 - Исторические термины должны соответствовать эпохе: "гимназия" (не "школа" для дореволюционного периода)
-- Проверяйте соответствие архитектурных терминов: "особняк", "доходный дом", "усадьба" - не взаимозаменяемы"""
+- Проверяйте соответствие архитектурных терминов: "особняк", "доходный дом", "усадьба" - не взаимозаменяемы
+
+ТИПИЧНЫЕ ОШИБКИ В РУССКОЯЗЫЧНЫХ ФАКТАХ:
+- НЕ путайте годы: 1812 (война) ≠ 1825 (декабристы) ≠ 1861 (отмена крепостного права)
+- НЕ приписывайте всё купцам Елисеевым или Морозовым без проверки
+- НЕ называйте любое старое здание "бывшей усадьбой" или "особняком купца"
+- ПРОВЕРЯЙТЕ даты московских/петербургских выставок и ярмарок
+- НЕ выдумывайте "тайные знаки", "масонские символы", "скрытые послания"
+- Революция: февраль 1917 ≠ октябрь 1917, не путайте события"""
 
             # Choose appropriate system prompt based on location type
             if is_live_location:
@@ -205,11 +213,11 @@ Step 1: PRECISE LOCATION ANALYSIS
 - NEVER mention places from a different city than where the coordinates are
 - FACT-CHECK: Verify this location exists at these coordinates before proceeding
 
-Step 2: DEEP RESEARCH FOR THE UNEXPECTED
+Step 2: DEEP RESEARCH FOR THE UNEXPECTED (WITH FACT VERIFICATION)
 Search for facts in this priority order:
    A) The specific building/location at these coordinates:
       - Former unexpected uses (morgue→nightclub, palace→parking lot)
-      - Hidden architectural features (secret rooms, disguised elements)
+      - Hidden architectural features (secret rooms, disguised elements)  
       - Specific incidents that happened here (crimes, meetings, discoveries)
       - Famous residents/visitors and what they did here specifically
 
@@ -224,6 +232,13 @@ Search for facts in this priority order:
       - Local legends tied to specific features
       - Hidden infrastructure or urban planning secrets
 
+CRITICAL VERIFICATION FOR EACH FACT:
+□ Is the DATE correct? (Buildings from 1878 expo ≠ 1889, Soviet era ≠ 1917)
+□ Is the ATTRIBUTION correct? (Not every metal structure = Eiffel)
+□ Are NUMBERS exact? (29 not "about 30", verify counts from sources)
+□ Is this DOCUMENTED or LEGEND? (Distinguish real events from urban myths)
+□ Am I INVENTING details? (No imaginary plaques, marks, or features)
+
 Step 3: FIND THE HUMAN ELEMENT (WITH VERIFIED FACTS)
 Every great Atlas Obscura story connects to people:
    - WHO made this decision and WHY (architect's obsession, owner's fear, city planner's vision)
@@ -237,12 +252,23 @@ Every great Atlas Obscura story connects to people:
 
 FACT-CHECKING RULE: If you can't verify a specific detail (name, date, event), describe the general truth instead. Better to say "a local merchant" than invent "merchant Ivanov"
 
-Step 4: IDENTIFY WHAT'S STILL VISIBLE
+Step 4: IDENTIFY WHAT'S STILL VISIBLE (ONLY REAL FEATURES)
 Atlas Obscura readers want to know what they can see:
    - Specific architectural details (the carved face, the blocked window, the odd cornerstone)
+     → But NOT invented details (imaginary plaques, marks that don't exist)
    - Traces of former use (rail tracks in pavement, anchor points on walls)
+     → Verify these actually exist, don't assume or invent
    - Deliberate markers (plaques, memorials, architectural choices)
+     → Only mention real, documented markers
    - Accidental remnants (worn steps, patched walls, tree growth patterns)
+     → Describe only what's genuinely visible
+
+DESCRIBING COMPLEX HISTORICAL PROCESSES:
+- Government decisions: "после долгой борьбы" not "мэрия решила"
+- Multi-year campaigns: "кампания 1972-1974 годов" not "однажды в 1973"
+- Multiple actors: "активисты, пресса и политики" not just "художники"
+- Legal complexity: "серия решений на разных уровнях" not one simple act
+- Avoid Hollywood dramatization of real events
 
 WRITING YOUR FACT (100-120 words):
 
@@ -252,6 +278,22 @@ Example approach (showing fact-checking notes):
 "The elegant apartment building at [verify exact address] hides metal rings embedded in its basement walls - remnants from its decade as the city's exotic animal quarantine station [verify this historical use]. In [verify exact year, or use 'early 1920s'], smuggler [use documented name or 'a local smuggler'] was arrested here when his 'crate of textiles' turned out to contain three tiger cubs destined for private collections. The building's unusually thick walls and ventilation system [verify these features exist], designed for containing animal sounds and smells, now provide its residents with excellent sound insulation. Look for [describe only verifiable physical features] - [ensure visitors can actually see this]."
 
 Note: This is a template showing where to verify facts. Your actual response should contain only confirmed information.
+
+GOOD vs BAD EXAMPLES:
+❌ BAD: "Клеймо 'G. Eiffel 1889' видно на заклёпках" (inventing marks)
+✅ GOOD: "Металлические конструкции эпохи выставки 1878 года" (verified period)
+
+❌ BAD: "Мэрия признала это архитектурным феноменом" (oversimplification)
+✅ GOOD: "После кампании 1972-74 годов и серии решений разных инстанций" (accurate)
+
+❌ BAD: "30 павильонов" (rounded number)
+✅ GOOD: "29 мастерских" (exact documented count)
+
+❌ BAD: "Художники забаррикадировали ворота мольбертами" (dramatization)
+✅ GOOD: "Жители и активисты организовали протесты" (documented fact)
+
+❌ BAD: "Львиная маска на regard №22" (invented feature)
+✅ GOOD: "Инспекционный павильон акведука XVII века" (real purpose)
 
 CRITICAL WRITING RULES:
 • Start with the most surprising specific detail - never with general context
@@ -270,6 +312,22 @@ AVOIDING REPETITION:
 - When previous facts exist, expand your search radius or dig deeper for more obscure details
 - Each fact should feel like a completely new discovery
 
+COMMON FACT ERRORS TO AVOID:
+1. DATE CONFUSION: 1878 Expo ≠ 1889 Expo ≠ 1900 Expo. Each had different buildings
+2. FALSE ATTRIBUTION: Not every iron structure = Eiffel. Check actual architects/engineers
+3. INVENTED DETAILS: No imaginary plaques, marks, inscriptions, or "hidden signatures"
+4. NUMBER PRECISION: "29 workshops" not "about 30". Use exact documented numbers
+5. PROCESS OVERSIMPLIFICATION: Government decisions ≠ "mayor decided". Complex processes happened
+6. DRAMATIZATION: Real events don't need embellishment. "Protests" not "barricades of easels"
+7. FEATURE INVENTION: Don't create architectural details (lion heads, special marks) that don't exist
+
+SPECIAL RULES FOR TECHNICAL/ENGINEERING STRUCTURES:
+- Aqueduct "regards" are INSPECTION chambers, not fountains
+- Not every iron structure is by Eiffel - check actual engineers
+- Verify technical purposes: inspection ≠ water distribution
+- Don't invent decorative elements on utilitarian structures
+- Technical terms must be accurate: "regard" ≠ "fontaine" ≠ "borne"
+
 ABSOLUTE REQUIREMENTS:
 - Never invent facts - use only verifiable historical information
 - Never use generic descriptions like "this area" or "nearby" - be specific
@@ -280,18 +338,27 @@ ABSOLUTE REQUIREMENTS:
 
 CRITICAL FACT-CHECKING REQUIREMENTS:
 - VERIFY DATES: Every date must be historically accurate. If uncertain about exact year, use "в начале XX века" rather than guessing "1923"
+  → Common errors: Confusing World Expo years (1878≠1889≠1900), Revolution dates (February≠October 1917)
 - VERIFY NAMES: Use real historical figures and businesses. If unsure of a specific name, describe the role instead ("местный архитектор" not "архитектор Петров")
+  → NEVER attribute famous names without proof (not everything metal = Eiffel)
 - VERIFY DETAILS: Building features, historical events, and transformations must be documented facts
+  → NO invented plaques, inscriptions, marks, or hidden signatures
+  → NO imaginary architectural features (lion heads, secret symbols)
 - CROSS-CHECK GEOGRAPHY: Ensure the location you're describing is actually at these coordinates
+  → Buildings can't be from two places at once
 - NO EMBELLISHMENT: If a detail sounds too perfect or dramatic, verify it exists
+  → Real protests ≠ "barricades of easels", real events ≠ "24 hours on roofs"
 - UNCERTAIN = OMIT: When in doubt about a specific detail, focus on what you know is true
+- DISTINGUISH LEGEND FROM FACT: Urban myths can be mentioned but must be labeled as such
 
 FACT VERIFICATION CHECKLIST:
 □ Is this building/location really at these exact coordinates?
-□ Did this event actually happen on this date?
-□ Is this person's name and role correct?
-□ Are the architectural/physical details accurate?
-□ Can visitors really see what I'm describing today?
+□ Did this event actually happen on this date? (Not confusing years/expos/eras?)
+□ Is this person's name and role correct? (Not falsely attributing to famous figures?)
+□ Are the architectural/physical details accurate? (Not inventing marks/plaques/features?)
+□ Can visitors really see what I'm describing today? (Is it actually visible, not imagined?)
+□ Are my numbers precise? (Exact count, not rounded?)
+□ Is this documented history or urban legend? (Label legends as such)
 
 CRITICAL FOR SEARCH FIELD:
 The Search field is used for GEOCODING (finding coordinates) via Nominatim/OpenStreetMap.
@@ -447,11 +514,13 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
 
 QUICK FACT-CHECK:
 □ Is this location verified at these coordinates?
-□ Are dates/names real or appropriately generalized?
-□ Can visitors see what I describe?
-□ Have I avoided fictional embellishments?
+□ Are dates/names real or appropriately generalized? (Not confusing expos/eras?)
+□ Can visitors see what I describe? (Not inventing marks/features?)
+□ Have I avoided fictional embellishments? (No dramatic barricades/rooftop vigils?)
+□ Are my numbers exact from sources? (Not rounded?)
+□ Have I distinguished documented facts from legends?
 
-Accuracy matters more than drama."""
+Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel attributions, invented plaques/marks, dramatized protests, oversimplified decisions."""
 
             # Choose model based on location type and premium status
             model_to_use = "o4-mini"  # Default model
