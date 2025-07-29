@@ -522,9 +522,17 @@ def get_donors_db() -> DonorsDatabase:
     """Get or create the global donors database instance."""
     global _donors_db
     if _donors_db is None:
-        # Check if we should use environment-based database
         import os
-        if os.environ.get("USE_ENV_DB", "").lower() == "true":
+        
+        # Check for PostgreSQL database URL (Railway provides this)
+        if os.environ.get("DATABASE_URL"):
+            # Use PostgreSQL for production
+            from .postgres_wrapper import PostgresSyncWrapper
+            logger.info("Using PostgreSQL database (DATABASE_URL detected)")
+            _donors_db = PostgresSyncWrapper()
+        
+        # Check if we should use environment-based database
+        elif os.environ.get("USE_ENV_DB", "").lower() == "true":
             # Use simple environment variable database for Railway
             from .env_db import EnvDatabase
             logger.info("Using environment variable database (USE_ENV_DB=true)")
@@ -571,5 +579,6 @@ def get_donors_db() -> DonorsDatabase:
             
             _donors_db = EnvDatabaseWrapper()
         else:
+            # Use SQLite for local development
             _donors_db = DonorsDatabase()
     return _donors_db

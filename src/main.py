@@ -183,6 +183,17 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 def main() -> None:
     """Main function to run the bot."""
     logger.info("Starting NearbyFactBot...")
+    
+    # Run database migration if PostgreSQL is configured
+    if os.environ.get("DATABASE_URL"):
+        logger.info("PostgreSQL detected, checking for migration...")
+        try:
+            import asyncio
+            from src.utils.migrate_to_postgres import check_and_migrate
+            asyncio.run(check_and_migrate())
+        except Exception as e:
+            logger.error(f"Migration check failed: {e}")
+            # Continue anyway - database will be created empty
 
     # Get bot token from environment
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
