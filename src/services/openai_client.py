@@ -637,23 +637,47 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
         return coords1_precision > coords2_precision
 
     async def get_coordinates_from_search_keywords(
-        self, search_keywords: str
+        self, search_keywords: str, user_lat: float = None, user_lon: float = None
     ) -> tuple[float, float] | None:
         """Get coordinates using search keywords via Nominatim.
 
         Args:
             search_keywords: Search keywords from GPT response
+            user_lat: User's current latitude for validation
+            user_lon: User's current longitude for validation
 
         Returns:
             Tuple of (latitude, longitude) if found, None otherwise
         """
         logger.info(f"Searching coordinates for keywords: {search_keywords}")
+        
+        # Extract city name from keywords for validation
+        city_name = None
+        common_cities = {
+            "Paris": (48.8566, 2.3522, 15),  # lat, lon, radius_km
+            "Москва": (55.7558, 37.6173, 30), 
+            "Moscow": (55.7558, 37.6173, 30),
+            "London": (51.5074, -0.1278, 20),
+            "New York": (40.7128, -74.0060, 25),
+            "Санкт-Петербург": (59.9311, 30.3609, 20),
+            "Saint Petersburg": (59.9311, 30.3609, 20),
+            "St Petersburg": (59.9311, 30.3609, 20)
+        }
+        
+        for city, (city_lat, city_lon, radius) in common_cities.items():
+            if city in search_keywords:
+                city_name = city
+                break
 
         # Try original keywords first
         nominatim_coords = await self.get_coordinates_from_nominatim(search_keywords)
         if nominatim_coords:
-            logger.info(f"Found Nominatim coordinates: {nominatim_coords}")
-            return nominatim_coords
+            # Validate coordinates are in the expected city
+            if city_name and not self._validate_city_coordinates(nominatim_coords[0], nominatim_coords[1], city_name):
+                logger.warning(f"Coordinates {nominatim_coords} are not in {city_name}, rejecting")
+            else:
+                logger.info(f"Found Nominatim coordinates: {nominatim_coords}")
+                return nominatim_coords
 
         logger.info(f"Nominatim failed for original keywords: {search_keywords}")
 
@@ -686,14 +710,28 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                 parts[0] if parts else "",  # First word only
             ])
 
-        # For long place names, try progressively shorter versions
+        # For addresses with city names, preserve city context
         words = search_keywords.split()
-        if len(words) > 2:
+        if city_name and len(words) > 3:
+            # Try removing middle descriptive words but keeping location identifiers
+            # Keep first main identifier and city
+            main_place = words[0]
+            if words[1] and words[1].lower() not in ['de', 'la', 'du', 'le', 'des', 'of', 'the']:
+                main_place = f"{words[0]} {words[1]}"
+            
             fallback_patterns.extend([
-                " ".join(words[:3]),  # First 3 words
-                " ".join(words[:2]),  # First 2 words
-                words[0]  # First word only
+                f"{main_place} {city_name}",  # Main place + city
+                f"{' '.join(words[-3:])}" if len(words) > 3 else "",  # Last 3 words (usually street + city)
             ])
+        
+        # For addresses, try street + city
+        street_indicators = ['rue', 'boulevard', 'avenue', 'street', 'road', 'улица', 'проспект', 'переулок']
+        for i, word in enumerate(words):
+            if word.lower() in street_indicators and i < len(words) - 1:
+                street_part = f"{word} {words[i+1]}"
+                if city_name:
+                    fallback_patterns.append(f"{street_part} {city_name}")
+                break
 
         # Remove empty patterns and duplicates
         fallback_patterns = [p.strip() for p in fallback_patterns if p and p.strip()]
@@ -705,6 +743,18 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                 logger.info(f"Trying fallback search: {pattern}")
                 coords = await self.get_coordinates_from_nominatim(pattern)
                 if coords:
+                    # Validate coordinates if we have city context
+                    if city_name and not self._validate_city_coordinates(coords[0], coords[1], city_name):
+                        logger.warning(f"Fallback coordinates {coords} for '{pattern}' are not in {city_name}, skipping")
+                        continue
+                    
+                    # If we have user coordinates, check distance (should be within reasonable range)
+                    if user_lat and user_lon:
+                        distance = self._calculate_distance(user_lat, user_lon, coords[0], coords[1])
+                        if distance > 50:  # More than 50km away
+                            logger.warning(f"Fallback coordinates {coords} are {distance:.1f}km from user, skipping")
+                            continue
+                    
                     logger.info(f"Found coordinates with fallback search '{pattern}': {coords}")
                     return coords
 
@@ -712,12 +762,14 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
         return None
 
     async def parse_coordinates_from_response(
-        self, response: str
+        self, response: str, user_lat: float = None, user_lon: float = None
     ) -> tuple[float, float] | None:
         """Parse coordinates from OpenAI response using search keywords.
 
         Args:
             response: OpenAI response text
+            user_lat: User's current latitude for validation
+            user_lon: User's current longitude for validation
 
         Returns:
             Tuple of (latitude, longitude) if found, None otherwise
@@ -734,8 +786,8 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                     search_keywords = search_match.group(1).strip()
                     logger.info(f"Found search keywords from <answer> tags: {search_keywords}")
 
-                    # Use new keyword-based search
-                    coords = await self.get_coordinates_from_search_keywords(search_keywords)
+                    # Use new keyword-based search with user coordinates for validation
+                    coords = await self.get_coordinates_from_search_keywords(search_keywords, user_lat, user_lon)
                     if coords:
                         return coords
 
@@ -745,8 +797,8 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                     place_name = location_match.group(1).strip()
                     logger.info(f"No search keywords found, using location name from <answer>: {place_name}")
 
-                    # Use location name as search keywords
-                    coords = await self.get_coordinates_from_search_keywords(place_name)
+                    # Use location name as search keywords with user coordinates
+                    coords = await self.get_coordinates_from_search_keywords(place_name, user_lat, user_lon)
                     if coords:
                         return coords
 
@@ -758,8 +810,8 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                     search_keywords = search_match.group(1).strip()
                     logger.info(f"Found search keywords from legacy format: {search_keywords}")
 
-                    # Use new keyword-based search
-                    coords = await self.get_coordinates_from_search_keywords(search_keywords)
+                    # Use new keyword-based search with user coordinates for validation
+                    coords = await self.get_coordinates_from_search_keywords(search_keywords, user_lat, user_lon)
                     if coords:
                         return coords
 
@@ -769,8 +821,8 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
                     place_name = place_match.group(1).strip()
                     logger.info(f"No search keywords found, using location name from legacy: {place_name}")
 
-                    # Use location name as search keywords
-                    coords = await self.get_coordinates_from_search_keywords(place_name)
+                    # Use location name as search keywords with user coordinates
+                    coords = await self.get_coordinates_from_search_keywords(place_name, user_lat, user_lon)
                     if coords:
                         return coords
 
@@ -1123,6 +1175,60 @@ Critical: Lead with the surprise. Include one specific date or name. Tell what's
             logger.info(f"Static location cache after add: {stats['locations']} locations, {stats['total_facts']} total facts")
 
         return fact_response
+    
+    def _validate_city_coordinates(self, lat: float, lon: float, city_name: str) -> bool:
+        """Validate that coordinates are within expected city bounds.
+        
+        Args:
+            lat: Latitude to check
+            lon: Longitude to check  
+            city_name: Name of the city to validate against
+            
+        Returns:
+            True if coordinates are within city bounds, False otherwise
+        """
+        city_bounds = {
+            "Paris": (48.8566, 2.3522, 15),  # center_lat, center_lon, radius_km
+            "Москва": (55.7558, 37.6173, 30), 
+            "Moscow": (55.7558, 37.6173, 30),
+            "London": (51.5074, -0.1278, 20),
+            "New York": (40.7128, -74.0060, 25),
+            "Санкт-Петербург": (59.9311, 30.3609, 20),
+            "Saint Petersburg": (59.9311, 30.3609, 20),
+            "St Petersburg": (59.9311, 30.3609, 20)
+        }
+        
+        if city_name not in city_bounds:
+            return True  # Can't validate unknown cities
+            
+        center_lat, center_lon, radius_km = city_bounds[city_name]
+        distance = self._calculate_distance(lat, lon, center_lat, center_lon)
+        
+        return distance <= radius_km
+    
+    def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """Calculate distance between two coordinates in kilometers.
+        
+        Args:
+            lat1, lon1: First coordinate
+            lat2, lon2: Second coordinate
+            
+        Returns:
+            Distance in kilometers
+        """
+        from math import radians, cos, sin, asin, sqrt
+        
+        # Convert to radians
+        lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+        
+        # Haversine formula
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+        c = 2 * asin(sqrt(a))
+        r = 6371  # Earth radius in kilometers
+        
+        return r * c
 
 
 # Global client instance - will be initialized lazily

@@ -414,7 +414,7 @@ class LiveLocationTracker:
 
                     # Try to parse coordinates and send location for navigation using search keywords (background fact)
                     coordinates = await openai_client.parse_coordinates_from_response(
-                        response
+                        response, session_data.latitude, session_data.longitude
                     )
                     if coordinates:
                         venue_lat, venue_lon = coordinates

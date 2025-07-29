@@ -397,7 +397,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
 
         # Try to parse coordinates and send location for navigation using search keywords
-        coordinates = await openai_client.parse_coordinates_from_response(response)
+        coordinates = await openai_client.parse_coordinates_from_response(response, lat, lon)
         if coordinates:
             venue_lat, venue_lon = coordinates
             try:
@@ -594,7 +594,7 @@ async def handle_interval_callback(
                 )
 
         # Try to parse coordinates and send location for navigation using search keywords (live location)
-        coordinates = await openai_client.parse_coordinates_from_response(response)
+        coordinates = await openai_client.parse_coordinates_from_response(response, lat, lon)
         if coordinates:
             venue_lat, venue_lon = coordinates
             try:
