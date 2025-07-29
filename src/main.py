@@ -190,7 +190,15 @@ def main() -> None:
         try:
             import asyncio
             from src.utils.migrate_to_postgres import check_and_migrate
-            asyncio.run(check_and_migrate())
+            
+            # Create new event loop for migration
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(check_and_migrate())
+            loop.close()
+            
+            # Reset event loop for telegram bot
+            asyncio.set_event_loop(asyncio.new_event_loop())
         except Exception as e:
             logger.error(f"Migration check failed: {e}")
             # Continue anyway - database will be created empty

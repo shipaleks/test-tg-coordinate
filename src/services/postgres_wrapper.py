@@ -43,13 +43,22 @@ class PostgresSyncWrapper:
     def _run_async(self, coro):
         """Run async coroutine in sync context."""
         try:
-            # Ensure we have event loop
-            if self._loop is None or self._loop.is_closed():
-                self._loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self._loop)
-            
-            # Run coroutine
-            return self._loop.run_until_complete(coro)
+            # Get or create event loop for current thread
+            try:
+                loop = asyncio.get_running_loop()
+                # If we're already in async context, create task
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(asyncio.run, coro)
+                    return future.result()
+            except RuntimeError:
+                # No running loop, use our own
+                if self._loop is None or self._loop.is_closed():
+                    self._loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(self._loop)
+                
+                # Run coroutine
+                return self._loop.run_until_complete(coro)
         except Exception as e:
             logger.error(f"Error running async operation: {e}")
             raise
