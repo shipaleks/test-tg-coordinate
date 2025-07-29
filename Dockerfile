@@ -21,6 +21,10 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app \
     && chown -R app:app /app
+
+# Pre-create data directory with correct permissions for volume mount
+RUN mkdir -p /data && chown app:app /data && chmod 755 /data
+
 USER app
 
 # Expose port
