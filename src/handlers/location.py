@@ -37,7 +37,9 @@ LOCATION_MESSAGES = {
         'static_fact_format': "📍 *Место:* {place}\n\n💡 *Факт:* {fact}",
         'live_fact_format': "🔴 *Факт #{number}*\n\n📍 *Место:* {place}\n\n💡 *Факт:* {fact}",
         'error_no_info': "😔 *Упс!*\n\nНе удалось найти интересную информацию о данном месте.\nПопробуйте немного сместиться или отправить другую локацию.",
-        'near_you': "рядом с вами"
+        'near_you': "рядом с вами",
+        'live_stopped': "✅ *Живая локация остановлена*\n\nСпасибо за использование NearbyFactBot! 🗺️✨\nЗапустите новую живую локацию в любое время, чтобы продолжить исследование!",
+        'live_expired': "✅ *Сессия живой локации завершена*\n\nПериод отслеживания истек. Запустите новую живую локацию, чтобы продолжить получать факты! 🗺️✨"
     },
     'en': {
         'image_fallback': "⚠️ Images failed to load, but here's the fact:\n\n",
@@ -54,7 +56,9 @@ LOCATION_MESSAGES = {
         'static_fact_format': "📍 *Place:* {place}\n\n💡 *Fact:* {fact}",
         'live_fact_format': "🔴 *Fact #{number}*\n\n📍 *Place:* {place}\n\n💡 *Fact:* {fact}",
         'error_no_info': "😔 *Oops!*\n\nCouldn't find interesting information about this location.\nTry moving slightly or sending a different location.",
-        'near_you': "near you"
+        'near_you': "near you",
+        'live_stopped': "✅ *Live location stopped*\n\nThank you for using NearbyFactBot! 🗺️✨\nStart a new live location anytime to continue exploring!",
+        'live_expired': "✅ *Live location session ended*\n\nThe tracking period has expired. Start a new live location to continue receiving facts! 🗺️✨"
     },
     'fr': {
         'image_fallback': "⚠️ Les images n'ont pas pu se charger, mais voici le fait :\n\n",
@@ -71,7 +75,9 @@ LOCATION_MESSAGES = {
         'static_fact_format': "📍 *Lieu :* {place}\n\n💡 *Fait :* {fact}",
         'live_fact_format': "🔴 *Fait #{number}*\n\n📍 *Lieu :* {place}\n\n💡 *Fait :* {fact}",
         'error_no_info': "😔 *Oups !*\n\nImpossible de trouver des informations intéressantes sur cet endroit.\nEssayez de vous déplacer légèrement ou d'envoyer une autre position.",
-        'near_you': "près de vous"
+        'near_you': "près de vous",
+        'live_stopped': "✅ *Position en direct arrêtée*\n\nMerci d'avoir utilisé NearbyFactBot ! 🗺️✨\nDémarrez une nouvelle position en direct à tout moment pour continuer à explorer !",
+        'live_expired': "✅ *Session de position en direct terminée*\n\nLa période de suivi a expiré. Démarrez une nouvelle position en direct pour continuer à recevoir des faits ! 🗺️✨"
     }
     # Add more languages as needed
 }
@@ -284,6 +290,26 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
 
     try:
+        # Check if user has an active live location session
+        tracker = get_live_location_tracker()
+        has_active_session = tracker.is_user_tracking(user_id)
+        
+        # If user has active session and this is a regular location (no live_period),
+        # it means live location sharing has stopped
+        if has_active_session and not location.live_period:
+            logger.info(f"Detected live location stop signal for user {user_id}")
+            await tracker.stop_live_location(user_id)
+            
+            # Send confirmation message
+            stop_response = await get_localized_message(user_id, 'live_stopped')
+            
+            await update.message.reply_text(
+                text=stop_response,
+                parse_mode="Markdown",
+                reply_to_message_id=update.message.message_id,
+            )
+            return
+        
         # Send typing indicator
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
@@ -695,39 +721,3 @@ async def handle_edited_location(
         logger.error(f"Error updating live location for user {user_id}: {e}")
 
 
-async def handle_stop_live_location(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
-    """Handle when live location sharing stops.
-
-    Args:
-        update: Telegram update
-        context: Bot context
-    """
-    # This handler will be called when live location ends
-    # We detect this by checking if a user had an active session that's no longer updating
-    user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
-
-    try:
-        tracker = get_live_location_tracker()
-
-        if tracker.is_user_tracking(user_id):
-            await tracker.stop_live_location(user_id)
-
-            # Send confirmation message (default to English since we can't get user_id from this context)
-            stop_response = (
-                "✅ *Live location stopped*\n\n"
-                "Thank you for using NearbyFactBot! 🗺️✨"
-            )
-
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=stop_response,
-                parse_mode="Markdown",
-            )
-
-            logger.info(f"Live location tracking stopped for user {user_id}")
-
-    except Exception as e:
-        logger.error(f"Error stopping live location for user {user_id}: {e}")

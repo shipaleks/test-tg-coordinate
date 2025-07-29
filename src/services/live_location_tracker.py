@@ -171,10 +171,13 @@ class LiveLocationData:
     fact_count: int = 0  # Counter for facts sent
     fact_history: list = None  # History of sent facts to avoid repetition
     task: asyncio.Task | None = None
+    session_start: datetime = None  # Track when session started
 
     def __post_init__(self):
         if self.fact_history is None:
             self.fact_history = []
+        if self.session_start is None:
+            self.session_start = datetime.now()
 
 
 class LiveLocationTracker:
@@ -223,6 +226,7 @@ class LiveLocationTracker:
                 last_update=datetime.now(),
                 live_period=live_period,
                 fact_interval_minutes=fact_interval_minutes,
+                session_start=datetime.now(),
             )
 
             # Start the fact sending task
@@ -297,19 +301,41 @@ class LiveLocationTracker:
             bot: Telegram bot instance
         """
         try:
+            # Calculate session end time based on when it started
+            session_end_time = session_data.session_start + timedelta(seconds=session_data.live_period)
+            
             # Wait for the specified interval before sending first fact
             interval_seconds = session_data.fact_interval_minutes * 60
             await asyncio.sleep(interval_seconds)
 
             while True:
-                # Check if session is still active and not expired before sending fact
                 current_time = datetime.now()
+                
+                # Check if session has exceeded its live_period
+                if current_time >= session_end_time:
+                    logger.info(
+                        f"Live location session expired for user {session_data.user_id} "
+                        f"(started: {session_data.session_start}, live_period: {session_data.live_period}s)"
+                    )
+                    # Send notification to user that session has ended
+                    try:
+                        from ..handlers.location import get_localized_message
+                        stop_message = await get_localized_message(session_data.user_id, 'live_expired')
+                        await bot.send_message(
+                            chat_id=session_data.chat_id,
+                            text=stop_message,
+                            parse_mode="Markdown",
+                        )
+                    except Exception as notify_error:
+                        logger.error(f"Failed to send session end notification: {notify_error}")
+                    break
+                
+                # Also check if we haven't received updates in a while (as a backup)
                 time_since_update = current_time - session_data.last_update
-
-                # Stop if no updates for longer than live_period + 1 minute buffer
                 if time_since_update > timedelta(seconds=session_data.live_period + 60):
                     logger.info(
-                        f"Live location expired for user {session_data.user_id}"
+                        f"Live location stopped updating for user {session_data.user_id} "
+                        f"(last update: {session_data.last_update})"
                     )
                     break
 
