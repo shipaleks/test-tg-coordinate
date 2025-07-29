@@ -14,30 +14,84 @@ from ..services.async_donors_wrapper import get_async_donors_db
 
 logger = logging.getLogger(__name__)
 
+# Localized donation messages
+DONATION_MESSAGES = {
+    'ru': {
+        'title': "🌟 *Поддержать проект*",
+        'donor_status': "🎁 *Донатер проекта*\n📊 Всего звезд: {total_stars}⭐\n🧠 o3 модель активна для живых локаций",
+        'support_helps': "Ваша поддержка помогает:",
+        'help_points': [
+            "🤖 Оплачивать OpenAI API для качественных фактов",
+            "🚀 Развивать новые функции бота", 
+            "📡 Поддерживать сервер 24/7"
+        ],
+        'voluntary': "💝 *Любая поддержка добровольна и очень ценится!*",
+        'other_amount': "💰 Other amount",
+        'choose_amount': "💰 *Choose amount:*",
+        'any_support': "✨ Any support is greatly appreciated!",
+        'back': "← Back"
+    },
+    'en': {
+        'title': "🌟 *Support the project*",
+        'donor_status': "🎁 *Project supporter*\n📊 Total stars: {total_stars}⭐\n🧠 o3 model active for live locations",
+        'support_helps': "Your support helps:",
+        'help_points': [
+            "🤖 Pay for OpenAI API for quality facts",
+            "🚀 Develop new bot features",
+            "📡 Maintain 24/7 server"
+        ],
+        'voluntary': "💝 *All support is voluntary and greatly appreciated!*",
+        'other_amount': "💰 Other amount",
+        'choose_amount': "💰 *Choose amount:*",
+        'any_support': "✨ Any support is greatly appreciated!",
+        'back': "← Back"
+    },
+    'fr': {
+        'title': "🌟 *Soutenir le projet*",
+        'donor_status': "🎁 *Soutien du projet*\n📊 Total étoiles : {total_stars}⭐\n🧠 Modèle o3 actif pour les positions en direct",
+        'support_helps': "Votre soutien aide à :",
+        'help_points': [
+            "🤖 Payer l'API OpenAI pour des faits de qualité",
+            "🚀 Développer de nouvelles fonctionnalités",
+            "📡 Maintenir le serveur 24h/24"
+        ],
+        'voluntary': "💝 *Tout soutien est volontaire et très apprécié !*",
+        'other_amount': "💰 Autre montant",
+        'choose_amount': "💰 *Choisissez le montant :*",
+        'any_support': "✨ Tout soutien est grandement apprécié !",
+        'back': "← Retour"
+    }
+}
+
 
 async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /donate command."""
     user = update.effective_user
     
-    # Check current premium status
+    # Get user language
     donors_db = await get_async_donors_db()
+    user_language = await donors_db.get_user_language(user.id)
+    messages = DONATION_MESSAGES.get(user_language, DONATION_MESSAGES['en'])
+    
+    # Check current premium status
     is_premium = await donors_db.is_premium_user(user.id)
     donor_info = await donors_db.get_donor_info(user.id)
     
     # Create status text
     if donor_info:
-        status_text = f"🎁 *Донатер проекта*\n📊 Всего звезд: {donor_info['total_stars']}⭐\n🧠 o3 модель активна для живых локаций\n\n"
+        status_text = messages['donor_status'].format(total_stars=donor_info['total_stars']) + "\n\n"
     else:
         status_text = ""
     
+    # Build help points
+    help_text = "\n".join([f"• {point}" for point in messages['help_points']])
+    
     donate_text = (
-        "🌟 *Поддержать проект*\n\n"
+        f"{messages['title']}\n\n"
         + status_text +
-        "Ваша поддержка помогает:\n"
-        "• 🤖 Оплачивать OpenAI API для качественных фактов\n"
-        "• 🚀 Развивать новые функции бота\n"
-        "• 📡 Поддерживать сервер 24/7\n\n"
-        "💝 *Любая поддержка добровольна и очень ценится!*"
+        f"{messages['support_helps']}\n"
+        f"{help_text}\n\n"
+        f"{messages['voluntary']}"
     )
     
     # Create donation buttons with increased amounts
@@ -48,10 +102,9 @@ async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             InlineKeyboardButton("500⭐", callback_data="donate_500"),
         ],
         [
-            InlineKeyboardButton("💰 Other amount", callback_data="donate_custom"),
+            InlineKeyboardButton(messages['other_amount'], callback_data="donate_custom"),
         ],
     ]
-    
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -76,6 +129,11 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
         amount_str = query.data.replace("donate_", "")
         
         if amount_str == "custom":
+            # Get user language for localized text
+            donors_db = await get_async_donors_db()
+            user_language = await donors_db.get_user_language(user.id)
+            messages = DONATION_MESSAGES.get(user_language, DONATION_MESSAGES['en'])
+            
             custom_keyboard = [
                 [
                     InlineKeyboardButton("50⭐", callback_data="donate_50"),
@@ -86,14 +144,14 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
                     InlineKeyboardButton("2000⭐", callback_data="donate_2000"),
                 ],
                 [
-                    InlineKeyboardButton("← Back", callback_data="donate_back"),
+                    InlineKeyboardButton(messages['back'], callback_data="donate_back"),
                 ],
             ]
             custom_markup = InlineKeyboardMarkup(custom_keyboard)
             
             await query.edit_message_text(
-                "💰 *Choose amount:*\n\n"
-                "✨ Any support is greatly appreciated!",
+                f"{messages['choose_amount']}\n\n"
+                f"{messages['any_support']}",
                 parse_mode="Markdown",
                 reply_markup=custom_markup
             )
@@ -103,23 +161,27 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
             # Go back to main donate screen - we need to recreate the original message
             user = query.from_user
             donors_db = await get_async_donors_db()
+            user_language = await donors_db.get_user_language(user.id)
+            messages = DONATION_MESSAGES.get(user_language, DONATION_MESSAGES['en'])
+            
             is_premium = await donors_db.is_premium_user(user.id)
             donor_info = await donors_db.get_donor_info(user.id)
             
             # Create status text
             if donor_info:
-                status_text = f"🎁 *Донатер проекта*\n📊 Всего звезд: {donor_info['total_stars']}⭐\n🧠 o3 модель активна для живых локаций\n\n"
+                status_text = messages['donor_status'].format(total_stars=donor_info['total_stars']) + "\n\n"
             else:
                 status_text = ""
             
+            # Build help points
+            help_text = "\n".join([f"• {point}" for point in messages['help_points']])
+            
             donate_text = (
-                "🌟 *Поддержать проект*\n\n"
+                f"{messages['title']}\n\n"
                 + status_text +
-                "Ваша поддержка помогает:\n"
-                "• 🤖 Оплачивать OpenAI API для качественных фактов\n"
-                "• 🚀 Развивать новые функции бота\n"
-                "• 📡 Поддерживать сервер 24/7\n\n"
-                "💝 *Любая поддержка добровольна и очень ценится!*"
+                f"{messages['support_helps']}\n"
+                f"{help_text}\n\n"
+                f"{messages['voluntary']}"
             )
             
             # Create donation buttons
@@ -130,7 +192,7 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
                     InlineKeyboardButton("500⭐", callback_data="donate_500"),
                 ],
                 [
-                    InlineKeyboardButton("💰 Other amount", callback_data="donate_custom"),
+                    InlineKeyboardButton(messages['other_amount'], callback_data="donate_custom"),
                 ],
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
