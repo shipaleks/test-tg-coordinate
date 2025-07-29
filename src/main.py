@@ -256,7 +256,8 @@ def main() -> None:
     # Info button patterns
     info_patterns = [
         "^📱💡 Как поделиться Live Location$",
-        "^📱💡 How to share Live Location$"
+        "^📱💡 How to share Live Location$",
+        "^📱💡 Comment partager Live Location$"
     ]
     for pattern in info_patterns:
         application.add_handler(
@@ -266,7 +267,8 @@ def main() -> None:
     # Donate button patterns  
     donate_patterns = [
         "^⭐💝 Поддержать проект$",
-        "^⭐💝 Support project$"
+        "^⭐💝 Support project$",
+        "^⭐💝 Soutenir le projet$"
     ]
     for pattern in donate_patterns:
         application.add_handler(
