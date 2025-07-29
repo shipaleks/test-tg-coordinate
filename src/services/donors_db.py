@@ -522,5 +522,54 @@ def get_donors_db() -> DonorsDatabase:
     """Get or create the global donors database instance."""
     global _donors_db
     if _donors_db is None:
-        _donors_db = DonorsDatabase()
+        # Check if we should use environment-based database
+        import os
+        if os.environ.get("USE_ENV_DB", "").lower() == "true":
+            # Use simple environment variable database for Railway
+            from .env_db import EnvDatabase
+            logger.info("Using environment variable database (USE_ENV_DB=true)")
+            # Return EnvDatabase wrapped to match DonorsDatabase interface
+            class EnvDatabaseWrapper:
+                def __init__(self):
+                    self.env_db = EnvDatabase()
+                    self.db_path = "env://DONORS_DATA"
+                
+                def add_donation(self, *args, **kwargs):
+                    return self.env_db.add_donation(*args, **kwargs)
+                
+                def is_premium_user(self, user_id: int) -> bool:
+                    return self.env_db.is_premium_user(user_id)
+                
+                def get_donor_info(self, user_id: int):
+                    return self.env_db.get_donor_info(user_id)
+                
+                def get_donation_history(self, user_id: int) -> List[Dict[str, Any]]:
+                    # Filter donations for this user
+                    try:
+                        user_donations = [
+                            d for d in self.env_db.data.get("donations", [])
+                            if d["user_id"] == user_id
+                        ]
+                        return sorted(user_donations, key=lambda x: x["payment_date"], reverse=True)
+                    except:
+                        return []
+                
+                def get_stats(self):
+                    return self.env_db.get_stats()
+                
+                def get_user_language(self, user_id: int) -> str:
+                    return "ru"  # Default to Russian
+                
+                def set_user_language(self, user_id: int, language: str) -> bool:
+                    return True  # Ignore language settings in env db
+                
+                def has_language_set(self, user_id: int) -> bool:
+                    return False
+                
+                def reset_user_language(self, user_id: int) -> bool:
+                    return True
+            
+            _donors_db = EnvDatabaseWrapper()
+        else:
+            _donors_db = DonorsDatabase()
     return _donors_db
