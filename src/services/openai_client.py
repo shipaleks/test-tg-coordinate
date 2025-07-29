@@ -144,9 +144,20 @@ class OpenAIClient:
             user_language = "ru"  # Default to Russian as most users are Russian-speaking
             if user_id:
                 try:
-                    donors_db = get_donors_db()
-                    is_premium_user = donors_db.is_premium_user(user_id)
-                    user_language = donors_db.get_user_language(user_id)
+                    # Check if we're in async context (telegram handlers)
+                    import asyncio
+                    try:
+                        loop = asyncio.get_running_loop()
+                        # We're in async context, use async wrapper
+                        from .async_donors_wrapper import get_async_donors_db
+                        donors_db = await get_async_donors_db()
+                        is_premium_user = await donors_db.is_premium_user(user_id)
+                        user_language = await donors_db.get_user_language(user_id)
+                    except RuntimeError:
+                        # Not in async context, use sync wrapper
+                        donors_db = get_donors_db()
+                        is_premium_user = donors_db.is_premium_user(user_id)
+                        user_language = donors_db.get_user_language(user_id)
                 except Exception as e:
                     logger.warning(f"Failed to check user preferences for user {user_id}: {e}")
             

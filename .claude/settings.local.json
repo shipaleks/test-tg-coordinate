@@ -21,7 +21,9 @@
       "WebFetch(domain:dev.to)",
       "Bash(sqlite3:*)",
       "Bash(find:*)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(pip install:*)",
+      "Bash(unset WEBHOOK_URL)"
     ],
     "deny": []
   }

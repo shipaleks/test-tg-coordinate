@@ -34,7 +34,7 @@ from .handlers.language_selection import (
     handle_custom_language_input,
     reset_language_command,
 )
-from .services.donors_db import get_donors_db
+from .services.async_donors_wrapper import get_async_donors_db
 
 # Load environment variables from .env file
 load_dotenv()
@@ -120,8 +120,9 @@ LOCALIZED_MESSAGES = {
 async def send_welcome_message(user_id: int, chat_id: int, bot, language: str = None) -> None:
     """Send welcome message in user's language."""
     if language is None:
-        donors_db = get_donors_db()
-        language = donors_db.get_user_language(user_id)
+        from src.services.async_donors_wrapper import get_async_donors_db
+        donors_db = await get_async_donors_db()
+        language = await donors_db.get_user_language(user_id)
     
     # Get localized messages (default to English)
     messages = LOCALIZED_MESSAGES.get(language, LOCALIZED_MESSAGES['en'])
@@ -150,10 +151,10 @@ async def send_welcome_message(user_id: int, chat_id: int, bot, language: str = 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command."""
     user = update.effective_user
-    donors_db = get_donors_db()
+    donors_db = await get_async_donors_db()
     
     # Check if user has language set
-    if not donors_db.has_language_set(user.id):
+    if not await donors_db.has_language_set(user.id):
         # Show language selection for new users
         await show_language_selection(update, context)
         return
@@ -165,8 +166,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle info button press."""
     user = update.effective_user
-    donors_db = get_donors_db()
-    language = donors_db.get_user_language(user.id)
+    donors_db = await get_async_donors_db()
+    language = await donors_db.get_user_language(user.id)
     
     # Get localized info text (default to English) 
     messages = LOCALIZED_MESSAGES.get(language, LOCALIZED_MESSAGES['en'])

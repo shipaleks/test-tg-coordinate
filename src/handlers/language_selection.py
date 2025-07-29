@@ -8,7 +8,7 @@ from telegram import (
 )
 from telegram.ext import ContextTypes
 
-from ..services.donors_db import get_donors_db
+from ..services.async_donors_wrapper import get_async_donors_db
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +66,8 @@ async def show_language_selection(update: Update, context: ContextTypes.DEFAULT_
     user = update.effective_user
     
     # Get current language for welcome message (default to English)
-    donors_db = get_donors_db()
-    current_lang = donors_db.get_user_language(user.id)
+    donors_db = await get_async_donors_db()
+    current_lang = await donors_db.get_user_language(user.id)
     
     welcome_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['en'])['welcome']
     
@@ -131,14 +131,14 @@ async def handle_language_selection(update: Update, context: ContextTypes.DEFAUL
     await query.answer()
     
     user = query.from_user
-    donors_db = get_donors_db()
+    donors_db = await get_async_donors_db()
     
     if query.data.startswith("lang_"):
         lang_code = query.data.replace("lang_", "")
         
         if lang_code == "custom":
             # Show custom language input prompt
-            current_lang = donors_db.get_user_language(user.id)
+            current_lang = await donors_db.get_user_language(user.id)
             prompt_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['en'])['custom_prompt']
             
             # Store state for custom language input
@@ -152,7 +152,7 @@ async def handle_language_selection(update: Update, context: ContextTypes.DEFAUL
         
         # Set predefined language
         if lang_code in LANGUAGES:
-            success = donors_db.set_user_language(user.id, lang_code)
+            success = await donors_db.set_user_language(user.id, lang_code)
             
             if success:
                 language_info = LANGUAGES[lang_code]
@@ -190,14 +190,15 @@ async def handle_custom_language_input(update: Update, context: ContextTypes.DEF
     
     # Validate language input (basic validation)
     if len(language_input) < 2 or len(language_input) > 50:
-        current_lang = get_donors_db().get_user_language(user.id)
+        donors_db = await get_async_donors_db()
+        current_lang = await donors_db.get_user_language(user.id)
         error_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['en'])['invalid_language']
         await update.message.reply_text(error_text)
         return
     
     # Save custom language
-    donors_db = get_donors_db()
-    success = donors_db.set_user_language(user.id, language_input)
+    donors_db = await get_async_donors_db()
+    success = await donors_db.set_user_language(user.id, language_input)
     
     if success:
         # Try to determine flag and name for common languages
@@ -235,13 +236,13 @@ async def handle_custom_language_input(update: Update, context: ContextTypes.DEF
 async def reset_language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /reset command to reset user's language preference."""
     user = update.effective_user
-    donors_db = get_donors_db()
+    donors_db = await get_async_donors_db()
     
     # Get current language for message
-    current_lang = donors_db.get_user_language(user.id)
+    current_lang = await donors_db.get_user_language(user.id)
     
     # Reset language
-    success = donors_db.reset_user_language(user.id)
+    success = await donors_db.reset_user_language(user.id)
     
     if success:
         reset_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['en'])['language_reset']

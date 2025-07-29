@@ -10,7 +10,7 @@ from telegram import (
 )
 from telegram.ext import ContextTypes
 
-from ..services.donors_db import get_donors_db
+from ..services.async_donors_wrapper import get_async_donors_db
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,9 @@ async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user = update.effective_user
     
     # Check current premium status
-    donors_db = get_donors_db()
-    is_premium = donors_db.is_premium_user(user.id)
-    donor_info = donors_db.get_donor_info(user.id)
+    donors_db = await get_async_donors_db()
+    is_premium = await donors_db.is_premium_user(user.id)
+    donor_info = await donors_db.get_donor_info(user.id)
     
     # Create status text
     if donor_info:
@@ -102,9 +102,9 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
         if amount_str == "back":
             # Go back to main donate screen - we need to recreate the original message
             user = query.from_user
-            donors_db = get_donors_db()
-            is_premium = donors_db.is_premium_user(user.id)
-            donor_info = donors_db.get_donor_info(user.id)
+            donors_db = await get_async_donors_db()
+            is_premium = await donors_db.is_premium_user(user.id)
+            donor_info = await donors_db.get_donor_info(user.id)
             
             # Create status text
             if donor_info:
@@ -263,10 +263,10 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
             return
         
         # Add to database
-        donors_db = get_donors_db()
+        donors_db = await get_async_donors_db()
         logger.info(f"Attempting to add donation to database: user_id={user.id}, payment_id={payment_id}, stars={stars_amount}")
         
-        success = donors_db.add_donation(
+        success = await donors_db.add_donation(
             user_id=user.id,
             payment_id=payment_id,
             stars_amount=stars_amount,
@@ -279,7 +279,7 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
         
         if success:
             # Get updated donor info
-            donor_info = donors_db.get_donor_info(user.id)
+            donor_info = await donors_db.get_donor_info(user.id)
             total_stars = donor_info['total_stars'] if donor_info else stars_amount
             
             # Check if this is first donation (show bonus message)
@@ -330,8 +330,8 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /stats command (for debugging/admin)."""
     try:
-        donors_db = get_donors_db()
-        stats = donors_db.get_stats()
+        donors_db = await get_async_donors_db()
+        stats = await donors_db.get_stats()
         
         if not stats:
             await update.message.reply_text("❌ Ошибка получения статистики")
