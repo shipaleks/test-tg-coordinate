@@ -11,6 +11,7 @@ from telegram import Bot, InputMediaPhoto
 from .openai_client import get_openai_client
 from ..utils.formatting_utils import extract_sources_from_answer as _extract_live_sources
 from ..utils.formatting_utils import strip_sources_section as _strip_live_sources
+from ..utils.formatting_utils import remove_bare_links_from_text as _remove_bare_links_from_text
 # Avoid importing handlers at module import time to prevent circular deps.
 # We'll import get_localized_message lazily inside functions.
 
@@ -428,6 +429,7 @@ class LiveLocationTracker:
                         fact_match = re.search(r"Interesting fact:\s*(.*?)(?=\n(?:Sources|Источники)\s*:|$)", answer_content, re.DOTALL)
                         if fact_match:
                             fact = _strip_live_sources(fact_match.group(1).strip())
+                            fact = _remove_bare_links_from_text(fact)
                         # Build localized sources block from answer content (single, clean block)
                         sources = _extract_live_sources(answer_content)
                         sources_block = ""

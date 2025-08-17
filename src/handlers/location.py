@@ -25,6 +25,8 @@ from ..utils.formatting_utils import (
     sanitize_url as _sanitize_url,
     escape_html as _escape_html,
     label_to_html as _label_to_html,
+    extract_bare_links as _extract_bare_links,
+    remove_bare_links_from_text as _remove_bare_links_from_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -519,6 +521,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
             if fact_match:
                 fact = _strip_sources_section(fact_match.group(1).strip())
+                # Remove bare links in body (e.g., (example.com))
+                fact = _remove_bare_links_from_text(fact)
         
         # Legacy fallback for old format responses
         else:

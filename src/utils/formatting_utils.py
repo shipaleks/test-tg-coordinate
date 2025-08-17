@@ -81,3 +81,35 @@ def label_to_html(label: str) -> str:
     return re.sub(r"\*(.+?)\*", r"<b>\\1</b>", label)
 
 
+def extract_bare_links(text: str) -> list[str]:
+    """Extract bare domains or domain+path from text and normalize to https URLs."""
+    try:
+        urls = []
+        # Match domains optionally with a simple path, avoid already http(s) links
+        for m in re.finditer(r"(?<!https?://)([a-z0-9.-]+\.[a-z]{2,})(/[\w\-/%]+)?", text, re.IGNORECASE):
+            domain = m.group(1)
+            path = m.group(2) or ""
+            url = f"https://{domain}{path}"
+            urls.append(url)
+        # Deduplicate
+        uniq = []
+        seen = set()
+        for u in urls:
+            if u not in seen:
+                uniq.append(u)
+                seen.add(u)
+        return uniq
+    except Exception:
+        return []
+
+
+def remove_bare_links_from_text(text: str) -> str:
+    """Remove bare domains in parentheses or as standalone tokens from text."""
+    try:
+        # Remove (example.com) or (example.com/path)
+        text = re.sub(r"\((?<!https?://)([a-z0-9.-]+\.[a-z]{2,}(/[\w\-/%]+)?)\)", "", text, flags=re.IGNORECASE)
+        return text
+    except Exception:
+        return text
+
+
