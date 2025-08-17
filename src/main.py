@@ -49,11 +49,9 @@ logger = logging.getLogger(__name__)
 LOCALIZED_MESSAGES = {
     'ru': {
         'welcome': (
-            "🗺️ *Bot Voyage — факты во время прогулки!*\n\n"
-            "🔴 *Живая локация — основной режим:*\n"
-            "📎 → Location → Share Live Location (5–60 мин и больше)\n"
-            "Я сам присылаю факты, пока вы идёте\n\n"
-            "Нажмите ниже, чтобы посмотреть, как включить живую локацию."
+            "🗺️ Привет! Я *Bot Voyage*. Я показываю неожиданные факты о местах вокруг тебя.\n\n"
+            "🔴 Хочешь попробовать живую локацию? Я сам буду присылать факты по пути.\n"
+            "Нажми ниже — коротко покажу, как включить."
         ),
         'buttons': {
             'info': "📱💡 Как включить живую локацию",
@@ -190,19 +188,19 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Localized short steps
     steps = {
         'ru': [
-            "Шаг 1/3. Нажмите скрепку 📎 внизу.",
-            "Шаг 2/3. Выберите 📍 Location → 🔴 Share Live Location.",
-            "Шаг 3/3. Установите время (60 мин удобно) — и идите, факты будут приходить сами.",
+            "Шаг 1/3. Нажми скрепку 📎 внизу — это меню вложений.",
+            "Шаг 2/3. Выбери 📍 Location → 🔴 Share Live Location — я начну следить за маршрутом.",
+            "Шаг 3/3. Поставь время (обычно 60 мин). Дальше я сам буду присылать факты по пути.",
         ],
         'en': [
-            "Step 1/3. Tap the paperclip 📎 at the bottom.",
-            "Step 2/3. Choose 📍 Location → 🔴 Share Live Location.",
-            "Step 3/3. Pick a duration (60 min is great) — then walk, facts will arrive automatically.",
+            "Step 1/3. Tap the paperclip 📎 below — that’s the attachment menu.",
+            "Step 2/3. Choose 📍 Location → 🔴 Share Live Location — I’ll start following your route.",
+            "Step 3/3. Pick a duration (60 min works well). I’ll send facts automatically as you walk.",
         ],
         'fr': [
-            "Étape 1/3. Touchez le trombone 📎 en bas.",
-            "Étape 2/3. Choisissez 📍 Location → 🔴 Share Live Location.",
-            "Étape 3/3. Choisissez la durée (60 min) — marchez, les faits arrivent automatiquement.",
+            "Étape 1/3. Touchez le trombone 📎 en bas — le menu des pièces jointes.",
+            "Étape 2/3. Choisissez 📍 Location → 🔴 Share Live Location — je suivrai votre trajet.",
+            "Étape 3/3. Choisissez la durée (60 min). J’enverrai des faits automatiquement en marchant.",
         ],
     }
     labels = {
