@@ -49,9 +49,9 @@ logger = logging.getLogger(__name__)
 LOCALIZED_MESSAGES = {
     'ru': {
         'welcome': (
-            "🗺️ Привет! Я *Bot Voyage*. Я показываю неожиданные факты о местах вокруг тебя.\n\n"
-            "🔴 Хочешь попробовать живую локацию? Я сам буду присылать факты по пути.\n"
-            "Нажми ниже — коротко покажу, как включить."
+            "🗺️ Привет! Я *Bot Voyage*. Покажу неожиданные факты вокруг тебя.\n\n"
+            "🔴 Включим живую локацию? Я сам пришлю первый факт.\n"
+            "Нажми ниже — покажу в 3 шага."
         ),
         'buttons': {
             'info': "📱💡 Как включить живую локацию",
@@ -72,11 +72,9 @@ LOCALIZED_MESSAGES = {
     },
     'en': {
         'welcome': (
-            "🗺️ *Bot Voyage — facts while you walk!*\n\n"
-            "🔴 *Live location is the main mode:*\n"
-            "📎 → Location → Share Live Location (5–60 min and more)\n"
-            "I’ll send facts automatically as you move\n\n"
-            "Tap below to see how to enable live location."
+            "🗺️ Hi, I’m *Bot Voyage*. I’ll show surprising facts around you.\n\n"
+            "🔴 Turn on live location? I’ll send the first fact myself.\n"
+            "Tap below — 3 short steps."
         ),
         'buttons': {
             'info': "📱💡 How to enable Live Location",
@@ -97,13 +95,9 @@ LOCALIZED_MESSAGES = {
     },
     'fr': {
         'welcome': (
-            "🗺️ *Bienvenue dans le bot des faits étonnants !*\n\n"
-            "🔴 *Position en direct — votre guide touristique personnel :*\n"
-            "📎 → Location → Share Live Location (15 min - 8 heures)\n"
-            "Faits automatiques toutes les 5-60 minutes pendant votre promenade\n\n"
-            "📍 *Aussi disponible :* envoi unique de position actuelle\n"
-            "Appuyez sur le bouton ci-dessous pour un fait instantané sur le lieu\n\n"
-            "_Chaque fait est une petite découverte près de vous !_ ✨"
+            "🗺️ Bonjour, je suis *Bot Voyage*. Je montre des faits inattendus autour de vous.\n\n"
+            "🔴 On active la position en direct ? J’enverrai le premier fait tout seul.\n"
+            "Touchez ci‑dessous — 3 étapes courtes."
         ),
         'buttons': {
             'info': "📱💡 Activer la position en direct",
@@ -188,19 +182,19 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Localized short steps
     steps = {
         'ru': [
-            "Шаг 1/3. Нажми скрепку 📎 внизу — это меню вложений.",
-            "Шаг 2/3. Выбери 📍 Location → 🔴 Share Live Location — я начну следить за маршрутом.",
-            "Шаг 3/3. Поставь время (обычно 60 мин). Дальше я сам буду присылать факты по пути.",
+            "Шаг 1/3. Нажми 📎 внизу.",
+            "Шаг 2/3. 📍 Location → 🔴 Share Live Location.",
+            "Шаг 3/3. Поставь 60 мин — я пришлю факты сам.",
         ],
         'en': [
-            "Step 1/3. Tap the paperclip 📎 below — that’s the attachment menu.",
-            "Step 2/3. Choose 📍 Location → 🔴 Share Live Location — I’ll start following your route.",
-            "Step 3/3. Pick a duration (60 min works well). I’ll send facts automatically as you walk.",
+            "Step 1/3. Tap 📎 below.",
+            "Step 2/3. 📍 Location → 🔴 Share Live Location.",
+            "Step 3/3. Choose 60 min — I’ll send facts for you.",
         ],
         'fr': [
-            "Étape 1/3. Touchez le trombone 📎 en bas — le menu des pièces jointes.",
-            "Étape 2/3. Choisissez 📍 Location → 🔴 Share Live Location — je suivrai votre trajet.",
-            "Étape 3/3. Choisissez la durée (60 min). J’enverrai des faits automatiquement en marchant.",
+            "Étape 1/3. Touchez 📎 en bas.",
+            "Étape 2/3. 📍 Location → 🔴 Share Live Location.",
+            "Étape 3/3. Choisissez 60 min — j’enverrai les faits pour vous.",
         ],
     }
     labels = {
