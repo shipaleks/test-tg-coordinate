@@ -521,8 +521,26 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Optional GPT-5 (Responses API) path with built-in web_search tool
             # Enable with USE_GPT5_RESPONSES=true in environment. Falls back automatically on errors.
             try:
-                if os.getenv("USE_GPT5_RESPONSES", "").lower() == "true":
-                    logger.info("USE_GPT5_RESPONSES=true; attempting GPT-5 Responses with web_search...")
+                enable_flag = os.getenv("USE_GPT5_RESPONSES", "").lower() == "true"
+                # Auto-enable on Railway or webhook (production-like) environments
+                on_railway = any(
+                    os.getenv(k) for k in (
+                        "RAILWAY_ENVIRONMENT",
+                        "RAILWAY_ENVIRONMENT_NAME",
+                        "RAILWAY_PROJECT_ID",
+                        "RAILWAY_SERVICE_ID",
+                    )
+                )
+                has_webhook = bool(os.getenv("WEBHOOK_URL"))
+                enable_gpt5 = enable_flag or on_railway or has_webhook
+
+                if enable_gpt5:
+                    why = (
+                        "USE_GPT5_RESPONSES=true"
+                        if enable_flag
+                        else ("Railway env detected" if on_railway else "WEBHOOK_URL set")
+                    )
+                    logger.info(f"Attempting GPT-5 Responses with web_search... ({why})")
                     content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location)
                     if content:
                         logger.info("GPT-5 Responses: success (web_search enabled)")
