@@ -182,19 +182,22 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Localized short steps
     steps = {
         'ru': [
+            "Что такое живая локация: ты делишься местоположением в реальном времени на выбранный срок. Telegram можно закрыть — уведомления с фактами всё равно придут.",
             "Шаг 1/3. Нажми 📎 внизу.",
             "Шаг 2/3. 📍 Location → 🔴 Share Live Location.",
-            "Шаг 3/3. Поставь 60 мин — я пришлю факты сам.",
+            "Шаг 3/3. Поставь 60 мин — дальше я сам присылаю факты каждые 5–60 мин.",
         ],
         'en': [
+            "What is live location: you share your real‑time location for a chosen time. You can close Telegram — I’ll still send push facts.",
             "Step 1/3. Tap 📎 below.",
             "Step 2/3. 📍 Location → 🔴 Share Live Location.",
-            "Step 3/3. Choose 60 min — I’ll send facts for you.",
+            "Step 3/3. Choose 60 min — I’ll auto‑send facts every 5–60 min.",
         ],
         'fr': [
+            "Qu’est‑ce que la position en direct : vous partagez votre position en temps réel pendant une durée choisie. Vous pouvez fermer Telegram — j’enverrai quand même les faits.",
             "Étape 1/3. Touchez 📎 en bas.",
             "Étape 2/3. 📍 Location → 🔴 Share Live Location.",
-            "Étape 3/3. Choisissez 60 min — j’enverrai les faits pour vous.",
+            "Étape 3/3. Choisissez 60 min — j’enverrai des faits automatiquement (5–60 min).",
         ],
     }
     labels = {
