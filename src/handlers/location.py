@@ -143,6 +143,16 @@ def _extract_sources_from_answer(answer_content: str) -> list[tuple[str, str]]:
     except Exception:
         return []
 
+
+def _strip_sources_section(text: str) -> str:
+    """Remove any trailing Sources/Источники section from a text block."""
+    try:
+        # Cut at the first occurrence of a sources header
+        cut = re.split(r"\n(?:Sources|Источники)\s*:.*", text, maxsplit=1, flags=re.IGNORECASE | re.DOTALL)
+        return cut[0].rstrip()
+    except Exception:
+        return text
+
 async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, user_id=None, reply_to_message_id=None):
     """Send fact message with Wikipedia images if available.
     
@@ -448,7 +458,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 re.DOTALL,
             )
             if fact_match:
-                fact = fact_match.group(1).strip()
+                fact = _strip_sources_section(fact_match.group(1).strip())
         
         # Legacy fallback for old format responses
         else:
