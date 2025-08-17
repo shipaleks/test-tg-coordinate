@@ -700,7 +700,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 model="gpt-5",
                 input=messages,
                 tools=tools,
-                tool_choice={"type": "web_search"},
+                tool_choice="auto",
                 reasoning=reasoning,
             )
 
