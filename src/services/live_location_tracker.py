@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 from telegram import Bot, InputMediaPhoto
 
 from .openai_client import get_openai_client
-from ..handlers.location import _extract_sources_from_answer as _extract_live_sources
-from ..handlers.location import _strip_sources_section as _strip_live_sources
+from ..utils.formatting_utils import extract_sources_from_answer as _extract_live_sources
+from ..utils.formatting_utils import strip_sources_section as _strip_live_sources
 from ..handlers.location import get_localized_message as _get_msg
 
 logger = logging.getLogger(__name__)

@@ -19,6 +19,13 @@ from ..services.live_location_tracker import get_live_location_tracker
 from ..services.openai_client import get_openai_client
 import inspect
 from ..services.async_donors_wrapper import get_async_donors_db
+from ..utils.formatting_utils import (
+    extract_sources_from_answer as _extract_sources_from_answer,
+    strip_sources_section as _strip_sources_section,
+    sanitize_url as _sanitize_url,
+    escape_html as _escape_html,
+    label_to_html as _label_to_html,
+)
 
 logger = logging.getLogger(__name__)
 
