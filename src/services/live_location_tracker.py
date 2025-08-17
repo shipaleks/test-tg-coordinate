@@ -52,11 +52,15 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                     logger.info(f"Successfully sent {len(image_urls)} live images with caption in media group for {place}")
                 else:
                     # Caption too long, send text first then all images as media group
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=formatted_response,
-                        parse_mode="Markdown"
-                    )
+                    # Prefer resilient send to preserve formatting if Markdown fails
+                    try:
+                        await bot.send_message(
+                            chat_id=chat_id,
+                            text=formatted_response,
+                            parse_mode="Markdown"
+                        )
+                    except Exception:
+                        await bot.send_message(chat_id=chat_id, text=formatted_response)
                     
                     # Send all images as media group without captions
                     media_list = []
@@ -101,11 +105,14 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                     # Import localization function to avoid circular imports
                     from ..handlers.location import get_localized_message
                     fallback_message = await get_localized_message(0, 'image_fallback')  # Use user_id=0 for generic message
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=f"{fallback_message}{formatted_response}",
-                        parse_mode="Markdown"
-                    )
+                    try:
+                        await bot.send_message(
+                            chat_id=chat_id,
+                            text=f"{fallback_message}{formatted_response}",
+                            parse_mode="Markdown"
+                        )
+                    except Exception:
+                        await bot.send_message(chat_id=chat_id, text=f"{fallback_message}{formatted_response}")
                     logger.info(f"Sent fallback live text-only message for {place}")
                     return
                 except Exception as text_fallback_error:
@@ -137,22 +144,28 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                     logger.error(f"Failed to send individual live fact images fallback: {individual_fallback_error}")
         
         # No images found or all fallbacks failed, send just the text
-        await bot.send_message(
-            chat_id=chat_id,
-            text=formatted_response,
-            parse_mode="Markdown"
-        )
-        logger.info(f"Sent live fact without images for {place}")
-            
-    except Exception as e:
-        logger.warning(f"Failed to send live fact with images: {e}")
-        # Final fallback to text-only message
         try:
             await bot.send_message(
                 chat_id=chat_id,
                 text=formatted_response,
                 parse_mode="Markdown"
             )
+        except Exception:
+            await bot.send_message(chat_id=chat_id, text=formatted_response)
+        logger.info(f"Sent live fact without images for {place}")
+            
+    except Exception as e:
+        logger.warning(f"Failed to send live fact with images: {e}")
+        # Final fallback to text-only message
+        try:
+            try:
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=formatted_response,
+                    parse_mode="Markdown"
+                )
+            except Exception:
+                await bot.send_message(chat_id=chat_id, text=formatted_response)
         except Exception as fallback_error:
             logger.error(f"Failed to send fallback live fact message: {fallback_error}")
 

@@ -540,6 +540,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         # Extract and format sources section if present
         sources_block = ""
+        html_sources_block = ""
         if answer_match:
             sources = _extract_sources_from_answer(answer_content)
             if sources:
@@ -551,6 +552,30 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     safe_url = _sanitize_url(url)
                     bullets.append(f"- **[{safe_title}]({safe_url})**")
                 sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
+                # HTML version with anchors
+                html_bullets = []
+                for title, url in sources[:3]:
+                    t = _escape_html(title)[:80]
+                    u = _sanitize_url(url)
+                    html_bullets.append(f"- <b><a href=\"{u}\">{t}</a></b>")
+                html_sources_block = "\n\n" + _label_to_html(src_label) + "\n" + "\n".join(html_bullets)
+        else:
+            # Legacy: try to pull sources from the whole response
+            sources = _extract_sources_from_answer(response)
+            if sources:
+                src_label = await get_localized_message(user_id, 'sources_label')
+                bullets = []
+                for title, url in sources[:3]:
+                    safe_title = re.sub(r"[\[\]]", "", title)[:80]
+                    safe_url = _sanitize_url(url)
+                    bullets.append(f"- **[{safe_title}]({safe_url})**")
+                sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
+                html_bullets = []
+                for title, url in sources[:3]:
+                    t = _escape_html(title)[:80]
+                    u = _sanitize_url(url)
+                    html_bullets.append(f"- <b><a href=\"{u}\">{t}</a></b>")
+                html_sources_block = "\n\n" + _label_to_html(src_label) + "\n" + "\n".join(html_bullets)
 
         # Format the response for static location (Markdown primary, HTML fallback)
         formatted_response = await get_localized_message(user_id, 'static_fact_format', place=place, fact=fact)
@@ -565,6 +590,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         html_formatted = html_formatted.replace("💡 *Fact:*", "💡 <b>Fact:</b>")
         html_formatted = html_formatted.replace("📍 *Lieu :*", "📍 <b>Lieu :</b>")
         html_formatted = html_formatted.replace("💡 *Fait :*", "💡 <b>Fait :</b>")
+        if html_sources_block:
+            html_formatted = f"{html_formatted}{html_sources_block}"
         
         # Send fact with images using extracted search keywords
         if final_search_keywords:
