@@ -211,7 +211,8 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         env_path = os.getenv("HOWTO_GIF_PATH")
         if env_path:
             candidates.append(Path(env_path))
-        here = Path(__file__).resolve().parents[2]
+        # Project root: src/main.py -> src -> project root
+        here = Path(__file__).resolve().parent.parent
         candidates += [
             here / "howtobot.gif",
             here / "docs" / "howtobot.gif",
@@ -221,11 +222,22 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         sent = False
         for p in candidates:
             if p.exists() and p.is_file():
-                with p.open("rb") as f:
-                    await context.bot.send_animation(chat_id=chat_id, animation=f)
-                logger.info(f"Sent how-to gif from {p}")
-                sent = True
-                break
+                try:
+                    with p.open("rb") as f:
+                        await context.bot.send_animation(chat_id=chat_id, animation=f)
+                    logger.info(f"Sent how-to gif from {p}")
+                    sent = True
+                    break
+                except Exception as e:
+                    logger.warning(f"send_animation failed for {p}: {e}; trying as document")
+                    try:
+                        with p.open("rb") as f:
+                            await context.bot.send_document(chat_id=chat_id, document=f)
+                        logger.info(f"Sent how-to as document from {p}")
+                        sent = True
+                        break
+                    except Exception as e2:
+                        logger.warning(f"send_document failed for {p}: {e2}")
         if not sent:
             file_id = os.getenv("HOWTO_GIF_FILE_ID")
             file_url = os.getenv("HOWTO_GIF_URL")
