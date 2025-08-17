@@ -115,6 +115,120 @@ class OpenAIClient:
         self.client = AsyncOpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.static_history = StaticLocationHistory()
 
+    def _build_location_fact_prompt(
+        self,
+        lat: float,
+        lon: float,
+        is_live_location: bool,
+        user_language: str,
+        previous_facts: list | None,
+        language_instructions: str,
+    ) -> tuple[str, str]:
+        """Build structured system/user prompts (de-duplicated, with Sources section).
+
+        Keeps rich guidance, removes repetition, and enforces link formatting.
+        """
+        core_rules = f"""You are writing Atlas Obscura–style location facts. Goal: the most surprising, specific, verifiable detail about THIS exact spot that would make locals say "I never knew that!"
+
+IMPORTANT: Respond entirely in {user_language} (analysis and final answer).
+
+MANDATORY ONLINE VERIFICATION (web sources):
+- Verify coordinates, names, dates, and numbers using reliable sources.
+- When a web_search tool is available, call it at least twice with distinct queries to gather sources (coordinates + factual verification) BEFORE composing the final answer; synthesize a verified result.
+- Cross-check at least two independent sources for any specific names/dates/numbers. Prefer high‑credibility sources when in doubt.
+
+ATLAS OBSCURA METHOD (do these in order):
+1) PRECISE LOCATION ANALYSIS
+   - Identify what is exactly at these coordinates (building, corner, gate, tunnel access).
+   - Confirm the correct city by coordinates; never mix cities.
+   - Note the immediate surroundings (50–100 m) and neighborhood character.
+   - FACT‑CHECK that the place truly exists here before proceeding.
+
+2) DEEP RESEARCH FOR THE UNEXPECTED (expand outward only if needed)
+   A) This exact spot: prior uses, hidden features, specific incidents, famous visitors doing something here.
+   B) Immediate vicinity: underground features, vanished buildings, street‑name origins, visible architectural details with stories.
+   C) Wider area (only if A/B fail): transformation stories, documented legends, hidden infrastructure.
+
+3) HUMAN ELEMENT (documented)
+   - Who decided and why (use roles or names only if verified); what event happened; when (exact if sure, otherwise ranges like "в 1920‑е").
+   - No invented specifics. If uncertain, generalize the role instead of fabricating a name.
+
+4) WHAT'S VISIBLE TODAY (real, verifiable)
+   - Specific details visitors can actually see (rings in masonry, blocked windows, anchor points). No imaginary plaques/signatures/marks.
+
+QUALITY SELECTION (internal):
+- Generate 2–3 variants; select the best: surprising, specific, verifiable, and vivid. Output only the final choice.
+
+OUTPUT FORMAT:
+- Do NOT place URLs in the main fact text. At the end add a separate section: 'Источники' (RU) or 'Sources' (other languages), 2–3 bullets in the form: "Concise title — URL". Prefer canonical, clean links.
+
+WRITING RULES:
+• Start with the surprise, not with generic context.
+• Include at least one name or date (exact if certain; otherwise a precise range/period).
+• Tell what a visitor can look for today (physically verifiable).
+• Every sentence should add new, concrete information; avoid filler and dramatization.
+• Accuracy over drama. Distinguish documented history from legend (label legends as such).
+
+COMMON ERRORS TO AVOID:
+1) Confusing expo/era dates; 2) False attributions (not every iron = Eiffel);
+3) Invented details (plaques/marks/signatures); 4) Rounded numbers instead of exact counts;
+5) Oversimplifying complex processes; 6) Hollywood dramatization; 7) Inventing architectural features.
+
+CRITICAL FOR SEARCH FIELD (geocoding via Nominatim):
+- Use commas between components; include full city; prefer official names; avoid adjectives like "former"/"old".
+"""
+
+        language_block = f"""
+LANGUAGE REQUIREMENTS:
+Write your response in {user_language}.
+{language_instructions}"""
+
+        system_prompt = f"{core_rules}\n\n{language_block}".strip()
+
+        prev_block = ""
+        if previous_facts:
+            prev_text = "\n".join([f"- {fact}" for fact in previous_facts[-5:]])
+            prev_block = f"""\nPREVIOUS FACTS ALREADY MENTIONED (avoid repeating places/details):\n{prev_text}\n\nCRITICAL: Choose a DIFFERENT spot/aspect than anything listed above."""
+
+        if is_live_location:
+            user_prompt = f"""Analyze these coordinates: {lat}, {lon}
+
+CRITICAL: This is the user's CURRENT location. Mention only places actually at or very near (≤500 m) these exact coordinates. Do NOT pull famous landmarks from other parts of the city unless they are genuinely visible or directly relevant to this precise spot.{prev_block}
+
+Follow the method above to find the most surprising true detail about THIS exact place.
+
+Present your final answer strictly in this structure:
+<answer>
+Location: [Street address / building / precise intersection]
+Search: [Geocoding query optimized for Nominatim, with commas and city name]
+Interesting fact: [100–120 words. Surprising opening → Human story → Why it matters → What to look for today. Names/dates only if verified. No inline URLs.]
+Sources/Источники:
+- [Concise source title] — [URL]
+- [Concise source title] — [URL]
+</answer>
+"""
+        else:
+            user_prompt = f"""Here are the coordinates to analyze:
+<coordinates>
+Latitude: {lat}
+Longitude: {lon}
+</coordinates>{prev_block}
+
+Apply the method above to find one concise, surprising, verified detail.
+
+Format the answer strictly as:
+<answer>
+Location: [Exact place name; not "near"/generic area]
+Search: ["Place, Street/District, City" — commas, official names, with city]
+Interesting fact: [60–80 words. Surprising detail → Quick context (with name/date) → What is visible today. No inline URLs.]
+Sources/Источники:
+- [Concise source title] — [URL]
+- [Concise source title] — [URL]
+</answer>
+"""
+
+        return system_prompt, user_prompt
+
     async def get_nearby_fact(
         self,
         lat: float,
@@ -527,6 +641,16 @@ QUICK FACT-CHECK:
 □ Have I distinguished documented facts from legends?
 
 Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel attributions, invented plaques/marks, dramatized protests, oversimplified decisions."""
+
+            # Override with structured, de-duplicated prompts (keeps rich guidance and Sources section)
+            system_prompt, user_prompt = self._build_location_fact_prompt(
+                lat=lat,
+                lon=lon,
+                is_live_location=is_live_location,
+                user_language=user_language,
+                previous_facts=previous_facts,
+                language_instructions=language_instructions,
+            )
 
             # Optional GPT-5 (Responses API) path with built-in web_search tool
             # Enable with USE_GPT5_RESPONSES=true in environment. Falls back automatically on errors.
