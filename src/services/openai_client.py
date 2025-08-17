@@ -676,8 +676,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             final_content = content.strip()
             if user_language == "ru" and ("Interesting fact:" in final_content or "Интересный факт:" in final_content):
                 logger.info("Applying Russian language polish for better quality")
-                # Return as is - the language instructions in prompts should be sufficient
-                # Additional post-processing could distort facts
+                final_content = self._postprocess_russian_fact(final_content)
 
             return final_content
 
@@ -895,6 +894,25 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         
         logger.debug(f"No coordinates found in Nominatim for: {place_name}")
         return None
+
+    def _postprocess_russian_fact(self, text: str) -> str:
+        """Light-weight cleanup for Russian style without changing meaning.
+
+        - Replace common bureaucratic phrases with more neutral forms
+        - Avoid repetitive parenthetical URLs (we already enforce Sources section)
+        """
+        replacements = {
+            "является": "—",
+            "представляет собой": "это",
+            "находится": "стоит",
+            "расположен": "стоит",
+        }
+        cleaned = text
+        for old, new in replacements.items():
+            cleaned = re.sub(rf"\b{re.escape(old)}\b", new, cleaned)
+        # Remove bare domain lists in parentheses at end of lines
+        cleaned = re.sub(r"\([^\)]*https?://[^\)]*\)$", "", cleaned, flags=re.MULTILINE)
+        return cleaned
 
     def _coordinates_look_imprecise(self, lat: float, lon: float) -> bool:
         """Check if coordinates look suspiciously imprecise.
