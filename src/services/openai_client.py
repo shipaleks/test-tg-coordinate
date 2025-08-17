@@ -183,8 +183,9 @@ SPECIAL REQUIREMENTS FOR RUSSIAN:
 
 IMPORTANT: You must respond entirely in {user_language}. All your analysis, reasoning, and final answer must be in {user_language}.
 
-MANDATORY ONLINE VERIFICATION:
+MANDATORY ONLINE VERIFICATION (WITH web_search WHEN AVAILABLE):
 - You MUST verify the exact coordinates, names, dates and other factual details using reliable web sources.
+- When the web_search tool is available, you MUST call web_search (at least two distinct queries) to gather sources for coordinates and facts, then synthesize a verified answer.
 - Cross-check at least two independent sources before stating specific names/dates/numbers.
 - If sources disagree, prefer institutionally reliable sources and indicate uncertainty by using ranges or roles instead of invented specifics.
 
@@ -222,13 +223,13 @@ Search for facts in this priority order:
       - Local legends tied to specific features
       - Hidden infrastructure or urban planning secrets
 
-CRITICAL VERIFICATION FOR EACH FACT (WITH ONLINE SOURCES):
+CRITICAL VERIFICATION FOR EACH FACT (WITH ONLINE SOURCES / web_search WHEN AVAILABLE):
 □ Is the DATE correct? (Buildings from 1878 expo ≠ 1889, Soviet era ≠ 1917)
 □ Is the ATTRIBUTION correct? (Not every metal structure = Eiffel)
 □ Are NUMBERS exact? (29 not "about 30", verify counts from sources)
 □ Is this DOCUMENTED or LEGEND? (Distinguish real events from urban myths)
 □ Am I INVENTING details? (No imaginary plaques, marks, or features)
-□ Did I confirm these claims using reliable online sources?
+□ Did I confirm these claims using reliable online sources (via web_search when available)?
 
 Step 3: FIND THE HUMAN ELEMENT (WITH VERIFIED FACTS)
 Every great Atlas Obscura story connects to people:
