@@ -9,6 +9,9 @@ from datetime import datetime, timedelta
 from telegram import Bot, InputMediaPhoto
 
 from .openai_client import get_openai_client
+from ..handlers.location import _extract_sources_from_answer as _extract_live_sources
+from ..handlers.location import _strip_sources_section as _strip_live_sources
+from ..handlers.location import get_localized_message as _get_msg
 
 logger = logging.getLogger(__name__)
 
@@ -420,10 +423,20 @@ class LiveLocationTracker:
                         if search_match:
                             search_keywords = search_match.group(1).strip()
                         
-                        # Extract fact from answer content
-                        fact_match = re.search(r"Interesting fact:\s*(.*?)(?:\n\s*$|$)", answer_content, re.DOTALL)
+                        # Extract fact from answer content, stopping before Sources/Источники
+                        fact_match = re.search(r"Interesting fact:\s*(.*?)(?=\n(?:Sources|Источники)\s*:|$)", answer_content, re.DOTALL)
                         if fact_match:
-                            fact = fact_match.group(1).strip()
+                            fact = _strip_live_sources(fact_match.group(1).strip())
+                        # Build localized sources block from answer content (single, clean block)
+                        sources = _extract_live_sources(answer_content)
+                        sources_block = ""
+                        if sources:
+                            src_label = await _get_msg(session_data.user_id, 'sources_label')
+                            bullets = []
+                            for title, url in sources[:3]:
+                                # No markdown here (we ship as caption or as text separately elsewhere)
+                                bullets.append(f"- {title}")
+                            sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
                     
                     # Legacy fallback for old format responses
                     else:
@@ -451,6 +464,8 @@ class LiveLocationTracker:
                     # Import get_localized_message at top of function to avoid circular imports
                     from ..handlers.location import get_localized_message
                     formatted_response = await get_localized_message(session_data.user_id, 'live_fact_format', number=session_data.fact_count, place=place, fact=fact)
+                    if 'sources_block' in locals() and sources_block:
+                        formatted_response = f"{formatted_response}{sources_block}"
 
                     # Save fact to history to avoid repetition
                     session_data.fact_history.append(f"{place}: {fact}")

@@ -746,10 +746,14 @@ async def handle_interval_callback(
             if search_match:
                 search_keywords = search_match.group(1).strip()
             
-            # Extract fact from answer content
-            fact_match = re.search(r"Interesting fact:\s*(.*?)(?:\n\s*$|$)", answer_content, re.DOTALL)
+            # Extract fact from answer content (stop before Sources/Источники if present)
+            fact_match = re.search(
+                r"Interesting fact:\s*(.*?)(?=\n(?:Sources|Источники)\s*:|$)",
+                answer_content,
+                re.DOTALL,
+            )
             if fact_match:
-                fact = fact_match.group(1).strip()
+                fact = _strip_sources_section(fact_match.group(1).strip())
         
         # Legacy fallback for old format responses
         else:
