@@ -693,9 +693,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 {"role": "user", "content": [{"type": "input_text", "text": user_prompt}]},
             ]
             tools = [{"type": "web_search"}]
-            reasoning = {"effort": "low" if is_live else "medium"}
+            reasoning = {"effort": "medium" if is_live else "low"}
 
-            logger.info(f"GPT-5 Responses: sending request (reasoning={'high' if is_live else 'medium'})")
+            logger.info(f"GPT-5 Responses: sending request (reasoning={'medium' if is_live else 'low'})")
             response = await self.client.responses.create(
                 model="gpt-5",
                 input=messages,
