@@ -518,6 +518,17 @@ QUICK FACT-CHECK:
 
 Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel attributions, invented plaques/marks, dramatized protests, oversimplified decisions."""
 
+            # Optional GPT-5 (Responses API) path with built-in web_search tool
+            # Enable with USE_GPT5_RESPONSES=true in environment. Falls back automatically on errors.
+            try:
+                if os.getenv("USE_GPT5_RESPONSES", "").lower() == "true":
+                    content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location)
+                    if content:
+                        logger.info("Generated fact via GPT-5 Responses API")
+                        return content.strip()
+            except Exception as e:
+                logger.warning(f"GPT-5 Responses path failed: {e}. Falling back to standard models.")
+
             # Choose model based on location type and premium status
             model_to_use = "o4-mini"  # Default model for live
             max_tokens_limit = 10000
@@ -643,6 +654,49 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
         except Exception as e:
             logger.error(f"Failed to generate fact for {lat},{lon}: {e}")
+            raise
+
+    async def _get_with_gpt5_responses(self, system_prompt: str, user_prompt: str, is_live: bool) -> str | None:
+        """Attempt to use GPT-5 Responses API with built-in web_search tool.
+
+        Returns text content or None on failure.
+        """
+        try:
+            # Build inputs in Responses API format
+            messages = [
+                {"role": "system", "content": [{"type": "text", "text": system_prompt}]},
+                {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
+            ]
+            tools = [{"type": "web_search"}]
+            reasoning = {"effort": "high" if is_live else "medium"}
+
+            response = await self.client.responses.create(
+                model="gpt-5",
+                input=messages,
+                tools=tools,
+                tool_choice={"type": "web_search"},
+                reasoning=reasoning,
+            )
+
+            # Try convenience accessor first
+            content = getattr(response, "output_text", None)
+            if content:
+                return content
+
+            # Fallback: try to extract from output structure
+            try:
+                outputs = getattr(response, "output", None) or []
+                for item in outputs:
+                    parts = item.get("content") if isinstance(item, dict) else None
+                    if isinstance(parts, list):
+                        for part in parts:
+                            if part.get("type") == "output_text" and part.get("text"):
+                                return part["text"]
+            except Exception:
+                pass
+            return None
+        except Exception as e:
+            # Surface upstream for caller to decide on fallback
             raise
 
     async def get_precise_coordinates(
