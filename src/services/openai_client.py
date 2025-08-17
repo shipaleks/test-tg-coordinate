@@ -1398,8 +1398,41 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         def _cache_set(cache: dict, key: str, val):
             cache[key] = (val, time.time())
 
-        async def _qid_from_coords_or_search(session, lat_val, lon_val, keywords: str, place_text: str | None) -> str | None:
+        async def _qid_from_coords_or_search(session, lat_val, lon_val, keywords: str, place_text: str | None, poi_coords: tuple[float, float] | None) -> str | None:
             languages = ['ru', 'en', 'fr', 'de', 'es', 'it']
+            # If we have POI coords, try geosearch at POI FIRST
+            if poi_coords is not None:
+                plat, plon = poi_coords
+                for lang in languages:
+                    params = {
+                        'action': 'query', 'list': 'geosearch',
+                        'gscoord': f"{plat}|{plon}", 'gsradius': 120, 'gslimit': 10,
+                        'format': 'json'
+                    }
+                    data = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", params)
+                    if not data:
+                        continue
+                    pages = data.get('query', {}).get('geosearch', [])
+                    if not pages:
+                        continue
+                    pages.sort(key=lambda p: p.get('dist', 1e9))
+                    pageid = pages[0].get('pageid')
+                    if not pageid:
+                        continue
+                    cached = _cache_get(self._qid_cache, f"pageid:{pageid}")
+                    if cached:
+                        return cached
+                    pp = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
+                        'action': 'query', 'prop': 'pageprops', 'ppprop': 'wikibase_item',
+                        'pageids': pageid, 'format': 'json'
+                    })
+                    try:
+                        qid = next(iter(pp['query']['pages'].values()))['pageprops']['wikibase_item']
+                        if qid:
+                            _cache_set(self._qid_cache, f"pageid:{pageid}", qid)
+                            return qid
+                    except Exception:
+                        pass
             # Prefer title/keyword resolution FIRST (so image matches POI from the fact)
             titles_to_try: list[tuple[str, str]] = []  # (lang, title)
             if place_text:
@@ -1534,10 +1567,10 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 pass
             return out
 
-        async def _commons_geosearch(session, lat_val, lon_val, limit: int = 10) -> list[dict]:
+        async def _commons_geosearch(session, lat_val, lon_val, limit: int = 10, radius_m: int = 200) -> list[dict]:
             data = await _fetch_json(session, "https://commons.wikimedia.org/w/api.php", {
                 'action': 'query', 'list': 'geosearch', 'gscoord': f"{lat_val}|{lon_val}",
-                'gsradius': 200, 'gslimit': limit, 'format': 'json'
+                'gsradius': max(30, min(500, radius_m)), 'gslimit': limit, 'format': 'json'
             })
             items = []
             try:
@@ -1564,6 +1597,17 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 ts = ii.get('timestamp') or ''
                 landscape = 1 if width and height and width >= height else 0
                 title = (ii.get('descriptionurl') or ii.get('url') or '').lower()
+                # Include extmetadata description as haystack
+                try:
+                    em = ii.get('extmetadata') or {}
+                    desc = ''
+                    for k in ('ImageDescription', 'ObjectName'):
+                        v = em.get(k, {}).get('value') if isinstance(em.get(k), dict) else em.get(k)
+                        if v:
+                            desc += f" {str(v).lower()}"
+                    title += desc
+                except Exception:
+                    pass
                 # Token match bonus if any poi token appears in title/url
                 token_bonus = 0
                 try:
@@ -1572,7 +1616,26 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                             token_bonus += 1
                 except Exception:
                     token_bonus = 0
-                return (token_bonus, landscape, width)
+                # Distance bonus (closer better)
+                dist_bonus = 0
+                try:
+                    d = ii.get('distance')
+                    if isinstance(d, (int, float)):
+                        if d <= 60:
+                            dist_bonus = 3
+                        elif d <= 120:
+                            dist_bonus = 2
+                        elif d <= 200:
+                            dist_bonus = 1
+                except Exception:
+                    pass
+                # Negative penalties for irrelevant stadiums/arenas unless explicitly requested
+                neg = 0
+                banned = ['stade', 'stadium', 'arena', 'football', 'rugby']
+                if not any(x in (poi_tokens or []) for x in ['stadium', 'stade', 'arena']):
+                    if any(b in title for b in banned):
+                        neg = -5
+                return (token_bonus + dist_bonus + neg, landscape, width)
             infos_sorted = sorted(infos, key=score, reverse=True)
             urls = []
             for ii in infos_sorted:
@@ -1682,8 +1745,16 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         allow_user_geo_fallback = _os.getenv("ALLOW_USER_GEO_FALLBACK", "false").lower() == "true"
 
         try:
+            # Derive POI coordinates early to help QID resolution
+            poi_coords = None
+            if clean_keywords:
+                try:
+                    poi_coords = await self.get_coordinates_from_search_keywords(clean_keywords, user_lat=lat, user_lon=lon)
+                except Exception:
+                    poi_coords = None
+
             async with aiohttp.ClientSession() as session:
-                qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords, place_hint)
+                qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords, place_hint, poi_coords)
                 infos: list[dict] = []
                 if qid:
                     filename = await _p18_for_qid(session, qid)
@@ -1693,18 +1764,20 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                             infos.append(ii)
                     if len(infos) < max_images:
                         infos += await _commons_depicts_for_qid(session, qid, limit=max(3, max_images))
-                # Try Commons geosearch around POI coordinates derived from Search keywords first
-                poi_coords = None
-                if len(infos) < max_images and clean_keywords:
-                    try:
-                        poi_coords = await self.get_coordinates_from_search_keywords(clean_keywords, user_lat=lat, user_lon=lon)
-                    except Exception:
-                        poi_coords = None
                 if poi_coords and len(infos) < max_images:
-                    infos += await _commons_geosearch(session, poi_coords[0], poi_coords[1], limit=max(6, max_images))
+                    # Adjust radius based on tokens: micro-objects need tighter radius
+                    base_radius = 200
+                    try:
+                        if any(t in (poi_tokens or []) for t in ['plaque', 'arch', 'entrance']):
+                            base_radius = 80
+                        elif any(t in (poi_tokens or []) for t in ['market', 'square', 'church']):
+                            base_radius = 150
+                    except Exception:
+                        pass
+                    infos += await _commons_geosearch(session, poi_coords[0], poi_coords[1], limit=max(6, max_images), radius_m=base_radius)
                 # Optional last resort: Commons geosearch near USER location (disabled by default)
                 if allow_user_geo_fallback and (lat is not None and lon is not None) and len(infos) < max_images:
-                    infos += await _commons_geosearch(session, lat, lon, limit=max(6, max_images))
+                    infos += await _commons_geosearch(session, lat, lon, limit=max(6, max_images), radius_m=150)
 
                 if infos:
                     results = _pick_urls_from_infos(infos, max_images)
