@@ -184,7 +184,7 @@ SPECIAL REQUIREMENTS FOR RUSSIAN:
 IMPORTANT: You must respond entirely in {user_language}. All your analysis, reasoning, and final answer must be in {user_language}.
 
 MANDATORY ONLINE VERIFICATION:
-- You MUST use the web_search tool to verify the exact coordinates, names, dates and other factual details.
+- You MUST verify the exact coordinates, names, dates and other factual details using reliable web sources.
 - Cross-check at least two independent sources before stating specific names/dates/numbers.
 - If sources disagree, prefer institutionally reliable sources and indicate uncertainty by using ranges or roles instead of invented specifics.
 
@@ -222,13 +222,13 @@ Search for facts in this priority order:
       - Local legends tied to specific features
       - Hidden infrastructure or urban planning secrets
 
-CRITICAL VERIFICATION FOR EACH FACT (WITH WEB SEARCH):
+CRITICAL VERIFICATION FOR EACH FACT (WITH ONLINE SOURCES):
 □ Is the DATE correct? (Buildings from 1878 expo ≠ 1889, Soviet era ≠ 1917)
 □ Is the ATTRIBUTION correct? (Not every metal structure = Eiffel)
 □ Are NUMBERS exact? (29 not "about 30", verify counts from sources)
 □ Is this DOCUMENTED or LEGEND? (Distinguish real events from urban myths)
 □ Am I INVENTING details? (No imaginary plaques, marks, or features)
-□ Did I confirm these claims using web_search with reliable sources?
+□ Did I confirm these claims using reliable online sources?
 
 Step 3: FIND THE HUMAN ELEMENT (WITH VERIFIED FACTS)
 Every great Atlas Obscura story connects to people:
@@ -241,7 +241,7 @@ Every great Atlas Obscura story connects to people:
    - WHEN exactly did the transformation/event occur
      → Use exact dates only when certain; otherwise "in the 1920s" or "during the Soviet period"
 
-FACT-CHECKING RULE: If you can't verify a specific detail (name, date, event) via web_search, describe the general truth instead. Better to say "a local merchant" than invent "merchant Johnson"
+FACT-CHECKING RULE: If you can't verify a specific detail (name, date, event) via online sources, describe the general truth instead. Better to say "a local merchant" than invent "merchant Johnson"
 
 Step 4: IDENTIFY WHAT'S STILL VISIBLE (ONLY REAL FEATURES)
 Atlas Obscura readers want to know what they can see:
@@ -363,7 +363,7 @@ You MUST format it for optimal geocoding results:
 - NEVER truncate - always provide full location context
 
 Remember: Atlas Obscura readers already know the obvious history. They want the specific detail that changes how they see a place forever.
-Use web_search for verification before finalizing.
+Verify online before finalizing.
 
 LANGUAGE REQUIREMENTS:
 Write your response in {user_language}.
@@ -375,7 +375,7 @@ Write your response in {user_language}.
 IMPORTANT: You must respond entirely in {user_language}. All your analysis and final answer must be in {user_language}.
 
 MANDATORY ONLINE VERIFICATION:
-- You MUST use the web_search tool to verify exact coordinates and factual details (names, dates, numbers).
+- You MUST verify exact coordinates and factual details (names, dates, numbers) using reliable web sources.
 - Cross-check at least two sources. If uncertain, generalize instead of inventing specifics.
 
 RAPID ATLAS OBSCURA SEARCH (for quick facts):
@@ -406,7 +406,7 @@ Structure: [Surprising fact] → [Quick context] → [What remains visible]
 Example (with fact-checking approach):
 "The ornate bank building here conceals [city]'s last remaining piece of the medieval city wall in its vault - discovered [in the late 20th century / in 1987 if verified] when [renovation work / a specific incident if documented] revealed unexpectedly old stonework. The [medieval / 14th-century if verified] fortification was incorporated into the bank's [current structure / security system if true]. Look for [only describe what visitors can actually see] near the entrance."
 
-Remember: Include only details you can verify using web_search. General truths are better than specific falsehoods.
+Remember: Include only details you can verify using online sources. General truths are better than specific falsehoods.
 
 QUICK WRITING RULES:
 • Lead with the surprise - never with "This building is..."
@@ -432,7 +432,7 @@ QUICK FACT VERIFICATION:
 - Confirm: Can visitors actually see what you describe?
 - If uncertain about a detail, describe what you're sure of instead
 
-Write in {user_language} - crisp, factual, surprising. Use web_search before finalizing.
+Write in {user_language} - crisp, factual, surprising. Verify online before finalizing.
 {language_instructions}"""
 
             # Handle previous facts for both live and static locations
@@ -518,59 +518,113 @@ QUICK FACT-CHECK:
 
 Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel attributions, invented plaques/marks, dramatized protests, oversimplified decisions."""
 
-            # Unified model: GPT-5 with reasoning and forced web_search tool
-            model_to_use = "gpt-5"
-            max_tokens_limit = 1000 if not is_live_location else 2000
+            # Choose model based on location type and premium status
+            model_to_use = "o4-mini"  # Default model for live
+            max_tokens_limit = 10000
+
+            if is_live_location:
+                if is_premium_user:
+                    # Premium users get o3 for live locations (detailed analysis)
+                    model_to_use = "o3"
+                    max_tokens_limit = 12000
+                    logger.info(f"Using o3 model for premium user {user_id} (live location)")
+                else:
+                    model_to_use = "o4-mini"
+                    max_tokens_limit = 10000
+            else:
+                # Static locations use gpt-4.1 (fast, concise)
+                model_to_use = "gpt-4.1"
+                max_tokens_limit = 400
+                if is_premium_user:
+                    logger.info(f"Using gpt-4.1 for premium user {user_id} (static location - speed priority)")
 
             response = None
-            # Use GPT-5 with reasoning + forced web_search for both live and static
-            try:
-                response = await self.client.chat.completions.create(
-                    model=model_to_use,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    reasoning={"effort": "high"},
-                    tools=[{"type": "web_search"}],
-                    tool_choice={"type": "web_search"},
-                    max_completion_tokens=max_tokens_limit,
-                    temperature=0.6,
-                )
-                logger.info(f"{model_to_use} response: {response}")
-                content = (
-                    response.choices[0].message.content
-                    if response.choices
-                    else None
-                )
-
-                if not content:
-                    logger.warning(
-                        f"{model_to_use} returned empty content, falling back to gpt-4.1"
+            if is_live_location:
+                # Use advanced models for live (o3 for premium, o4-mini for regular)
+                try:
+                    if model_to_use in ["o3", "o4-mini"]:
+                        response = await self.client.chat.completions.create(
+                            model=model_to_use,
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            max_completion_tokens=max_tokens_limit,
+                        )
+                    else:
+                        response = await self.client.chat.completions.create(
+                            model=model_to_use,
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            max_completion_tokens=max_tokens_limit,
+                            temperature=0.6,
+                        )
+                    logger.info(f"{model_to_use} (live) response: {response}")
+                    content = (
+                        response.choices[0].message.content
+                        if response.choices
+                        else None
                     )
-                    raise ValueError(f"Empty content from {model_to_use}")
 
-            except Exception as e:
-                logger.warning(
-                    f"{model_to_use} failed ({e}), falling back to gpt-4.1"
-                )
-                response = await self.client.chat.completions.create(
-                    model="gpt-4.1",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    max_tokens=800,
-                    temperature=0.6,
-                    tools=[{"type": "web_search"}],
-                    tool_choice={"type": "web_search"},
-                )
-                logger.info(f"gpt-4.1 fallback response: {response}")
-                content = (
-                    response.choices[0].message.content
-                    if response.choices
-                    else None
-                )
+                    if not content:
+                        logger.warning(
+                            f"{model_to_use} returned empty content, falling back to gpt-4.1"
+                        )
+                        raise ValueError(f"Empty content from {model_to_use}")
+
+                except Exception as e:
+                    logger.warning(
+                        f"{model_to_use} failed ({e}), falling back to gpt-4.1"
+                    )
+                    response = await self.client.chat.completions.create(
+                        model="gpt-4.1",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        max_tokens=800,
+                        temperature=0.6,
+                    )
+                    logger.info(f"gpt-4.1 fallback response: {response}")
+                    content = (
+                        response.choices[0].message.content
+                        if response.choices
+                        else None
+                    )
+            else:
+                # Use gpt-4.1 for static location
+                try:
+                    if previous_facts:
+                        logger.info(f"Sending prompt to GPT-4.1 with {len(previous_facts)} previous facts")
+                        logger.debug(f"User prompt preview: {user_prompt[:200]}...")
+
+                    response = await self.client.chat.completions.create(
+                        model="gpt-4.1",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        max_tokens=400,
+                        temperature=0.7,
+                    )
+                    logger.info(f"gpt-4.1 (static location) response: {response}")
+                    content = (
+                        response.choices[0].message.content
+                        if response.choices
+                        else None
+                    )
+
+                    if not content:
+                        logger.warning(
+                            "gpt-4.1 returned empty content for static location"
+                        )
+                        raise ValueError("Empty content from gpt-4.1")
+
+                except Exception as e:
+                    logger.error(f"gpt-4.1 failed for static location: {e}")
+                    raise
 
             if not content:
                 logger.error(f"Empty content even after fallback: {response}")

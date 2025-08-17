@@ -54,7 +54,7 @@ def test_get_nearby_fact_empty_response(openai_client):
         mock_create = AsyncMock(return_value=mock_response)
 
         with patch.object(openai_client.client.chat.completions, "create", mock_create):
-            with pytest.raises(ValueError, match="Empty response from OpenAI"):
+            with pytest.raises(ValueError, match="Empty content from gpt-4.1"):
                 await openai_client.get_nearby_fact(
                     55.751244, 37.618423, is_live_location=False
                 )
@@ -98,20 +98,18 @@ def test_get_nearby_fact_prompt_format(openai_client):
             mock_create.assert_called_once()
             call_args = mock_create.call_args
 
-            # For static location we now use unified gpt-5 with web_search
+            # For static location (is_live_location=False), should use gpt-4.1
             model_used = call_args[1]["model"]
-            assert model_used == "gpt-5"
-            assert call_args[1]["temperature"] == 0.6
-            assert call_args[1]["max_completion_tokens"] == 1000
-            assert call_args[1]["tools"] == [{"type": "web_search"}]
-            assert call_args[1]["tool_choice"] == {"type": "web_search"}
+            assert model_used == "gpt-4.1"
+            assert call_args[1]["temperature"] == 0.7
+            assert call_args[1]["max_tokens"] == 400
+            assert "max_completion_tokens" not in call_args[1]
 
             messages = call_args[1]["messages"]
             assert len(messages) == 2
             assert messages[0]["role"] == "system"
-            assert isinstance(messages[0]["content"], str)
+            assert "Atlas Obscura" in messages[0]["content"]
             assert messages[1]["role"] == "user"
-            assert "Latitude" in messages[1]["content"]
             assert "55.751244" in messages[1]["content"]
             assert "Location:" in messages[1]["content"]
             assert "Interesting fact:" in messages[1]["content"]
@@ -120,7 +118,7 @@ def test_get_nearby_fact_prompt_format(openai_client):
 
 
 def test_get_nearby_fact_live_location_model(openai_client):
-    """Test that live location uses gpt-5 with web_search and reasoning."""
+    """Test that live location uses o4-mini model."""
 
     async def _test():
         mock_response = MagicMock()
@@ -140,22 +138,19 @@ def test_get_nearby_fact_live_location_model(openai_client):
             mock_create.assert_called_once()
             call_args = mock_create.call_args
 
-            # For live location we now use unified gpt-5 with web_search and reasoning
+            # For live location (is_live_location=True), should use o4-mini
             model_used = call_args[1]["model"]
-            assert model_used == "gpt-5"
-            assert call_args[1]["temperature"] == 0.6
-            assert call_args[1]["max_completion_tokens"] == 2000
-            assert call_args[1]["tools"] == [{"type": "web_search"}]
-            assert call_args[1]["tool_choice"] == {"type": "web_search"}
-            assert call_args[1]["reasoning"]["effort"] == "medium"
+            assert model_used == "o4-mini"
+            assert "temperature" not in call_args[1]
+            assert call_args[1]["max_completion_tokens"] == 10000
+            assert "max_tokens" not in call_args[1]
 
             messages = call_args[1]["messages"]
             assert len(messages) == 2
             assert messages[0]["role"] == "system"
-            assert isinstance(messages[0]["content"], str)
+            assert "Atlas Obscura" in messages[0]["content"]
             assert messages[1]["role"] == "user"
             assert "55.751244" in messages[1]["content"]
-            # Live user prompt includes detailed Atlas Obscura method instructions
             assert "Location:" in messages[1]["content"]
             assert "Interesting fact:" in messages[1]["content"]
 
