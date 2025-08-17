@@ -1360,15 +1360,16 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         place_hint = None
         try:
             # Inspect caller locals to fetch keyword-only arguments if provided
-            # This is a safe no-op for older call sites/tests
             caller_locals = frame.f_back.f_locals if frame and frame.f_back else {}
             lat = caller_locals.get('lat') if 'lat' in caller_locals else caller_locals.get('latitude')
             lon = caller_locals.get('lon') if 'lon' in caller_locals else caller_locals.get('longitude')
             place_hint = caller_locals.get('place') or caller_locals.get('location_title')
+            poi_tokens = caller_locals.get('poi_tokens') or caller_locals.get('what_to_see_tokens') or []
         except Exception:
             lat = None
             lon = None
             place_hint = None
+            poi_tokens = []
 
         # Normalize keywords
         clean_keywords = (search_keywords or '').replace(' + ', ' ').replace('+', ' ').strip()
@@ -1562,7 +1563,16 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 height = ii.get('thumbheight') or ii.get('height') or 0
                 ts = ii.get('timestamp') or ''
                 landscape = 1 if width and height and width >= height else 0
-                return (landscape, width)
+                title = (ii.get('descriptionurl') or ii.get('url') or '').lower()
+                # Token match bonus if any poi token appears in title/url
+                token_bonus = 0
+                try:
+                    for t in poi_tokens:
+                        if t and t.lower() in title:
+                            token_bonus += 1
+                except Exception:
+                    token_bonus = 0
+                return (token_bonus, landscape, width)
             infos_sorted = sorted(infos, key=score, reverse=True)
             urls = []
             for ii in infos_sorted:
