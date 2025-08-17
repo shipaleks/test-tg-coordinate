@@ -35,6 +35,7 @@ from .handlers.language_selection import (
     reset_language_command,
 )
 from .services.async_donors_wrapper import get_async_donors_db
+from pathlib import Path
 
 # Load environment variables from .env file
 load_dotenv()
@@ -212,16 +213,40 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if step == 0:
         try:
             import os
-            gif_path = os.getenv("HOWTO_GIF_PATH", "howtobot.gif")
-            if os.path.exists(gif_path):
-                with open(gif_path, "rb") as f:
-                    await context.bot.send_animation(chat_id=chat_id, animation=f)
-            else:
+            # 1) explicit env path
+            candidates = []
+            env_path = os.getenv("HOWTO_GIF_PATH")
+            if env_path:
+                candidates.append(Path(env_path))
+            # 2) common repo locations
+            here = Path(__file__).resolve().parents[2]  # project root
+            candidates += [
+                here / "howtobot.gif",
+                here / "docs" / "howtobot.gif",
+                here / "assets" / "howtobot.gif",
+                Path("howtobot.gif").resolve(),
+            ]
+            sent = False
+            for p in candidates:
+                if p.exists() and p.is_file():
+                    with p.open("rb") as f:
+                        await context.bot.send_animation(chat_id=chat_id, animation=f)
+                    logger.info(f"Sent how-to gif from {p}")
+                    sent = True
+                    break
+            if not sent:
+                # 3) file_id or URL
                 file_id = os.getenv("HOWTO_GIF_FILE_ID")
+                file_url = os.getenv("HOWTO_GIF_URL")
                 if file_id:
                     await context.bot.send_animation(chat_id=chat_id, animation=file_id)
+                    logger.info("Sent how-to gif via file_id")
+                    sent = True
+                elif file_url:
+                    await context.bot.send_animation(chat_id=chat_id, animation=file_url)
+                    logger.info("Sent how-to gif via URL")
         except Exception as e:
-            logger.debug(f"Failed to send how-to gif: {e}")
+            logger.warning(f"Failed to send how-to gif: {e}")
 
     # Compose inline keyboard for step
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
