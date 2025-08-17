@@ -430,11 +430,12 @@ class DonorsDatabase:
                     
                     if result:
                         return result[0]
-                    return "en"  # Default to English
+                    # Default to Russian so that first-time users see language selection (wrapper checks ru)
+                    return "ru"
                     
         except Exception as e:
             logger.error(f"Failed to get user language for user {user_id}: {e}")
-            return "en"  # Default fallback
+            return "ru"  # Default fallback
     
     def set_user_language(self, user_id: int, language: str) -> bool:
         """Set user's preferred language.

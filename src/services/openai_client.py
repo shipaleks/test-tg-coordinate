@@ -522,9 +522,10 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Enable with USE_GPT5_RESPONSES=true in environment. Falls back automatically on errors.
             try:
                 if os.getenv("USE_GPT5_RESPONSES", "").lower() == "true":
+                    logger.info("USE_GPT5_RESPONSES=true; attempting GPT-5 Responses with web_search...")
                     content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location)
                     if content:
-                        logger.info("Generated fact via GPT-5 Responses API")
+                        logger.info("GPT-5 Responses: success (web_search enabled)")
                         return content.strip()
             except Exception as e:
                 logger.warning(f"GPT-5 Responses path failed: {e}. Falling back to standard models.")
@@ -670,6 +671,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             tools = [{"type": "web_search"}]
             reasoning = {"effort": "high" if is_live else "medium"}
 
+            logger.info(f"GPT-5 Responses: sending request (reasoning={'high' if is_live else 'medium'})")
             response = await self.client.responses.create(
                 model="gpt-5",
                 input=messages,
@@ -681,6 +683,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Try convenience accessor first
             content = getattr(response, "output_text", None)
             if content:
+                logger.info("GPT-5 Responses: output_text received")
                 return content
 
             # Fallback: try to extract from output structure
@@ -691,12 +694,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     if isinstance(parts, list):
                         for part in parts:
                             if part.get("type") == "output_text" and part.get("text"):
+                                logger.info("GPT-5 Responses: output_text extracted from structured output")
                                 return part["text"]
             except Exception:
                 pass
             return None
         except Exception as e:
             # Surface upstream for caller to decide on fallback
+            logger.warning(f"GPT-5 Responses error: {e}")
             raise
 
     async def get_precise_coordinates(
