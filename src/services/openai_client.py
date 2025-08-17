@@ -1352,20 +1352,23 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         desired, callers may pass them via keyword-only args (lat, lon), which
         will be ignored by older tests using positional args.
         """
-        # Keyword-only optional coords (ignored if not provided by caller)
+        # Keyword-only optional hints (ignored if not provided by caller)
         import inspect as _inspect
         frame = _inspect.currentframe()
         lat = None
         lon = None
+        place_hint = None
         try:
             # Inspect caller locals to fetch keyword-only arguments if provided
             # This is a safe no-op for older call sites/tests
             caller_locals = frame.f_back.f_locals if frame and frame.f_back else {}
             lat = caller_locals.get('lat') if 'lat' in caller_locals else caller_locals.get('latitude')
             lon = caller_locals.get('lon') if 'lon' in caller_locals else caller_locals.get('longitude')
+            place_hint = caller_locals.get('place') or caller_locals.get('location_title')
         except Exception:
             lat = None
             lon = None
+            place_hint = None
 
         # Normalize keywords
         clean_keywords = (search_keywords or '').replace(' + ', ' ').replace('+', ' ').strip()
@@ -1394,9 +1397,53 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         def _cache_set(cache: dict, key: str, val):
             cache[key] = (val, time.time())
 
-        async def _qid_from_coords_or_search(session, lat_val, lon_val, keywords: str) -> str | None:
+        async def _qid_from_coords_or_search(session, lat_val, lon_val, keywords: str, place_text: str | None) -> str | None:
             languages = ['ru', 'en', 'fr', 'de', 'es', 'it']
-            # Prefer geosearch when coords available
+            # Prefer title/keyword resolution FIRST (so image matches POI from the fact)
+            titles_to_try: list[tuple[str, str]] = []  # (lang, title)
+            if place_text:
+                for lang in languages:
+                    titles_to_try.append((lang, place_text))
+            if keywords:
+                # Try exact title path via keywords
+                for lang in languages:
+                    titles_to_try.append((lang, keywords))
+            # Try direct titles → pageprops → QID
+            for lang, title in titles_to_try:
+                try:
+                    cached_qid = _cache_get(self._qid_cache, f"title:{lang}:{title}")
+                    if cached_qid:
+                        return cached_qid
+                    page = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
+                        'action': 'query', 'prop': 'pageprops', 'ppprop': 'wikibase_item',
+                        'titles': title, 'redirects': 1, 'format': 'json'
+                    })
+                    qid = next(iter(page['query']['pages'].values()))['pageprops']['wikibase_item']
+                    if qid:
+                        _cache_set(self._qid_cache, f"title:{lang}:{title}", qid)
+                        return qid
+                except Exception:
+                    continue
+            # Then try keyword search → pageprops
+            if keywords:
+                for lang in languages:
+                    res = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
+                        'action': 'query', 'list': 'search', 'srsearch': keywords, 'srlimit': 1, 'format': 'json'
+                    })
+                    try:
+                        search_res = res['query']['search']
+                        if not search_res:
+                            continue
+                        title = search_res[0]['title']
+                        page = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
+                            'action': 'query', 'prop': 'pageprops', 'ppprop': 'wikibase_item', 'titles': title, 'format': 'json'
+                        })
+                        qid = next(iter(page['query']['pages'].values()))['pageprops']['wikibase_item']
+                        if qid:
+                            return qid
+                    except Exception:
+                        continue
+            # Finally, fallback to geosearch near USER coords (least preferred)
             if lat_val is not None and lon_val is not None:
                 for lang in languages:
                     params = {
@@ -1430,25 +1477,6 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                             return qid
                     except Exception:
                         pass
-            # Fallback: title search across languages
-            if keywords:
-                for lang in ['ru', 'en', 'fr', 'de', 'es', 'it']:
-                    res = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
-                        'action': 'query', 'list': 'search', 'srsearch': keywords, 'srlimit': 1, 'format': 'json'
-                    })
-                    try:
-                        search_res = res['query']['search']
-                        if not search_res:
-                            continue
-                        title = search_res[0]['title']
-                        page = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
-                            'action': 'query', 'prop': 'pageprops', 'ppprop': 'wikibase_item', 'titles': title, 'format': 'json'
-                        })
-                        qid = next(iter(page['query']['pages'].values()))['pageprops']['wikibase_item']
-                        if qid:
-                            return qid
-                    except Exception:
-                        continue
             return None
 
         async def _p18_for_qid(session, qid: str) -> str | None:
@@ -1548,7 +1576,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         results: list[str] = []
         try:
             async with aiohttp.ClientSession() as session:
-                qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords)
+                qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords, place_hint)
                 infos: list[dict] = []
                 if qid:
                     filename = await _p18_for_qid(session, qid)
@@ -1558,6 +1586,16 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                             infos.append(ii)
                     if len(infos) < max_images:
                         infos += await _commons_depicts_for_qid(session, qid, limit=max(3, max_images))
+                # Try Commons geosearch around POI coordinates derived from Search keywords first
+                poi_coords = None
+                if len(infos) < max_images and clean_keywords:
+                    try:
+                        poi_coords = await self.get_coordinates_from_search_keywords(clean_keywords, user_lat=lat, user_lon=lon)
+                    except Exception:
+                        poi_coords = None
+                if poi_coords and len(infos) < max_images:
+                    infos += await _commons_geosearch(session, poi_coords[0], poi_coords[1], limit=max(6, max_images))
+                # Last resort: Commons geosearch near USER location
                 if (lat is not None and lon is not None) and len(infos) < max_images:
                     infos += await _commons_geosearch(session, lat, lon, limit=max(6, max_images))
 
