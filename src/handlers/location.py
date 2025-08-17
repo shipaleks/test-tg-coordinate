@@ -113,7 +113,11 @@ def _extract_sources_from_answer(answer_content: str) -> list[tuple[str, str]]:
     """
     try:
         # Find sources header and capture until the end
-        match = re.search(r"(?:^|\n)(Sources|Источники)\s*:\s*(.*?)$", answer_content, re.DOTALL | re.IGNORECASE)
+        match = re.search(
+            r"(?:^|\n)(Sources(?:/Источники)?|Источники(?:/Sources)?)\s*:\s*(.*?)$",
+            answer_content,
+            re.DOTALL | re.IGNORECASE,
+        )
         if not match:
             return []
         section = match.group(2).strip()
@@ -149,7 +153,12 @@ def _strip_sources_section(text: str) -> str:
     """Remove any trailing Sources/Источники section from a text block."""
     try:
         # Cut at the first occurrence of a sources header
-        cut = re.split(r"\n(?:Sources|Источники)\s*:.*", text, maxsplit=1, flags=re.IGNORECASE | re.DOTALL)
+        cut = re.split(
+            r"\n(?:Sources(?:/Источники)?|Источники(?:/Sources)?)\s*:.*",
+            text,
+            maxsplit=1,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
         return cut[0].rstrip()
     except Exception:
         return text
@@ -167,8 +176,27 @@ def _sanitize_url(url: str) -> str:
         return url
 
 
-async def _send_text_resilient(bot, chat_id: int, text: str, reply_to_message_id: int | None = None):
-    """Send text with Markdown; on entity parse error, retry without parse_mode."""
+def _escape_html(text: str) -> str:
+    return (
+        text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+    )
+
+
+def _label_to_html(label: str) -> str:
+    # Convert patterns like "🔗 *Источники:*" to "🔗 <b>Источники:</b>"
+    return re.sub(r"\*(.+?)\*", r"<b>\\1</b>", label)
+
+
+async def _send_text_resilient(
+    bot,
+    chat_id: int,
+    text: str,
+    reply_to_message_id: int | None = None,
+    html_text: str | None = None,
+):
+    """Send text with Markdown; on entity parse error, retry as HTML, then plain."""
     try:
         await bot.send_message(
             chat_id=chat_id,
@@ -179,6 +207,17 @@ async def _send_text_resilient(bot, chat_id: int, text: str, reply_to_message_id
     except Exception as e:
         err_str = str(e).lower()
         if "can't parse entities" in err_str or "parse entities" in err_str:
+            if html_text:
+                try:
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=html_text,
+                        parse_mode="HTML",
+                        reply_to_message_id=reply_to_message_id,
+                    )
+                    return
+                except Exception:
+                    pass
             await bot.send_message(
                 chat_id=chat_id,
                 text=text,
@@ -187,7 +226,7 @@ async def _send_text_resilient(bot, chat_id: int, text: str, reply_to_message_id
         else:
             raise
 
-async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, user_id=None, reply_to_message_id=None):
+async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, user_id=None, reply_to_message_id=None, html_text: str | None = None):
     """Send fact message with Wikipedia images if available.
     
     Args:
@@ -229,7 +268,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                     logger.info(f"Successfully sent {len(image_urls)} images with caption in media group for {place}")
                 else:
                     # Caption too long, send text first then all images as media group
-                    await _send_text_resilient(bot, chat_id, formatted_response, reply_to_message_id)
+                    await _send_text_resilient(bot, chat_id, formatted_response, reply_to_message_id, html_text=html_text)
                     
                     # Send all images as media group without captions
                     media_list = []
@@ -274,7 +313,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                 # (This is a fallback in case the text sending also failed)
                 try:
                     fallback_message = await get_localized_message(user_id or 0, 'image_fallback') if user_id else "⚠️ Изображения не загрузились, но вот факт:\n\n"
-                    await _send_text_resilient(bot, chat_id, f"{fallback_message}{formatted_response}", reply_to_message_id)
+                    await _send_text_resilient(bot, chat_id, f"{fallback_message}{formatted_response}", reply_to_message_id, html_text=html_text)
                     logger.info(f"Sent fallback text-only message for {place}")
                     return
                 except Exception as text_fallback_error:
@@ -307,7 +346,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                     logger.error(f"Failed to send individual images fallback: {individual_fallback_error}")
         
         # No images found or all fallbacks failed, send just the text
-        await _send_text_resilient(bot, chat_id, formatted_response, reply_to_message_id)
+        await _send_text_resilient(bot, chat_id, formatted_response, reply_to_message_id, html_text=html_text)
         logger.info(f"Sent fact without images for {place}")
             
     except Exception as e:
@@ -513,10 +552,19 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     bullets.append(f"- **[{safe_title}]({safe_url})**")
                 sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
 
-        # Format the response for static location
+        # Format the response for static location (Markdown primary, HTML fallback)
         formatted_response = await get_localized_message(user_id, 'static_fact_format', place=place, fact=fact)
         if sources_block:
             formatted_response = f"{formatted_response}{sources_block}"
+        # Build HTML variant to preserve bold if Markdown breaks
+        html_formatted = _escape_html(formatted_response)
+        # Convert known bold labels to <b>...</b>
+        html_formatted = html_formatted.replace("📍 *Место:*", "📍 <b>Место:</b>")
+        html_formatted = html_formatted.replace("💡 *Факт:*", "💡 <b>Факт:</b>")
+        html_formatted = html_formatted.replace("📍 *Place:*", "📍 <b>Place:</b>")
+        html_formatted = html_formatted.replace("💡 *Fact:*", "💡 <b>Fact:</b>")
+        html_formatted = html_formatted.replace("📍 *Lieu :*", "📍 <b>Lieu :</b>")
+        html_formatted = html_formatted.replace("💡 *Fait :*", "💡 <b>Fait :</b>")
         
         # Send fact with images using extracted search keywords
         if final_search_keywords:
@@ -527,10 +575,12 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 final_search_keywords, 
                 place,
                 user_id=user_id,
-                reply_to_message_id=update.message.message_id
+                reply_to_message_id=update.message.message_id,
+                html_text=html_formatted,
             )
         else:
             # No search keywords, send just text
+            # For tests, keep original reply_text path
             await update.message.reply_text(
                 text=formatted_response,
                 reply_to_message_id=update.message.message_id,
@@ -718,6 +768,11 @@ async def handle_interval_callback(
         initial_fact_response = await get_localized_message(user_id, 'live_fact_format', number=fact_number, place=place, fact=fact)
         if sources_block:
             initial_fact_response = f"{initial_fact_response}{sources_block}"
+        live_html_text = _escape_html(initial_fact_response)
+        live_html_text = live_html_text.replace("🔴 *Факт #", "🔴 <b>Факт #")
+        live_html_text = live_html_text.replace("*\n\n📍 *Место:*", "</b>\n\n📍 <b>Место:</b>")
+        live_html_text = live_html_text.replace("*\n\n📍 *Place:*", "</b>\n\n📍 <b>Place:</b>")
+        live_html_text = live_html_text.replace("*\n\n📍 *Lieu :*", "</b>\n\n📍 <b>Lieu :</b>")
 
         # Save initial fact to history
         if user_id in tracker._active_sessions:
@@ -748,7 +803,7 @@ async def handle_interval_callback(
                 )
             else:
                 # No search keywords, send just text
-                await _send_text_resilient(context.bot, chat_id, initial_fact_response)
+                await _send_text_resilient(context.bot, chat_id, initial_fact_response, html_text=live_html_text)
 
         # Try to parse coordinates and send location for navigation using search keywords (live location)
         coordinates = None
