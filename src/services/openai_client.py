@@ -954,7 +954,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 })
         
         url = "https://nominatim.openstreetmap.org/search"
-        headers = {"User-Agent": "NearbyFactBot/1.0 (Educational Project)"}
+        headers = {"User-Agent": "BotVoyage/1.0 (Educational Project)"}
         
         # Try each strategy
         async with aiohttp.ClientSession() as session:
@@ -1427,7 +1427,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         try:
             # Use legacy API for search (REST API often returns 404)
             search_url = f"https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={quote(search_term)}&format=json"
-            headers = {"User-Agent": "NearbyFactBot/1.0 (Educational Project)"}
+            headers = {"User-Agent": "BotVoyage/1.0 (Educational Project)"}
 
             async with aiohttp.ClientSession() as session:
                 # Search for pages using legacy API

@@ -1,4 +1,4 @@
-"""Main application entry point for NearbyFactBot."""
+"""Main application entry point for Bot Voyage."""
 
 import logging
 import os
@@ -45,72 +45,56 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Localized welcome messages
+# Localized welcome messages (focus on Live Location)
 LOCALIZED_MESSAGES = {
     'ru': {
         'welcome': (
-            "🗺️ *Добро пожаловать в бот удивительных фактов!*\n\n"
-            "🔴 *Живая локация — ваш персональный экскурсовод:*\n"
-            "📎 → Location → Share Live Location (15 мин - 8 часов)\n"
-            "Автоматические факты каждые 5-60 минут во время прогулки\n\n"
-            "📍 *Также доступно:* разовая отправка текущей геопозиции\n"
-            "Нажмите кнопку ниже для мгновенного факта о месте\n\n"
-            "_Каждый факт — это маленькое открытие рядом с вами!_ ✨"
+            "🗺️ *Bot Voyage — факты во время прогулки!*\n\n"
+            "🔴 *Живая локация — основной режим:*\n"
+            "📎 → Location → Share Live Location (5–60 мин и больше)\n"
+            "Я сам присылаю факты, пока вы идёте\n\n"
+            "Нажмите ниже, чтобы посмотреть, как включить живую локацию."
         ),
         'buttons': {
-            'info': "📱💡 Как поделиться Live Location",
-            'location': "🔴📍 Поделиться локацией",
+            'info': "📱💡 Как включить живую локацию",
             'donate': "⭐💝 Поддержать проект"
         },
         'info_text': (
-            "📱 *Как поделиться Live Location:*\n\n"
-            "🔴 *Живая локация — основной режим:*\n"
-            "1️⃣ Скрепка 📎 → Location → Share Live Location\n"
-            "2️⃣ Выберите время отслеживания (15 мин - 8 часов)\n"
-            "3️⃣ Настройте частоту фактов (каждые 5-60 минут)\n"
-            "4️⃣ Гуляйте и получайте факты автоматически!\n\n"
+            "📱 *Как включить живую локацию:*\n\n"
+            "1️⃣ Скрепка 📎 → 📍 Location → 🔴 Share Live Location\n"
+            "2️⃣ Выберите время (обычно 60 мин удобно)\n"
+            "3️⃣ Гуляйте — факты будут приходить сами (каждые 5–60 мин)\n\n"
             "*💡 Почему живая локация лучше?*\n"
             "• Персональный экскурсовод в кармане\n"
             "• Факты приходят сами по мере движения\n"
             "• Не нужно постоянно отправлять локацию\n"
             "• Идеально для туристических прогулок\n\n"
-            "📍 *Разовая геопозиция:*\n"
-            "• Кнопка «🔴 Поделиться локацией»\n"
-            "• Мгновенный факт о текущем месте\n"
-            "• Подходит для быстрых запросов"
+            "Если что — разовая локация тоже работает, просто отправьте её через 📎."
         )
     },
     'en': {
         'welcome': (
-            "🗺️ *Welcome to the amazing facts bot!*\n\n"
-            "🔴 *Live location — your personal tour guide:*\n"
-            "📎 → Location → Share Live Location (15 min - 8 hours)\n"
-            "Automatic facts every 5-60 minutes during your walk\n\n"
-            "📍 *Also available:* one-time current location sharing\n"
-            "Press the button below for an instant fact about the place\n\n"
-            "_Every fact is a small discovery near you!_ ✨"
+            "🗺️ *Bot Voyage — facts while you walk!*\n\n"
+            "🔴 *Live location is the main mode:*\n"
+            "📎 → Location → Share Live Location (5–60 min and more)\n"
+            "I’ll send facts automatically as you move\n\n"
+            "Tap below to see how to enable live location."
         ),
         'buttons': {
-            'info': "📱💡 How to share Live Location",
-            'location': "🔴📍 Share location",
+            'info': "📱💡 How to enable Live Location",
             'donate': "⭐💝 Support project"
         },
         'info_text': (
-            "📱 *How to share Live Location:*\n\n"
-            "🔴 *Live location — main mode:*\n"
-            "1️⃣ Paperclip 📎 → Location → Share Live Location\n"
-            "2️⃣ Choose tracking time (15 min - 8 hours)\n"
-            "3️⃣ Set fact frequency (every 5-60 minutes)\n"
-            "4️⃣ Walk and get facts automatically!\n\n"
+            "📱 *How to enable Live Location:*\n\n"
+            "1️⃣ Paperclip 📎 → 📍 Location → 🔴 Share Live Location\n"
+            "2️⃣ Pick a duration (60 min is a good default)\n"
+            "3️⃣ Walk — facts will arrive automatically (every 5–60 min)\n\n"
             "*💡 Why is live location better?*\n"
             "• Personal tour guide in your pocket\n"
             "• Facts come automatically as you move\n"
             "• No need to constantly send location\n"
             "• Perfect for tourist walks\n\n"
-            "📍 *One-time location:*\n"
-            "• Button «🔴 Share location»\n"
-            "• Instant fact about current place\n"
-            "• Suitable for quick queries"
+            "One-time location also works — just send your location via 📎 if needed."
         )
     },
     'fr': {
@@ -124,26 +108,20 @@ LOCALIZED_MESSAGES = {
             "_Chaque fait est une petite découverte près de vous !_ ✨"
         ),
         'buttons': {
-            'info': "📱💡 Comment partager Live Location",
-            'location': "🔴📍 Partager la position",
+            'info': "📱💡 Activer la position en direct",
             'donate': "⭐💝 Soutenir le projet"
         },
         'info_text': (
-            "📱 *Comment partager Live Location :*\n\n"
-            "🔴 *Position en direct — mode principal :*\n"
-            "1️⃣ Trombone 📎 → Location → Share Live Location\n"
-            "2️⃣ Choisissez la durée de suivi (15 min - 8 heures)\n"
-            "3️⃣ Réglez la fréquence des faits (toutes les 5-60 minutes)\n"
-            "4️⃣ Promenez-vous et recevez des faits automatiquement !\n\n"
+            "📱 *Activer la position en direct :*\n\n"
+            "1️⃣ Trombone 📎 → 📍 Location → 🔴 Share Live Location\n"
+            "2️⃣ Durée conseillée : 60 min\n"
+            "3️⃣ Les faits arrivent automatiquement (5–60 min)\n\n"
             "*💡 Pourquoi la position en direct est-elle meilleure ?*\n"
             "• Guide touristique personnel dans votre poche\n"
             "• Les faits arrivent automatiquement en vous déplaçant\n"
             "• Pas besoin d'envoyer constamment votre position\n"
             "• Parfait pour les promenades touristiques\n\n"
-            "📍 *Position unique :*\n"
-            "• Bouton « 🔴 Partager la position »\n"
-            "• Fait instantané sur le lieu actuel\n"
-            "• Convient pour les demandes rapides"
+            "La position unique fonctionne aussi via 📎 si besoin."
         )
     }
     # Add more languages as needed
@@ -164,9 +142,9 @@ async def send_welcome_message(user_id: int, chat_id: int, bot, language: str = 
     buttons = messages['buttons']
     
     # Create keyboard with localized buttons
+    # Focus on Live Location: no direct one-time location button
     keyboard = [
         [KeyboardButton(buttons['info'])],
-        [KeyboardButton(buttons['location'], request_location=True)],
         [KeyboardButton(buttons['donate'])],
     ]
     reply_markup = ReplyKeyboardMarkup(
@@ -207,6 +185,23 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     info_text = messages['info_text']
 
     await update.message.reply_text(info_text, parse_mode="Markdown")
+    # Try sending how-to GIF if available
+    try:
+        import os
+        gif_path = os.getenv("HOWTO_GIF_PATH", "howtobot.gif")
+        if os.path.exists(gif_path):
+            with open(gif_path, "rb") as f:
+                await context.bot.send_animation(
+                    chat_id=update.effective_chat.id, animation=f
+                )
+        else:
+            file_id = os.getenv("HOWTO_GIF_FILE_ID")
+            if file_id:
+                await context.bot.send_animation(
+                    chat_id=update.effective_chat.id, animation=file_id
+                )
+    except Exception as e:
+        logger.debug(f"Failed to send how-to gif: {e}")
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -216,7 +211,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 def main() -> None:
     """Main function to run the bot."""
-    logger.info("Starting NearbyFactBot...")
+    logger.info("Starting Bot Voyage...")
     
     # Run database migration if PostgreSQL is configured
     if os.environ.get("DATABASE_URL"):
@@ -248,6 +243,7 @@ def main() -> None:
     # Add command handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("donate", donate_command))
+    application.add_handler(CommandHandler("live", info_command))
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("dbtest", dbtest_command))
     application.add_handler(CommandHandler("reset", reset_language_command))

@@ -50,7 +50,7 @@ LOCATION_MESSAGES = {
         'live_fact_format': "🔴 *Факт #{number}*\n\n📍 *Место:* {place}\n\n💡 *Факт:* {fact}",
         'error_no_info': "😔 *Упс!*\n\nНе удалось найти интересную информацию о данном месте.\nПопробуйте немного сместиться или отправить другую локацию.",
         'near_you': "рядом с вами",
-        'live_stopped': "✅ *Живая локация остановлена*\n\nСпасибо за использование NearbyFactBot! 🗺️✨\nЗапустите новую живую локацию в любое время, чтобы продолжить исследование!",
+        'live_stopped': "✅ *Живая локация остановлена*\n\nСпасибо за использование Bot Voyage! 🗺️✨\nЗапустите новую живую локацию в любое время, чтобы продолжить исследование!",
         'live_expired': "✅ *Сессия живой локации завершена*\n\nПериод отслеживания истек. Запустите новую живую локацию, чтобы продолжить получать факты! 🗺️✨",
         'live_manual_stop': "✅ *Трансляция остановлена*\n\nВы прекратили делиться геопозицией.\nСпасибо за прогулку с нами! 🚶‍♂️🗺️"
     },
@@ -71,7 +71,7 @@ LOCATION_MESSAGES = {
         'live_fact_format': "🔴 *Fact #{number}*\n\n📍 *Place:* {place}\n\n💡 *Fact:* {fact}",
         'error_no_info': "😔 *Oops!*\n\nCouldn't find interesting information about this location.\nTry moving slightly or sending a different location.",
         'near_you': "near you",
-        'live_stopped': "✅ *Live location stopped*\n\nThank you for using NearbyFactBot! 🗺️✨\nStart a new live location anytime to continue exploring!",
+        'live_stopped': "✅ *Live location stopped*\n\nThank you for using Bot Voyage! 🗺️✨\nStart a new live location anytime to continue exploring!",
         'live_expired': "✅ *Live location session ended*\n\nThe tracking period has expired. Start a new live location to continue receiving facts! 🗺️✨",
         'live_manual_stop': "✅ *Broadcast stopped*\n\nYou stopped sharing your location.\nThank you for walking with us! 🚶‍♂️🗺️"
     },
@@ -92,7 +92,7 @@ LOCATION_MESSAGES = {
         'live_fact_format': "🔴 *Fait #{number}*\n\n📍 *Lieu :* {place}\n\n💡 *Fait :* {fact}",
         'error_no_info': "😔 *Oups !*\n\nImpossible de trouver des informations intéressantes sur cet endroit.\nEssayez de vous déplacer légèrement ou d'envoyer une autre position.",
         'near_you': "près de vous",
-        'live_stopped': "✅ *Position en direct arrêtée*\n\nMerci d'avoir utilisé NearbyFactBot ! 🗺️✨\nDémarrez une nouvelle position en direct à tout moment pour continuer à explorer !",
+        'live_stopped': "✅ *Position en direct arrêtée*\n\nMerci d'avoir utilisé Bot Voyage ! 🗺️✨\nDémarrez une nouvelle position en direct à tout moment pour continuer à explorer !",
         'live_expired': "✅ *Session de position en direct terminée*\n\nLa période de suivi a expiré. Démarrez une nouvelle position en direct pour continuer à recevoir des faits ! 🗺️✨",
         'live_manual_stop': "✅ *Diffusion arrêtée*\n\nVous avez cessé de partager votre position.\nMerci de vous promener avec nous ! 🚶‍♂️🗺️"
     }

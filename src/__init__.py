@@ -1,1 +1,1 @@
-# NearbyFactBot package
+# Bot Voyage package
