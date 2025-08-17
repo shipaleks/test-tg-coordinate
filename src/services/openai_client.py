@@ -683,8 +683,13 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         """
         try:
             # Build inputs in Responses API format
+            gpt5_system_prompt = (
+                system_prompt
+                + "\n\nTOOLS AVAILABLE:\n"
+                + "- web_search: You have access to a web_search tool. You MUST call web_search at least twice with distinct queries to collect sources (coordinates and factual verification) before composing the final answer. Do not include tool call results verbatim; only output the final verified answer.\n"
+            )
             messages = [
-                {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+                {"role": "system", "content": [{"type": "input_text", "text": gpt5_system_prompt}]},
                 {"role": "user", "content": [{"type": "input_text", "text": user_prompt}]},
             ]
             tools = [{"type": "web_search"}]
