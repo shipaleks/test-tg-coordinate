@@ -51,8 +51,8 @@ LOCALIZED_MESSAGES = {
     'ru': {
         'welcome': (
             "🗺️ Привет! Я *Bot Voyage*. Покажу неожиданные факты вокруг тебя.\n\n"
-            "🔴 Включим живую локацию? Я сам пришлю первый факт.\n"
-            "Нажми ниже — покажу в 3 шага."
+            "ℹ️ Живая локация — это когда ты делишься местоположением в реальном времени на выбранный срок. Telegram можно закрыть — факты придут пушами.\n\n"
+            "🔴 Включим? Нажми ниже — покажу в 3 шага."
         ),
         'buttons': {
             'info': "📱💡 Как включить живую локацию",
@@ -74,8 +74,8 @@ LOCALIZED_MESSAGES = {
     'en': {
         'welcome': (
             "🗺️ Hi, I’m *Bot Voyage*. I’ll show surprising facts around you.\n\n"
-            "🔴 Turn on live location? I’ll send the first fact myself.\n"
-            "Tap below — 3 short steps."
+            "ℹ️ Live location means you share your real‑time location for a chosen time. You can close Telegram — I’ll keep sending facts as push notifications.\n\n"
+            "🔴 Turn it on? Tap below — 3 short steps."
         ),
         'buttons': {
             'info': "📱💡 How to enable Live Location",
@@ -97,8 +97,8 @@ LOCALIZED_MESSAGES = {
     'fr': {
         'welcome': (
             "🗺️ Bonjour, je suis *Bot Voyage*. Je montre des faits inattendus autour de vous.\n\n"
-            "🔴 On active la position en direct ? J’enverrai le premier fait tout seul.\n"
-            "Touchez ci‑dessous — 3 étapes courtes."
+            "ℹ️ La position en direct = partager votre position en temps réel pendant une durée choisie. Vous pouvez fermer Telegram — j’enverrai quand même les faits.\n\n"
+            "🔴 On l’active ? 3 étapes ci‑dessous."
         ),
         'buttons': {
             'info': "📱💡 Activer la position en direct",
@@ -168,34 +168,29 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Interactive onboarding for Live Location (step-by-step)."""
+    """Send concise, sequential live-location onboarding with GIF."""
     user = update.effective_user
     donors_db = await get_async_donors_db()
     language = await donors_db.get_user_language(user.id)
 
-    # Simple state machine in memory (per chat)
     chat_id = update.effective_chat.id
-    if "onboarding_step" not in context.chat_data:
-        context.chat_data["onboarding_step"] = 0
 
-    step = context.chat_data["onboarding_step"]
-
-    # Localized short steps
+    # Localized sequence: definition + 3 steps (no buttons)
     steps = {
         'ru': [
-            "Что такое живая локация: ты делишься местоположением в реальном времени на выбранный срок. Telegram можно закрыть — уведомления с фактами всё равно придут.",
+            "Что такое живая локация: ты делишься местоположением в реальном времени на выбранный срок. Telegram можно закрыть — факты придут пушами.",
             "Шаг 1/3. Нажми 📎 внизу.",
             "Шаг 2/3. 📍 Location → 🔴 Share Live Location.",
             "Шаг 3/3. Поставь 60 мин — дальше я сам присылаю факты каждые 5–60 мин.",
         ],
         'en': [
-            "What is live location: you share your real‑time location for a chosen time. You can close Telegram — I’ll still send push facts.",
+            "Live location = share your real‑time location for a chosen time. You can close Telegram — I’ll keep sending facts.",
             "Step 1/3. Tap 📎 below.",
             "Step 2/3. 📍 Location → 🔴 Share Live Location.",
             "Step 3/3. Choose 60 min — I’ll auto‑send facts every 5–60 min.",
         ],
         'fr': [
-            "Qu’est‑ce que la position en direct : vous partagez votre position en temps réel pendant une durée choisie. Vous pouvez fermer Telegram — j’enverrai quand même les faits.",
+            "Position en direct = partager votre position en temps réel pendant une durée choisie. Vous pouvez fermer Telegram — j’enverrai quand même les faits.",
             "Étape 1/3. Touchez 📎 en bas.",
             "Étape 2/3. 📍 Location → 🔴 Share Live Location.",
             "Étape 3/3. Choisissez 60 min — j’enverrai des faits automatiquement (5–60 min).",
@@ -209,73 +204,46 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     lang_steps = steps.get(language, steps['en'])
     lang_labels = labels.get(language, labels['en'])
 
-    # Send GIF on the first step
-    if step == 0:
-        try:
-            import os
-            # 1) explicit env path
-            candidates = []
-            env_path = os.getenv("HOWTO_GIF_PATH")
-            if env_path:
-                candidates.append(Path(env_path))
-            # 2) common repo locations
-            here = Path(__file__).resolve().parents[2]  # project root
-            candidates += [
-                here / "howtobot.gif",
-                here / "docs" / "howtobot.gif",
-                here / "assets" / "howtobot.gif",
-                Path("howtobot.gif").resolve(),
-            ]
-            sent = False
-            for p in candidates:
-                if p.exists() and p.is_file():
-                    with p.open("rb") as f:
-                        await context.bot.send_animation(chat_id=chat_id, animation=f)
-                    logger.info(f"Sent how-to gif from {p}")
-                    sent = True
-                    break
-            if not sent:
-                # 3) file_id or URL
-                file_id = os.getenv("HOWTO_GIF_FILE_ID")
-                file_url = os.getenv("HOWTO_GIF_URL")
-                if file_id:
-                    await context.bot.send_animation(chat_id=chat_id, animation=file_id)
-                    logger.info("Sent how-to gif via file_id")
-                    sent = True
-                elif file_url:
-                    await context.bot.send_animation(chat_id=chat_id, animation=file_url)
-                    logger.info("Sent how-to gif via URL")
-        except Exception as e:
-            logger.warning(f"Failed to send how-to gif: {e}")
+    # Always try to send GIF first
+    try:
+        import os
+        candidates = []
+        env_path = os.getenv("HOWTO_GIF_PATH")
+        if env_path:
+            candidates.append(Path(env_path))
+        here = Path(__file__).resolve().parents[2]
+        candidates += [
+            here / "howtobot.gif",
+            here / "docs" / "howtobot.gif",
+            here / "assets" / "howtobot.gif",
+            Path("howtobot.gif").resolve(),
+        ]
+        sent = False
+        for p in candidates:
+            if p.exists() and p.is_file():
+                with p.open("rb") as f:
+                    await context.bot.send_animation(chat_id=chat_id, animation=f)
+                logger.info(f"Sent how-to gif from {p}")
+                sent = True
+                break
+        if not sent:
+            file_id = os.getenv("HOWTO_GIF_FILE_ID")
+            file_url = os.getenv("HOWTO_GIF_URL")
+            if file_id:
+                await context.bot.send_animation(chat_id=chat_id, animation=file_id)
+                logger.info("Sent how-to gif via file_id")
+            elif file_url:
+                await context.bot.send_animation(chat_id=chat_id, animation=file_url)
+                logger.info("Sent how-to gif via URL")
+    except Exception as e:
+        logger.warning(f"Failed to send how-to gif: {e}")
 
-    # Compose inline keyboard for step
-    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-    if step < len(lang_steps) - 1:
-        buttons = [[InlineKeyboardButton(lang_labels['next'], callback_data="live_onboarding_next")]]
-    else:
-        buttons = [[InlineKeyboardButton(lang_labels['go'], callback_data="live_onboarding_done")]]
-
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=lang_steps[step],
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
-
-    # Advance step
-    context.chat_data["onboarding_step"] = (step + 1) % len(lang_steps)
+    # Send all steps sequentially (no buttons)
+    for line in lang_steps:
+        await context.bot.send_message(chat_id=chat_id, text=line)
 
 
-async def live_onboarding_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    # Reuse info_command logic to send next step
-    if data == "live_onboarding_next":
-        await info_command(update, context)
-    elif data == "live_onboarding_done":
-        # Reset step and send short confirmation
-        context.chat_data["onboarding_step"] = 0
-        await query.edit_message_text("Отлично! Включайте живую локацию через 📎 → 📍 → 🔴, я жду.")
+# Removed callback-based onboarding (now sequential messages without buttons)
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -370,9 +338,7 @@ def main() -> None:
     application.add_handler(
         CallbackQueryHandler(handle_interval_callback, pattern="^interval_")
     )
-    application.add_handler(
-        CallbackQueryHandler(live_onboarding_callback, pattern="^live_onboarding_")
-    )
+    # No callback handler needed: onboarding sends sequential messages without buttons
     application.add_handler(
         CallbackQueryHandler(handle_donation_callback, pattern="^donate_")
     )
