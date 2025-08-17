@@ -1666,6 +1666,11 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             return urls
 
         results: list[str] = []
+        import os as _os
+        enable_openverse = _os.getenv("IMAGE_SOURCES_OPENVERSE", "false").lower() == "true"
+        enable_flickr = (_os.getenv("IMAGE_SOURCES_FLICKR", "false").lower() == "true") and bool(_os.getenv("FLICKR_API_KEY"))
+        allow_user_geo_fallback = _os.getenv("ALLOW_USER_GEO_FALLBACK", "false").lower() == "true"
+
         try:
             async with aiohttp.ClientSession() as session:
                 qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords, place_hint)
@@ -1687,14 +1692,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         poi_coords = None
                 if poi_coords and len(infos) < max_images:
                     infos += await _commons_geosearch(session, poi_coords[0], poi_coords[1], limit=max(6, max_images))
-                # Last resort: Commons geosearch near USER location
-                if (lat is not None and lon is not None) and len(infos) < max_images:
+                # Optional last resort: Commons geosearch near USER location (disabled by default)
+                if allow_user_geo_fallback and (lat is not None and lon is not None) and len(infos) < max_images:
                     infos += await _commons_geosearch(session, lat, lon, limit=max(6, max_images))
 
                 if infos:
                     results = _pick_urls_from_infos(infos, max_images)
-                # Supplement with Openverse/Flickr if lacking
-                if len(results) < max_images:
+                # Supplement with Openverse/Flickr if lacking (opt-in)
+                if enable_openverse and len(results) < max_images:
                     need_more = max_images - len(results)
                     # Prefer Openverse (broad CC catalog)
                     ov_urls = await _search_openverse_images(place_hint or clean_keywords, need_more)
@@ -1704,7 +1709,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                             need_more -= 1
                             if need_more <= 0:
                                 break
-                if len(results) < max_images:
+                if enable_flickr and len(results) < max_images:
                     need_more = max_images - len(results)
                     # Flickr if API key present, using POI coords if available, else keywords
                     flickr_urls = await _search_flickr_images(
