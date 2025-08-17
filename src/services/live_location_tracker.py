@@ -319,11 +319,13 @@ class LiveLocationTracker:
         try:
             # Calculate session end time based on when it started
             session_end_time = session_data.session_start + timedelta(seconds=session_data.live_period)
-            
-            # Wait for the specified interval before sending first fact
-            # Subtract 1 minute from the interval (5min -> 4min, 10min -> 9min, etc)
-            interval_seconds = (session_data.fact_interval_minutes - 1) * 60
-            await asyncio.sleep(interval_seconds)
+
+            # Desired interval between facts
+            desired_interval_seconds = session_data.fact_interval_minutes * 60
+
+            # Initial wait: account for ~3 minutes model latency so the next fact lands close to user interval
+            initial_sleep = max(desired_interval_seconds - 180, 30)
+            await asyncio.sleep(initial_sleep)
 
             while True:
                 current_time = datetime.now()
@@ -371,6 +373,7 @@ class LiveLocationTracker:
 
                 # Send fact at current coordinates
                 try:
+                    send_start_time = datetime.now()
                     # Increment fact counter
                     session_data.fact_count += 1
 
@@ -532,8 +535,10 @@ class LiveLocationTracker:
                     except Exception as send_error:
                         logger.error(f"Failed to send error message: {send_error}")
 
-                # Wait for the next interval
-                await asyncio.sleep(interval_seconds)
+                # Wait for the next interval, compensating for generation time
+                elapsed = (datetime.now() - send_start_time).total_seconds()
+                sleep_time = max(desired_interval_seconds - elapsed, 15)
+                await asyncio.sleep(sleep_time)
 
         except asyncio.CancelledError:
             logger.info(f"Live location task cancelled for user {session_data.user_id}")
