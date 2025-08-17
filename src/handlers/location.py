@@ -441,8 +441,12 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if search_match:
                 final_search_keywords = search_match.group(1).strip()
             
-            # Extract fact from answer content
-            fact_match = re.search(r"Interesting fact:\s*(.*?)(?:\n\s*$|$)", answer_content, re.DOTALL)
+            # Extract fact from answer content (stop before Sources/Источники if present)
+            fact_match = re.search(
+                r"Interesting fact:\s*(.*?)(?=\n(?:Sources|Источники)\s*:|$)",
+                answer_content,
+                re.DOTALL,
+            )
             if fact_match:
                 fact = fact_match.group(1).strip()
         
@@ -479,9 +483,9 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 src_label = await get_localized_message(user_id, 'sources_label')
                 bullets = []
                 for title, url in sources[:3]:
-                    # Markdown link with short title
+                    # Build bolded emoji bullet with Markdown link
                     safe_title = re.sub(r"[\[\]]", "", title)[:80]
-                    bullets.append(f"- [{safe_title}]({url})")
+                    bullets.append(f"- **[{safe_title}]({url})**")
                 sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
 
         # Format the response for static location
