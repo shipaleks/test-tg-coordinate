@@ -11,7 +11,8 @@ from telegram import Bot, InputMediaPhoto
 from .openai_client import get_openai_client
 from ..utils.formatting_utils import extract_sources_from_answer as _extract_live_sources
 from ..utils.formatting_utils import strip_sources_section as _strip_live_sources
-from ..handlers.location import get_localized_message as _get_msg
+# Avoid importing handlers at module import time to prevent circular deps.
+# We'll import get_localized_message lazily inside functions.
 
 logger = logging.getLogger(__name__)
 
@@ -431,6 +432,7 @@ class LiveLocationTracker:
                         sources = _extract_live_sources(answer_content)
                         sources_block = ""
                         if sources:
+                            from ..handlers.location import get_localized_message as _get_msg
                             src_label = await _get_msg(session_data.user_id, 'sources_label')
                             bullets = []
                             for title, url in sources[:3]:
