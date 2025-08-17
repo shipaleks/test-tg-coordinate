@@ -253,7 +253,15 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
         # Expose coords as local variables for the image pipeline's optional introspection
         latitude = lat
         longitude = lon
-        image_urls = await openai_client.get_wikipedia_images(search_keywords, max_images=4)  # Max 4 for media group
+        # Decide how many images to request (configurable)
+        import os
+        try:
+            desired_max = int(os.getenv("IMAGES_STATIC_MAX", "5"))
+        except Exception:
+            desired_max = 5
+        # Respect Telegram media group limit (10)
+        desired_max = max(1, min(10, desired_max))
+        image_urls = await openai_client.get_wikipedia_images(search_keywords, max_images=desired_max)
         
         if image_urls:
             # Try sending all images with text as media group
