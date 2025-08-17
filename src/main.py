@@ -175,33 +175,87 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle info button press."""
+    """Interactive onboarding for Live Location (step-by-step)."""
     user = update.effective_user
     donors_db = await get_async_donors_db()
     language = await donors_db.get_user_language(user.id)
-    
-    # Get localized info text (default to English) 
-    messages = LOCALIZED_MESSAGES.get(language, LOCALIZED_MESSAGES['en'])
-    info_text = messages['info_text']
 
-    await update.message.reply_text(info_text, parse_mode="Markdown")
-    # Try sending how-to GIF if available
-    try:
-        import os
-        gif_path = os.getenv("HOWTO_GIF_PATH", "howtobot.gif")
-        if os.path.exists(gif_path):
-            with open(gif_path, "rb") as f:
-                await context.bot.send_animation(
-                    chat_id=update.effective_chat.id, animation=f
-                )
-        else:
-            file_id = os.getenv("HOWTO_GIF_FILE_ID")
-            if file_id:
-                await context.bot.send_animation(
-                    chat_id=update.effective_chat.id, animation=file_id
-                )
-    except Exception as e:
-        logger.debug(f"Failed to send how-to gif: {e}")
+    # Simple state machine in memory (per chat)
+    chat_id = update.effective_chat.id
+    if "onboarding_step" not in context.chat_data:
+        context.chat_data["onboarding_step"] = 0
+
+    step = context.chat_data["onboarding_step"]
+
+    # Localized short steps
+    steps = {
+        'ru': [
+            "Шаг 1/3. Нажмите скрепку 📎 внизу.",
+            "Шаг 2/3. Выберите 📍 Location → 🔴 Share Live Location.",
+            "Шаг 3/3. Установите время (60 мин удобно) — и идите, факты будут приходить сами.",
+        ],
+        'en': [
+            "Step 1/3. Tap the paperclip 📎 at the bottom.",
+            "Step 2/3. Choose 📍 Location → 🔴 Share Live Location.",
+            "Step 3/3. Pick a duration (60 min is great) — then walk, facts will arrive automatically.",
+        ],
+        'fr': [
+            "Étape 1/3. Touchez le trombone 📎 en bas.",
+            "Étape 2/3. Choisissez 📍 Location → 🔴 Share Live Location.",
+            "Étape 3/3. Choisissez la durée (60 min) — marchez, les faits arrivent automatiquement.",
+        ],
+    }
+    labels = {
+        'ru': { 'next': "Далее", 'done': "Готово", 'go': "Поехали" },
+        'en': { 'next': "Next", 'done': "Done", 'go': "Let’s go" },
+        'fr': { 'next': "Suivant", 'done': "Terminé", 'go': "C’est parti" },
+    }
+    lang_steps = steps.get(language, steps['en'])
+    lang_labels = labels.get(language, labels['en'])
+
+    # Send GIF on the first step
+    if step == 0:
+        try:
+            import os
+            gif_path = os.getenv("HOWTO_GIF_PATH", "howtobot.gif")
+            if os.path.exists(gif_path):
+                with open(gif_path, "rb") as f:
+                    await context.bot.send_animation(chat_id=chat_id, animation=f)
+            else:
+                file_id = os.getenv("HOWTO_GIF_FILE_ID")
+                if file_id:
+                    await context.bot.send_animation(chat_id=chat_id, animation=file_id)
+        except Exception as e:
+            logger.debug(f"Failed to send how-to gif: {e}")
+
+    # Compose inline keyboard for step
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    if step < len(lang_steps) - 1:
+        buttons = [[InlineKeyboardButton(lang_labels['next'], callback_data="live_onboarding_next")]]
+    else:
+        buttons = [[InlineKeyboardButton(lang_labels['go'], callback_data="live_onboarding_done")]]
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=lang_steps[step],
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+    # Advance step
+    context.chat_data["onboarding_step"] = (step + 1) % len(lang_steps)
+
+
+async def live_onboarding_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    # Reuse info_command logic to send next step
+    if data == "live_onboarding_next":
+        await info_command(update, context)
+    elif data == "live_onboarding_done":
+        # Reset step and send short confirmation
+        context.chat_data["onboarding_step"] = 0
+        await query.edit_message_text("Отлично! Включайте живую локацию через 📎 → 📍 → 🔴, я жду.")
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -251,9 +305,9 @@ def main() -> None:
     # Add universal button handlers (check multiple language variants)
     # Info button patterns
     info_patterns = [
-        "^📱💡 Как поделиться Live Location$",
-        "^📱💡 How to share Live Location$",
-        "^📱💡 Comment partager Live Location$"
+        "^📱💡 Как включить живую локацию$",
+        "^📱💡 How to enable Live Location$",
+        "^📱💡 Activer la position en direct$"
     ]
     for pattern in info_patterns:
         application.add_handler(
@@ -295,6 +349,9 @@ def main() -> None:
     # Add callback query handlers
     application.add_handler(
         CallbackQueryHandler(handle_interval_callback, pattern="^interval_")
+    )
+    application.add_handler(
+        CallbackQueryHandler(live_onboarding_callback, pattern="^live_onboarding_")
     )
     application.add_handler(
         CallbackQueryHandler(handle_donation_callback, pattern="^donate_")
