@@ -683,8 +683,8 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         try:
             # Build inputs in Responses API format
             messages = [
-                {"role": "system", "content": [{"type": "text", "text": system_prompt}]},
-                {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
+                {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+                {"role": "user", "content": [{"type": "input_text", "text": user_prompt}]},
             ]
             tools = [{"type": "web_search"}]
             reasoning = {"effort": "high" if is_live else "medium"}
@@ -706,14 +706,16 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             # Fallback: try to extract from output structure
             try:
-                outputs = getattr(response, "output", None) or []
-                for item in outputs:
-                    parts = item.get("content") if isinstance(item, dict) else None
-                    if isinstance(parts, list):
-                        for part in parts:
-                            if part.get("type") == "output_text" and part.get("text"):
-                                logger.info("GPT-5 Responses: output_text extracted from structured output")
-                                return part["text"]
+                # Some SDKs return a top-level array in response.output or response.output[0].content
+                outputs = getattr(response, "output", None)
+                if isinstance(outputs, list):
+                    for item in outputs:
+                        parts = item.get("content") if isinstance(item, dict) else None
+                        if isinstance(parts, list):
+                            for part in parts:
+                                if part.get("type") == "output_text" and part.get("text"):
+                                    logger.info("GPT-5 Responses: output_text extracted from structured output")
+                                    return part["text"]
             except Exception:
                 pass
             return None
