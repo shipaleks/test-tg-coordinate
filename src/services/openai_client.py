@@ -1573,6 +1573,98 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     break
             return urls
 
+        async def _search_openverse_images(keywords: str, need: int) -> list[str]:
+            if not keywords or need <= 0:
+                return []
+            try:
+                # Cache key
+                ck = f"openverse:{keywords}:{need}"
+                cached = _cache_get(self._fileinfo_cache, ck)
+                if cached:
+                    return cached.get('urls', [])
+            except Exception:
+                pass
+            urls = []
+            try:
+                async with aiohttp.ClientSession() as session:
+                    params = {
+                        'q': keywords,
+                        'license_type': 'all-cc',
+                        'page_size': min(need * 3, 50),
+                    }
+                    data = await _fetch_json(session, 'https://api.openverse.engineering/v1/images', params)
+                    for item in (data or {}).get('results', []):
+                        # Basic quality/size heuristics
+                        url = item.get('thumbnail') or item.get('url')
+                        width = item.get('width') or 0
+                        height = item.get('height') or 0
+                        if not url:
+                            continue
+                        if width and height and width < 600:
+                            continue
+                        if url not in urls:
+                            urls.append(url)
+                        if len(urls) >= need:
+                            break
+                # Cache small structure
+                try:
+                    _cache_set(self._fileinfo_cache, ck, {'urls': urls})
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.debug(f"Openverse search failed: {e}")
+            return urls
+
+        async def _search_flickr_images(poi_lat: float | None, poi_lon: float | None, keywords: str, need: int) -> list[str]:
+            import os
+            api_key = os.getenv('FLICKR_API_KEY')
+            if not api_key or need <= 0:
+                return []
+            # Prefer geofilter if coords available; else keyword search
+            params = {
+                'method': 'flickr.photos.search',
+                'api_key': api_key,
+                'format': 'json',
+                'nojsoncallback': 1,
+                'safe_search': 1,
+                'content_type': 1,
+                'extras': 'url_l,url_o,owner_name,license,date_taken,geo',
+                # CC licenses only
+                'license': '1,2,3,4,5,6,9,10',
+                'per_page': min(need * 5, 50),
+                'sort': 'relevance',
+            }
+            if poi_lat is not None and poi_lon is not None:
+                params['lat'] = poi_lat
+                params['lon'] = poi_lon
+                params['radius'] = 0.2  # km
+                params['radius_units'] = 'km'
+            else:
+                params['text'] = keywords
+            urls: list[str] = []
+            try:
+                async with aiohttp.ClientSession() as session:
+                    data = await _fetch_json(session, 'https://api.flickr.com/services/rest/', params)
+                    for ph in (data or {}).get('photos', {}).get('photo', []):
+                        url = ph.get('url_l') or ph.get('url_o')
+                        if not url:
+                            # Construct static URL if sizes missing
+                            farm = ph.get('farm')
+                            server = ph.get('server')
+                            pid = ph.get('id')
+                            secret = ph.get('secret')
+                            if all([farm, server, pid, secret]):
+                                url = f"https://farm{farm}.staticflickr.com/{server}/{pid}_{secret}_b.jpg"
+                        if not url:
+                            continue
+                        if url not in urls:
+                            urls.append(url)
+                        if len(urls) >= need:
+                            break
+            except Exception as e:
+                logger.debug(f"Flickr search failed: {e}")
+            return urls
+
         results: list[str] = []
         try:
             async with aiohttp.ClientSession() as session:
@@ -1601,16 +1693,49 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
                 if infos:
                     results = _pick_urls_from_infos(infos, max_images)
-                # Final fallback to legacy page media search if still empty
-                if not results and clean_keywords:
-                    results = await self._search_wikipedia_images(clean_keywords, 'en', max_images)
-                    if not results:
-                        # try a few more langs quickly
+                # Supplement with Openverse/Flickr if lacking
+                if len(results) < max_images:
+                    need_more = max_images - len(results)
+                    # Prefer Openverse (broad CC catalog)
+                    ov_urls = await _search_openverse_images(place_hint or clean_keywords, need_more)
+                    for u in ov_urls:
+                        if u not in results:
+                            results.append(u)
+                            need_more -= 1
+                            if need_more <= 0:
+                                break
+                if len(results) < max_images:
+                    need_more = max_images - len(results)
+                    # Flickr if API key present, using POI coords if available, else keywords
+                    flickr_urls = await _search_flickr_images(
+                        poi_coords[0] if 'poi_coords' in locals() and poi_coords else lat,
+                        poi_coords[1] if 'poi_coords' in locals() and poi_coords else lon,
+                        place_hint or clean_keywords,
+                        need_more,
+                    )
+                    for u in flickr_urls:
+                        if u not in results:
+                            results.append(u)
+                            need_more -= 1
+                            if need_more <= 0:
+                                break
+                # Final fallback to legacy page media search if still lacking
+                if len(results) < max_images and clean_keywords:
+                    legacy_left = max_images - len(results)
+                    legacy = await self._search_wikipedia_images(clean_keywords, 'en', legacy_left)
+                    for u in legacy or []:
+                        if u not in results:
+                            results.append(u)
+                    if len(results) < max_images:
                         for lg in ['ru', 'fr']:
-                            if results:
+                            if len(results) >= max_images:
                                 break
                             try:
-                                results = await self._search_wikipedia_images(clean_keywords, lg, max_images)
+                                rem = max_images - len(results)
+                                more = await self._search_wikipedia_images(clean_keywords, lg, rem)
+                                for u in more or []:
+                                    if u not in results:
+                                        results.append(u)
                             except Exception:
                                 continue
         except Exception as e:
