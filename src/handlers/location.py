@@ -13,6 +13,7 @@ from telegram import (
     Update,
 )
 from telegram.ext import ContextTypes
+from urllib.parse import quote
 
 from ..services.live_location_tracker import get_live_location_tracker
 from ..services.openai_client import get_openai_client
@@ -153,6 +154,39 @@ def _strip_sources_section(text: str) -> str:
     except Exception:
         return text
 
+
+def _sanitize_url(url: str) -> str:
+    """Percent-encode characters that break Telegram Markdown links."""
+    try:
+        return (
+            url.replace(" ", "%20")
+               .replace("(", "%28")
+               .replace(")", "%29")
+        )
+    except Exception:
+        return url
+
+
+async def _send_text_resilient(bot, chat_id: int, text: str, reply_to_message_id: int | None = None):
+    """Send text with Markdown; on entity parse error, retry without parse_mode."""
+    try:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            parse_mode="Markdown",
+            reply_to_message_id=reply_to_message_id,
+        )
+    except Exception as e:
+        err_str = str(e).lower()
+        if "can't parse entities" in err_str or "parse entities" in err_str:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_to_message_id=reply_to_message_id,
+            )
+        else:
+            raise
+
 async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, user_id=None, reply_to_message_id=None):
     """Send fact message with Wikipedia images if available.
     
@@ -195,12 +229,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                     logger.info(f"Successfully sent {len(image_urls)} images with caption in media group for {place}")
                 else:
                     # Caption too long, send text first then all images as media group
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=formatted_response,
-                        parse_mode="Markdown",
-                        reply_to_message_id=reply_to_message_id
-                    )
+                    await _send_text_resilient(bot, chat_id, formatted_response, reply_to_message_id)
                     
                     # Send all images as media group without captions
                     media_list = []
@@ -245,12 +274,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                 # (This is a fallback in case the text sending also failed)
                 try:
                     fallback_message = await get_localized_message(user_id or 0, 'image_fallback') if user_id else "⚠️ Изображения не загрузились, но вот факт:\n\n"
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=f"{fallback_message}{formatted_response}",
-                        parse_mode="Markdown",
-                        reply_to_message_id=reply_to_message_id
-                    )
+                    await _send_text_resilient(bot, chat_id, f"{fallback_message}{formatted_response}", reply_to_message_id)
                     logger.info(f"Sent fallback text-only message for {place}")
                     return
                 except Exception as text_fallback_error:
@@ -283,24 +307,14 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                     logger.error(f"Failed to send individual images fallback: {individual_fallback_error}")
         
         # No images found or all fallbacks failed, send just the text
-        await bot.send_message(
-            chat_id=chat_id,
-            text=formatted_response,
-            parse_mode="Markdown",
-            reply_to_message_id=reply_to_message_id
-        )
+        await _send_text_resilient(bot, chat_id, formatted_response, reply_to_message_id)
         logger.info(f"Sent fact without images for {place}")
             
     except Exception as e:
         logger.warning(f"Failed to send fact with images: {e}")
         # Final fallback to text-only message
         try:
-            await bot.send_message(
-                chat_id=chat_id,
-                text=formatted_response,
-                parse_mode="Markdown",
-                reply_to_message_id=reply_to_message_id
-            )
+            await _send_text_resilient(bot, chat_id, formatted_response, reply_to_message_id)
         except Exception as fallback_error:
             logger.error(f"Failed to send fallback message: {fallback_error}")
 
@@ -495,7 +509,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 for title, url in sources[:3]:
                     # Build bolded emoji bullet with Markdown link
                     safe_title = re.sub(r"[\[\]]", "", title)[:80]
-                    bullets.append(f"- **[{safe_title}]({url})**")
+                    safe_url = _sanitize_url(url)
+                    bullets.append(f"- **[{safe_title}]({safe_url})**")
                 sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
 
         # Format the response for static location
@@ -733,11 +748,7 @@ async def handle_interval_callback(
                 )
             else:
                 # No search keywords, send just text
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=initial_fact_response,
-                    parse_mode="Markdown",
-                )
+                await _send_text_resilient(context.bot, chat_id, initial_fact_response)
 
         # Try to parse coordinates and send location for navigation using search keywords (live location)
         coordinates = None
