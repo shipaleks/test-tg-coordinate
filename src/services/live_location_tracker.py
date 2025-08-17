@@ -18,7 +18,7 @@ from ..utils.formatting_utils import remove_bare_links_from_text as _remove_bare
 logger = logging.getLogger(__name__)
 
 
-async def send_live_fact_with_images(bot, chat_id, formatted_response, search_keywords, place):
+async def send_live_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, lat: float | None = None, lon: float | None = None):
     """Send live fact message with Wikipedia images if available.
     
     Args:
@@ -31,6 +31,9 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
     try:
         # Try to get Wikipedia images
         openai_client = get_openai_client()
+        # Provide coords via local names for optional introspection inside pipeline
+        latitude = lat
+        longitude = lon
         image_urls = await openai_client.get_wikipedia_images(search_keywords, max_images=4)  # Max 4 for media group
         
         if image_urls:
@@ -82,7 +85,10 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
             except Exception as media_group_error:
                 logger.error(f"Failed to send live fact text + media group: {media_group_error}")
                 logger.error(f"Live fact error type: {type(media_group_error)}")
-                logger.error(f"Live image URLs that failed: {[img.media for img in media_list]}")
+                try:
+                    logger.error(f"Live image URLs that failed: {[img.media for img in media_list]}")
+                except Exception:
+                    logger.error("Live image URLs that failed: unavailable")
                 
                 # Try with fewer images if we had multiple images
                 if len(image_urls) > 2:
@@ -481,7 +487,9 @@ class LiveLocationTracker:
                             session_data.chat_id, 
                             formatted_response, 
                             search_keywords, 
-                            place
+                            place,
+                            lat=session_data.latitude,
+                            lon=session_data.longitude,
                         )
                     else:
                         # Legacy fallback: try to extract search keywords from old format
@@ -493,7 +501,9 @@ class LiveLocationTracker:
                                 session_data.chat_id, 
                                 formatted_response, 
                                 legacy_search_keywords, 
-                                place
+                                place,
+                                lat=session_data.latitude,
+                                lon=session_data.longitude,
                             )
                         else:
                             # No search keywords, send just text

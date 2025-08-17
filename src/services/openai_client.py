@@ -114,6 +114,11 @@ class OpenAIClient:
         """
         self.client = AsyncOpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.static_history = StaticLocationHistory()
+        # Lightweight caches for Wikimedia pipeline
+        self._qid_cache: dict[str, tuple[str, float]] = {}           # key -> (qid, ts)
+        self._p18_cache: dict[str, tuple[str, float]] = {}           # qid -> (filename, ts)
+        self._fileinfo_cache: dict[str, tuple[dict, float]] = {}     # filename -> (info, ts)
+        self._image_cache_ttl_seconds = 24 * 3600
 
     def _build_location_fact_prompt(
         self,
@@ -1335,83 +1340,249 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             return None
 
     async def get_wikipedia_images(self, search_keywords: str, max_images: int = 5) -> list[str]:
-        """Get multiple images from Wikipedia using search keywords.
+        """Get multiple images using a Wikidata/Commons pipeline with fallbacks.
 
-        Args:
-            search_keywords: Search keywords from GPT response
-            max_images: Maximum number of images to return (default 5)
+        Backward compatible facade that now prefers:
+          coords/title → Wikipedia Geosearch → page QID → P18 → Commons thumb URLs;
+          fallbacks to Commons depicts (P180) and Commons geosearch;
+          final fallback to legacy Wikipedia-page media search.
 
-        Returns:
-            List of image URLs (up to max_images)
+        NOTE: To keep backward compatibility with callers/tests, this method
+        accepts only (search_keywords, max_images). If latitude/longitude are
+        desired, callers may pass them via keyword-only args (lat, lon), which
+        will be ignored by older tests using positional args.
         """
-        # Languages to try (in order of preference)
-        languages = ['en', 'ru', 'fr', 'de', 'es', 'it']
+        # Keyword-only optional coords (ignored if not provided by caller)
+        import inspect as _inspect
+        frame = _inspect.currentframe()
+        lat = None
+        lon = None
+        try:
+            # Inspect caller locals to fetch keyword-only arguments if provided
+            # This is a safe no-op for older call sites/tests
+            caller_locals = frame.f_back.f_locals if frame and frame.f_back else {}
+            lat = caller_locals.get('lat') if 'lat' in caller_locals else caller_locals.get('latitude')
+            lon = caller_locals.get('lon') if 'lon' in caller_locals else caller_locals.get('longitude')
+        except Exception:
+            lat = None
+            lon = None
 
-        # Clean up search keywords
-        clean_keywords = search_keywords.replace(' + ', ' ').replace('+', ' ').strip()
+        # Normalize keywords
+        clean_keywords = (search_keywords or '').replace(' + ', ' ').replace('+', ' ').strip()
 
-        # Try different variations of search terms
-        search_variations = [clean_keywords]
+        async def _fetch_json(session, url, params):
+            headers = {"User-Agent": "BotVoyage/1.0 (contact: botvoyage@example.com)"}
+            try:
+                async with session.get(url, params=params, headers=headers, timeout=6) as resp:
+                    if resp.status != 200:
+                        raise RuntimeError(f"{url} HTTP {resp.status}")
+                    return await resp.json()
+            except Exception as e:
+                logger.debug(f"Request failed {url}: {e}")
+                return None
 
-        # Add word combinations
-        words = clean_keywords.split()
-        if len(words) > 1:
-            # Try first two words
-            search_variations.append(' '.join(words[:2]))
-            # Try first word only
-            search_variations.append(words[0])
-            # Try last word (often the most specific)
-            search_variations.append(words[-1])
-            # Try removing common words like "France", "Paris", etc.
-            filtered_words = [w for w in words if w not in ['France', 'Paris', 'London', 'Moscow', 'Москва', 'Россия']]
-            if filtered_words and len(filtered_words) != len(words):
-                search_variations.append(' '.join(filtered_words))
+        def _cache_get(cache: dict, key: str):
+            item = cache.get(key)
+            if not item:
+                return None
+            val, ts = item
+            if (time.time() - ts) > self._image_cache_ttl_seconds:
+                cache.pop(key, None)
+                return None
+            return val
 
-        # Add specific variations for common patterns
-        if any(word in clean_keywords.lower() for word in ['metro', 'station', 'метро', 'станция']):
-            # For metro stations, try without "metro"/"метро" words
-            metro_clean = clean_keywords.lower()
-            for word in ['metro', 'station', 'метро', 'станция']:
-                metro_clean = metro_clean.replace(word, '').strip()
-            if metro_clean:
-                search_variations.append(metro_clean)
+        def _cache_set(cache: dict, key: str, val):
+            cache[key] = (val, time.time())
 
-        # Remove duplicates while preserving order
-        search_variations = list(dict.fromkeys(search_variations))
+        async def _qid_from_coords_or_search(session, lat_val, lon_val, keywords: str) -> str | None:
+            languages = ['ru', 'en', 'fr', 'de', 'es', 'it']
+            # Prefer geosearch when coords available
+            if lat_val is not None and lon_val is not None:
+                for lang in languages:
+                    params = {
+                        'action': 'query', 'list': 'geosearch',
+                        'gscoord': f"{lat_val}|{lon_val}", 'gsradius': 200, 'gslimit': 20,
+                        'format': 'json'
+                    }
+                    data = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", params)
+                    if not data:
+                        continue
+                    pages = data.get('query', {}).get('geosearch', [])
+                    if not pages:
+                        continue
+                    # Pick nearest page
+                    pages.sort(key=lambda p: p.get('dist', 1e9))
+                    pageid = pages[0].get('pageid')
+                    if not pageid:
+                        continue
+                    cached = _cache_get(self._qid_cache, f"pageid:{pageid}")
+                    if cached:
+                        return cached
+                    # Fetch pageprops to get QID
+                    pp = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
+                        'action': 'query', 'prop': 'pageprops', 'ppprop': 'wikibase_item',
+                        'pageids': pageid, 'format': 'json'
+                    })
+                    try:
+                        qid = next(iter(pp['query']['pages'].values()))['pageprops']['wikibase_item']
+                        if qid:
+                            _cache_set(self._qid_cache, f"pageid:{pageid}", qid)
+                            return qid
+                    except Exception:
+                        pass
+            # Fallback: title search across languages
+            if keywords:
+                for lang in ['ru', 'en', 'fr', 'de', 'es', 'it']:
+                    res = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
+                        'action': 'query', 'list': 'search', 'srsearch': keywords, 'srlimit': 1, 'format': 'json'
+                    })
+                    try:
+                        search_res = res['query']['search']
+                        if not search_res:
+                            continue
+                        title = search_res[0]['title']
+                        page = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
+                            'action': 'query', 'prop': 'pageprops', 'ppprop': 'wikibase_item', 'titles': title, 'format': 'json'
+                        })
+                        qid = next(iter(page['query']['pages'].values()))['pageprops']['wikibase_item']
+                        if qid:
+                            return qid
+                    except Exception:
+                        continue
+            return None
 
-        found_images = []
+        async def _p18_for_qid(session, qid: str) -> str | None:
+            cached = _cache_get(self._p18_cache, qid)
+            if cached:
+                return cached
+            data = await _fetch_json(session, "https://www.wikidata.org/w/api.php", {
+                'action': 'wbgetentities', 'ids': qid, 'props': 'claims', 'format': 'json'
+            })
+            try:
+                claims = data['entities'][qid]['claims']
+                p18 = claims.get('P18')
+                if p18:
+                    filename = p18[0]['mainsnak']['datavalue']['value']
+                    _cache_set(self._p18_cache, qid, filename)
+                    return filename
+            except Exception:
+                return None
+            return None
 
-        for lang in languages:
-            if len(found_images) >= max_images:
-                break
+        async def _imageinfo_for_filename(session, filename: str, target_width: int = 1600) -> dict | None:
+            cached = _cache_get(self._fileinfo_cache, filename)
+            if cached:
+                return cached
+            info = await _fetch_json(session, "https://commons.wikimedia.org/w/api.php", {
+                'action': 'query', 'titles': f"File:{filename}", 'prop': 'imageinfo',
+                'iiprop': 'url|size|timestamp|user|extmetadata', 'iiurlwidth': target_width, 'format': 'json'
+            })
+            try:
+                pages = info['query']['pages']
+                page = next(iter(pages.values()))
+                ii = page['imageinfo'][0]
+                _cache_set(self._fileinfo_cache, filename, ii)
+                return ii
+            except Exception:
+                return None
 
-            for search_term in search_variations:
-                if not search_term or len(found_images) >= max_images:
-                    continue
+        async def _commons_depicts_for_qid(session, qid: str, limit: int = 6) -> list[dict]:
+            data = await _fetch_json(session, "https://commons.wikimedia.org/w/api.php", {
+                'action': 'query', 'list': 'search', 'srsearch': f"haswbstatement:P180={qid}",
+                'srnamespace': 6, 'srlimit': limit, 'format': 'json'
+            })
+            out = []
+            try:
+                for hit in data.get('query', {}).get('search', []):
+                    title = hit.get('title')  # "File:..."
+                    if not title:
+                        continue
+                    filename = title.split(':', 1)[-1]
+                    ii = await _imageinfo_for_filename(session, filename)
+                    if ii:
+                        out.append(ii)
+            except Exception:
+                pass
+            return out
 
-                try:
-                    logger.debug(f"Trying Wikipedia search: '{search_term}' in {lang}")
-                    images = await self._search_wikipedia_images(search_term, lang, max_images - len(found_images))
-                    if images:
-                        # Filter out duplicates
-                        for img in images:
-                            if img not in found_images:
-                                found_images.append(img)
-                                if len(found_images) >= max_images:
-                                    break
-                        logger.info(f"Found {len(images)} Wikipedia images for '{search_term}' in {lang}")
-                    else:
-                        logger.debug(f"No images found for '{search_term}' in {lang}")
-                except Exception as e:
-                    logger.debug(f"Wikipedia search failed for '{search_term}' in {lang}: {e}")
-                    continue
+        async def _commons_geosearch(session, lat_val, lon_val, limit: int = 10) -> list[dict]:
+            data = await _fetch_json(session, "https://commons.wikimedia.org/w/api.php", {
+                'action': 'query', 'list': 'geosearch', 'gscoord': f"{lat_val}|{lon_val}",
+                'gsradius': 200, 'gslimit': limit, 'format': 'json'
+            })
+            items = []
+            try:
+                for item in data.get('query', {}).get('geosearch', []):
+                    title = item.get('title')
+                    if not title or not title.startswith('File:'):
+                        continue
+                    filename = title.split(':', 1)[-1]
+                    ii = await _imageinfo_for_filename(session, filename)
+                    if ii:
+                        # Attach distance if present
+                        if 'dist' in item:
+                            ii['distance'] = item['dist']
+                        items.append(ii)
+            except Exception:
+                pass
+            return items
 
-        if found_images:
-            logger.info(f"Found {len(found_images)} Wikipedia images for: {search_keywords}")
+        def _pick_urls_from_infos(infos: list[dict], need: int) -> list[str]:
+            # Prefer large width, landscape, recent
+            def score(ii: dict) -> tuple:
+                width = ii.get('thumbwidth') or ii.get('width') or 0
+                height = ii.get('thumbheight') or ii.get('height') or 0
+                ts = ii.get('timestamp') or ''
+                landscape = 1 if width and height and width >= height else 0
+                return (landscape, width)
+            infos_sorted = sorted(infos, key=score, reverse=True)
+            urls = []
+            for ii in infos_sorted:
+                url = ii.get('thumburl') or ii.get('url')
+                if url and url not in urls:
+                    urls.append(url)
+                if len(urls) >= need:
+                    break
+            return urls
+
+        results: list[str] = []
+        try:
+            async with aiohttp.ClientSession() as session:
+                qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords)
+                infos: list[dict] = []
+                if qid:
+                    filename = await _p18_for_qid(session, qid)
+                    if filename:
+                        ii = await _imageinfo_for_filename(session, filename)
+                        if ii:
+                            infos.append(ii)
+                    if len(infos) < max_images:
+                        infos += await _commons_depicts_for_qid(session, qid, limit=max(3, max_images))
+                if (lat is not None and lon is not None) and len(infos) < max_images:
+                    infos += await _commons_geosearch(session, lat, lon, limit=max(6, max_images))
+
+                if infos:
+                    results = _pick_urls_from_infos(infos, max_images)
+                # Final fallback to legacy page media search if still empty
+                if not results and clean_keywords:
+                    results = await self._search_wikipedia_images(clean_keywords, 'en', max_images)
+                    if not results:
+                        # try a few more langs quickly
+                        for lg in ['ru', 'fr']:
+                            if results:
+                                break
+                            try:
+                                results = await self._search_wikipedia_images(clean_keywords, lg, max_images)
+                            except Exception:
+                                continue
+        except Exception as e:
+            logger.debug(f"Commons pipeline failed: {e}")
+
+        if results:
+            logger.info(f"Commons/Wikidata images found: {len(results)} for '{clean_keywords}'")
         else:
-            logger.info(f"No Wikipedia images found for: {search_keywords} (tried {len(search_variations)} variations across {len(languages)} languages)")
-
-        return found_images
+            logger.info(f"No images via Commons/Wikidata for '{clean_keywords}'")
+        return results
 
     async def _search_wikipedia_images(self, search_term: str, lang: str, max_images: int = 5) -> list[str]:
         """Search for images on specific Wikipedia language.

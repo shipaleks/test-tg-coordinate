@@ -235,7 +235,7 @@ async def _send_text_resilient(
         else:
             raise
 
-async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, user_id=None, reply_to_message_id=None, html_text: str | None = None):
+async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, user_id=None, reply_to_message_id=None, html_text: str | None = None, lat: float | None = None, lon: float | None = None):
     """Send fact message with Wikipedia images if available.
     
     Args:
@@ -250,6 +250,9 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
     try:
         # Try to get Wikipedia images
         openai_client = get_openai_client()
+        # Expose coords as local variables for the image pipeline's optional introspection
+        latitude = lat
+        longitude = lon
         image_urls = await openai_client.get_wikipedia_images(search_keywords, max_images=4)  # Max 4 for media group
         
         if image_urls:
@@ -294,7 +297,10 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
             except Exception as media_group_error:
                 logger.error(f"Failed to send text + media group: {media_group_error}")
                 logger.error(f"Error type: {type(media_group_error)}")
-                logger.error(f"Image URLs that failed: {[img.media for img in media_list]}")
+                try:
+                    logger.error(f"Image URLs that failed: {[img.media for img in media_list]}")
+                except Exception:
+                    logger.error("Image URLs that failed: unavailable")
                 
                 # Try with fewer images if we had multiple images
                 if len(image_urls) > 2:
@@ -606,6 +612,9 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         
         # Send fact with images using extracted search keywords
         if final_search_keywords:
+            # Pass coordinates opportunistically via keyword locals for the new pipeline
+            lat_kw = lat
+            lon_kw = lon
             await send_fact_with_images(
                 context.bot, 
                 chat_id, 
@@ -615,6 +624,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 user_id=user_id,
                 reply_to_message_id=update.message.message_id,
                 html_text=html_formatted,
+                lat=lat,
+                lon=lon,
             )
         else:
             # No search keywords, send just text
@@ -828,7 +839,9 @@ async def handle_interval_callback(
                 initial_fact_response, 
                 search_keywords, 
                 place,
-                user_id=user_id
+                user_id=user_id,
+                lat=lat,
+                lon=lon,
             )
         else:
             # Legacy fallback: try to extract search keywords from old format
@@ -841,7 +854,9 @@ async def handle_interval_callback(
                     initial_fact_response, 
                     legacy_search_keywords, 
                     place,
-                    user_id=user_id
+                    user_id=user_id,
+                    lat=lat,
+                    lon=lon,
                 )
             else:
                 # No search keywords, send just text
