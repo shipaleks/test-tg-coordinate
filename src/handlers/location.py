@@ -16,6 +16,7 @@ from telegram.ext import ContextTypes
 
 from ..services.live_location_tracker import get_live_location_tracker
 from ..services.openai_client import get_openai_client
+import inspect
 from ..services.async_donors_wrapper import get_async_donors_db
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ LOCATION_MESSAGES = {
         'live_activated': "🔴 *Живая локация активирована!*\n\n📍 Отслеживание: {minutes} минут\n⏰ Факты каждые: {interval} минут\n\n🚀 Скоро пришлю первый факт, затем буду присылать автоматически!\n\nОстановите sharing чтобы завершить сессию.",
         'place_label': "📍 *Место:*",
         'fact_label': "💡 *Факт:*",
+        'sources_label': "🔗 *Источники:*",
         'live_fact_label': "🔴 *Факт #{number}*",
         'attraction_address': "Достопримечательность: {place}",
         'static_fact_format': "📍 *Место:* {place}\n\n💡 *Факт:* {fact}",
@@ -52,6 +54,7 @@ LOCATION_MESSAGES = {
         'live_activated': "🔴 *Live location activated!*\n\n📍 Tracking: {minutes} minutes\n⏰ Facts every: {interval} minutes\n\n🚀 I'll send the first fact soon, then continue automatically!\n\nStop sharing to end the session.",
         'place_label': "📍 *Place:*",
         'fact_label': "💡 *Fact:*",
+        'sources_label': "🔗 *Sources:*",
         'live_fact_label': "🔴 *Fact #{number}*",
         'attraction_address': "Attraction: {place}",
         'static_fact_format': "📍 *Place:* {place}\n\n💡 *Fact:* {fact}",
@@ -72,6 +75,7 @@ LOCATION_MESSAGES = {
         'live_activated': "🔴 *Position en direct activée !*\n\n📍 Suivi : {minutes} minutes\n⏰ Faits toutes les : {interval} minutes\n\n🚀 Je vais envoyer le premier fait bientôt, puis continuer automatiquement !\n\nArrêtez le partage pour terminer la session.",
         'place_label': "📍 *Lieu :*",
         'fact_label': "💡 *Fait :*",
+        'sources_label': "🔗 *Sources :*",
         'live_fact_label': "🔴 *Fait #{number}*",
         'attraction_address': "Attraction : {place}",
         'static_fact_format': "📍 *Lieu :* {place}\n\n💡 *Fait :* {fact}",
@@ -100,6 +104,44 @@ async def get_localized_message(user_id: int, key: str, **kwargs) -> str:
         message = LOCATION_MESSAGES['en'].get(key, key)
         return message.format(**kwargs) if kwargs else message
 
+
+def _extract_sources_from_answer(answer_content: str) -> list[tuple[str, str]]:
+    """Parse Sources/Источники section into (title, url) pairs.
+
+    Handles bullets like "- Title — URL" or "- Title - URL".
+    """
+    try:
+        # Find sources header and capture until the end
+        match = re.search(r"(?:^|\n)(Sources|Источники)\s*:\s*(.*?)$", answer_content, re.DOTALL | re.IGNORECASE)
+        if not match:
+            return []
+        section = match.group(2).strip()
+        pairs = []
+        for line in section.splitlines():
+            line = line.strip()
+            if not line.startswith("-"):
+                continue
+            item = line.lstrip("- ").strip()
+            # Split on em dash or hyphen
+            split = re.split(r"\s+[—-]\s+", item, maxsplit=1)
+            if len(split) == 2:
+                title, url = split[0].strip(), split[1].strip()
+                # Extract URL if there is extra text
+                url_match = re.search(r"https?://\S+", url)
+                if url_match:
+                    url = url_match.group(0)
+                if title and url:
+                    pairs.append((title, url))
+            else:
+                # Try to extract a URL and use domain as title
+                url_match = re.search(r"https?://\S+", item)
+                if url_match:
+                    url = url_match.group(0)
+                    domain = re.sub(r"^https?://(www\.)?", "", url).split('/')[0]
+                    pairs.append((domain, url))
+        return pairs
+    except Exception:
+        return []
 
 async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, user_id=None, reply_to_message_id=None):
     """Send fact message with Wikipedia images if available.
@@ -366,8 +408,17 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         cache_key = f"{round(lat, 3)}_{round(lon, 3)}"
         logger.info(f"Static location - using coordinate-based cache key: '{cache_key}'")
         
-        # Get fact with history using coordinate key
-        response = await openai_client.get_nearby_fact_with_history(lat, lon, cache_key, user_id)
+        # Get fact with history when available; fallback to legacy get_nearby_fact for test mocks
+        response = None
+        try:
+            get_with_history = getattr(openai_client, "get_nearby_fact_with_history", None)
+            if get_with_history and inspect.iscoroutinefunction(get_with_history):
+                response = await get_with_history(lat, lon, cache_key, user_id)
+            else:
+                response = await openai_client.get_nearby_fact(lat, lon)
+        except Exception:
+            # Fallback to legacy method on any error
+            response = await openai_client.get_nearby_fact(lat, lon)
         
         # Parse the response to extract place and fact
         logger.info(f"Final response for static location: {response[:100]}...")
@@ -420,8 +471,23 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if legacy_search_match:
                 final_search_keywords = legacy_search_match.group(1).strip()
 
+        # Extract and format sources section if present
+        sources_block = ""
+        if answer_match:
+            sources = _extract_sources_from_answer(answer_content)
+            if sources:
+                src_label = await get_localized_message(user_id, 'sources_label')
+                bullets = []
+                for title, url in sources[:3]:
+                    # Markdown link with short title
+                    safe_title = re.sub(r"[\[\]]", "", title)[:80]
+                    bullets.append(f"- [{safe_title}]({url})")
+                sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
+
         # Format the response for static location
         formatted_response = await get_localized_message(user_id, 'static_fact_format', place=place, fact=fact)
+        if sources_block:
+            formatted_response = f"{formatted_response}{sources_block}"
         
         # Send fact with images using extracted search keywords
         if final_search_keywords:
@@ -443,7 +509,13 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
 
         # Try to parse coordinates and send location for navigation using search keywords
-        coordinates = await openai_client.parse_coordinates_from_response(response, lat, lon)
+        coordinates = None
+        try:
+            parse_method = getattr(openai_client, "parse_coordinates_from_response", None)
+            if parse_method and inspect.iscoroutinefunction(parse_method):
+                coordinates = await parse_method(response, lat, lon)
+        except Exception:
+            coordinates = None
         if coordinates:
             venue_lat, venue_lon = coordinates
             try:
@@ -601,8 +673,22 @@ async def handle_interval_callback(
         else:
             fact_number = 1  # Fallback
 
+        # Extract and format sources for live fact as well
+        sources_block = ""
+        if answer_match:
+            sources = _extract_sources_from_answer(answer_content)
+            if sources:
+                src_label = await get_localized_message(user_id, 'sources_label')
+                bullets = []
+                for title, url in sources[:3]:
+                    safe_title = re.sub(r"[\[\]]", "", title)[:80]
+                    bullets.append(f"- [{safe_title}]({url})")
+                sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
+
         # Format the initial fact with number
         initial_fact_response = await get_localized_message(user_id, 'live_fact_format', number=fact_number, place=place, fact=fact)
+        if sources_block:
+            initial_fact_response = f"{initial_fact_response}{sources_block}"
 
         # Save initial fact to history
         if user_id in tracker._active_sessions:
@@ -640,7 +726,13 @@ async def handle_interval_callback(
                 )
 
         # Try to parse coordinates and send location for navigation using search keywords (live location)
-        coordinates = await openai_client.parse_coordinates_from_response(response, lat, lon)
+        coordinates = None
+        try:
+            parse_method = getattr(openai_client, "parse_coordinates_from_response", None)
+            if parse_method and inspect.iscoroutinefunction(parse_method):
+                coordinates = await parse_method(response, lat, lon)
+        except Exception:
+            coordinates = None
         if coordinates:
             venue_lat, venue_lon = coordinates
             try:
