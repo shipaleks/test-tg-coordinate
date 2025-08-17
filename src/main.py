@@ -215,21 +215,30 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         here = Path(__file__).resolve().parent.parent
         candidates += [
             here / "howtobot.gif",
+            here / "howtobot.mp4",
             here / "docs" / "howtobot.gif",
+            here / "docs" / "howtobot.mp4",
             here / "assets" / "howtobot.gif",
+            here / "assets" / "howtobot.mp4",
             Path("howtobot.gif").resolve(),
+            Path("howtobot.mp4").resolve(),
         ]
         sent = False
         for p in candidates:
             if p.exists() and p.is_file():
                 try:
-                    with p.open("rb") as f:
-                        await context.bot.send_animation(chat_id=chat_id, animation=f)
-                    logger.info(f"Sent how-to gif from {p}")
+                    if p.suffix.lower() == ".mp4":
+                        with p.open("rb") as f:
+                            await context.bot.send_video(chat_id=chat_id, video=f, supports_streaming=True)
+                        logger.info(f"Sent how-to video from {p}")
+                    else:
+                        with p.open("rb") as f:
+                            await context.bot.send_animation(chat_id=chat_id, animation=f)
+                        logger.info(f"Sent how-to gif from {p}")
                     sent = True
                     break
                 except Exception as e:
-                    logger.warning(f"send_animation failed for {p}: {e}; trying as document")
+                    logger.warning(f"send_* failed for {p}: {e}; trying as document")
                     try:
                         with p.open("rb") as f:
                             await context.bot.send_document(chat_id=chat_id, document=f)
@@ -242,11 +251,19 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             file_id = os.getenv("HOWTO_GIF_FILE_ID")
             file_url = os.getenv("HOWTO_GIF_URL")
             if file_id:
-                await context.bot.send_animation(chat_id=chat_id, animation=file_id)
-                logger.info("Sent how-to gif via file_id")
+                try:
+                    await context.bot.send_animation(chat_id=chat_id, animation=file_id)
+                    logger.info("Sent how-to via file_id (animation)")
+                except Exception:
+                    await context.bot.send_video(chat_id=chat_id, video=file_id, supports_streaming=True)
+                    logger.info("Sent how-to via file_id (video)")
             elif file_url:
-                await context.bot.send_animation(chat_id=chat_id, animation=file_url)
-                logger.info("Sent how-to gif via URL")
+                try:
+                    await context.bot.send_animation(chat_id=chat_id, animation=file_url)
+                    logger.info("Sent how-to via URL (animation)")
+                except Exception:
+                    await context.bot.send_video(chat_id=chat_id, video=file_url, supports_streaming=True)
+                    logger.info("Sent how-to via URL (video)")
     except Exception as e:
         logger.warning(f"Failed to send how-to gif: {e}")
 
