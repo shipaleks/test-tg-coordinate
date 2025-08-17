@@ -409,6 +409,15 @@ Example (with fact-checking approach):
 
 Remember: Include only details you can verify using online sources. General truths are better than specific falsehoods.
 
+QUALITY SELECTION:
+- Internally generate 2–3 candidate facts and pick the most surprising, specific, and verifiable one.
+- Do NOT mention discarded options; output only the final chosen fact.
+
+OUTPUT FORMAT (use user's language for labels):
+- Main fact text MUST NOT include URLs or raw domains in parentheses.
+- At the end add a new section titled 'Источники' if writing in Russian, or 'Sources' otherwise.
+- List 2–3 bullet points in the form “Concise title — URL”. Prefer canonical, clean links (remove tracking params).
+
 QUICK WRITING RULES:
 • Lead with the surprise - never with "This building is..."
 • Include one specific name, date, or measurement
