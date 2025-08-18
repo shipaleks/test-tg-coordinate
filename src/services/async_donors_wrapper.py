@@ -110,12 +110,27 @@ class AsyncDonorsWrapper:
     
     async def has_language_set(self, user_id: int) -> bool:
         """Check if language is set (async)."""
-        language = await self.get_user_language(user_id)
-        return language != "ru"
+        await self._ensure_initialized()
+        if self._is_postgres:
+            try:
+                return await self._db.has_language_set(user_id)  # type: ignore[attr-defined]
+            except Exception:
+                # Fallback heuristic
+                language = await self.get_user_language(user_id)
+                return language != "ru"
+        else:
+            return self._db.has_language_set(user_id)  # type: ignore[attr-defined]
     
     async def reset_user_language(self, user_id: int) -> bool:
         """Reset language (async)."""
-        return await self.set_user_language(user_id, "ru")
+        await self._ensure_initialized()
+        if self._is_postgres:
+            try:
+                return await self._db.reset_user_language(user_id)  # type: ignore[attr-defined]
+            except Exception:
+                return await self.set_user_language(user_id, "ru")
+        else:
+            return self._db.reset_user_language(user_id)  # type: ignore[attr-defined]
 
 
 # Global instance
