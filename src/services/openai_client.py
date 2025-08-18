@@ -1631,9 +1631,6 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         poi_coords = None
                 if poi_coords and len(infos) < max_images:
                     infos += await _commons_geosearch(session, poi_coords[0], poi_coords[1], limit=max(6, max_images))
-                # Last resort: Commons geosearch near USER location
-                if (lat is not None and lon is not None) and len(infos) < max_images:
-                    infos += await _commons_geosearch(session, lat, lon, limit=max(6, max_images))
 
                 if infos:
                     results = _pick_urls_from_infos(infos, max_images)
