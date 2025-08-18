@@ -205,6 +205,7 @@ Follow the method above to find the most surprising true detail about THIS exact
 Present your final answer strictly in this structure:
 <answer>
 Location: [Street address / building / precise intersection]
+Coordinates: [LAT, LON in decimal degrees, 5–6 decimals, exact point of the described place]
 Search: [Geocoding query optimized for Nominatim, with commas and city name]
 Interesting fact: [100–120 words. Surprising opening → Human story → Why it matters → What to look for today. Names/dates only if verified. No inline URLs.]
 Sources/Источники:
@@ -224,6 +225,7 @@ Apply the method above to find one concise, surprising, verified detail.
 Format the answer strictly as:
 <answer>
 Location: [Exact place name; not "near"/generic area]
+Coordinates: [LAT, LON in decimal degrees, 5–6 decimals, exact point of the described place]
 Search: ["Place, Street/District, City" — commas, official names, with city]
 Interesting fact: [60–80 words. Surprising detail → Quick context (with name/date) → What is visible today. No inline URLs.]
 Sources/Источники:

@@ -523,6 +523,15 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if location_match:
                 place = location_match.group(1).strip()
             
+            # Extract precise coordinates if provided
+            coord_match = re.search(r"Coordinates:\s*([\-\d\.]+)\s*,\s*([\-\d\.]+)", answer_content)
+            if coord_match:
+                try:
+                    lat = float(coord_match.group(1))
+                    lon = float(coord_match.group(2))
+                except Exception:
+                    pass
+
             # Extract search keywords from answer content
             search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
             if search_match:
@@ -775,6 +784,15 @@ async def handle_interval_callback(
             if location_match:
                 place = location_match.group(1).strip()
             
+            # Extract precise coordinates if provided
+            coord_match = re.search(r"Coordinates:\s*([\-\d\.]+)\s*,\s*([\-\d\.]+)", answer_content)
+            if coord_match:
+                try:
+                    lat = float(coord_match.group(1))
+                    lon = float(coord_match.group(2))
+                except Exception:
+                    pass
+
             # Extract search keywords from answer content
             search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
             if search_match:
