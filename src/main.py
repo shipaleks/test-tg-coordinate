@@ -204,52 +204,37 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     lang_steps = steps.get(language, steps['en'])
     lang_labels = labels.get(language, labels['en'])
 
-    # Always try to send GIF first (optional)
+    # Send onboarding video (HD). Prefer file_id from env (Railway), fallback to local file in docs/.
     try:
         import os
         sent = False
-        
-        # First priority: use file_id from environment (best for Railway)
-        file_id = os.getenv("HOWTO_GIF_FILE_ID")
+
+        # Priority 1: file_id from env (HOWTO_VIDEO_FILE_ID)
+        file_id = os.getenv("HOWTO_VIDEO_FILE_ID")
         if file_id:
             try:
-                # Try as video first (for mp4)
                 await context.bot.send_video(chat_id=chat_id, video=file_id)
-                logger.info("Sent how-to video via file_id")
+                logger.info("Sent how-to HD video via file_id")
                 sent = True
-            except Exception:
-                try:
-                    # Fallback to animation (for gif)
-                    await context.bot.send_animation(chat_id=chat_id, animation=file_id)
-                    logger.info("Sent how-to animation via file_id")
-                    sent = True
-                except Exception as e:
-                    logger.warning(f"Failed to send media via file_id: {e}")
-        
-        # Second priority: try local files (for local development)
+            except Exception as e:
+                logger.warning(f"Failed to send HD video via file_id: {e}")
+
+        # Priority 2: local file for dev (docs/howtobot_hd.mp4, then howtobot.mp4)
         if not sent:
             base_path = Path(__file__).resolve().parent.parent
-            media_files = [
-                ("docs/howtobot.mp4", "video"),
-                ("docs/howtobot.gif", "animation"),
-            ]
-            
-            for relative_path, media_type in media_files:
+            for relative_path in ["docs/howtobot_hd.mp4", "docs/howtobot.mp4"]:
                 file_path = base_path / relative_path
                 if file_path.exists():
                     try:
                         with open(file_path, "rb") as f:
-                            if media_type == "video":
-                                await context.bot.send_video(chat_id=chat_id, video=f)
-                            else:
-                                await context.bot.send_animation(chat_id=chat_id, animation=f)
-                        logger.info(f"Sent {media_type} from {file_path}")
+                            await context.bot.send_video(chat_id=chat_id, video=f)
+                        logger.info(f"Sent how-to video from {file_path}")
                         sent = True
                         break
                     except Exception as e:
-                        logger.warning(f"Failed to send {media_type} from {file_path}: {e}")
+                        logger.warning(f"Failed to send video from {file_path}: {e}")
     except Exception as e:
-        logger.warning(f"Failed to send how-to media: {e}")
+        logger.warning(f"Failed to send onboarding video: {e}")
 
     # Send definition text first
     if lang_steps:

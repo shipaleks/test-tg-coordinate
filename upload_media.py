@@ -30,8 +30,8 @@ async def upload_media():
     
     # Files to upload
     files = [
+        ("docs/howtobot_hd.mp4", "video"),
         ("docs/howtobot.mp4", "video"),
-        ("docs/howtobot.gif", "animation"),
         ("docs/IMG_9249.PNG", "photo"),
         ("docs/IMG_9248.PNG", "photo"),
         ("docs/IMG_9247.PNG", "photo"),
@@ -67,7 +67,7 @@ async def upload_media():
             print(f"❌ Failed to upload {file_path}: {e}")
     
     print("\nAdd these to your Railway environment variables:")
-    print("HOWTO_GIF_FILE_ID=<file_id from howtobot.mp4 or gif>")
+    print("HOWTO_VIDEO_FILE_ID=<file_id from howtobot_hd.mp4 (or howtobot.mp4)>")
     print("HOWTO_STEP1_FILE_ID=<file_id from IMG_9249.PNG>")
     print("HOWTO_STEP2_FILE_ID=<file_id from IMG_9248.PNG>")
     print("HOWTO_STEP3_FILE_ID=<file_id from IMG_9247.PNG>")

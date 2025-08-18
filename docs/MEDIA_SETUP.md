@@ -1,6 +1,6 @@
 # Media Files Setup for Railway
 
-Bot Voyage использует медиафайлы (GIF/видео и изображения) для обучения пользователей включению живой локации. На Railway эти файлы нужно загрузить заранее и использовать через file_id.
+Bot Voyage использует видео и изображения для обучения пользователей включению живой локации. На Railway эти файлы нужно загрузить заранее и использовать через file_id.
 
 ## Шаги настройки
 
@@ -23,7 +23,7 @@ python upload_media.py
 
 Добавьте следующие переменные окружения в настройках Railway:
 
-- `HOWTO_GIF_FILE_ID` - file_id для howtobot.mp4 или howtobot.gif
+- `HOWTO_VIDEO_FILE_ID` - file_id для howtobot_hd.mp4 (или howtobot.mp4)
 - `HOWTO_STEP1_FILE_ID` - file_id для IMG_9249.PNG (шаг 1)
 - `HOWTO_STEP2_FILE_ID` - file_id для IMG_9248.PNG (шаг 2)
 - `HOWTO_STEP3_FILE_ID` - file_id для IMG_9247.PNG (шаг 3)
@@ -47,8 +47,8 @@ python upload_media.py
 
 ```
 docs/
-├── howtobot.mp4      # Видео-инструкция (приоритет)
-├── howtobot.gif      # GIF-инструкция (fallback)
+├── howtobot_hd.mp4   # Видео-инструкция (приоритет)
+├── howtobot.mp4      # Видео-инструкция (fallback)
 ├── IMG_9249.PNG      # Шаг 1: Нажать скрепку
 ├── IMG_9248.PNG      # Шаг 2: Выбрать Location
 └── IMG_9247.PNG      # Шаг 3: Share Live Location
@@ -65,4 +65,4 @@ docs/
 
 - file_id постоянны для каждого бота (не меняются)
 - Размер файлов: до 50MB для видео, до 10MB для фото
-- Поддерживаемые форматы: MP4, GIF, PNG, JPEG
+- Поддерживаемые форматы: MP4, PNG, JPEG
