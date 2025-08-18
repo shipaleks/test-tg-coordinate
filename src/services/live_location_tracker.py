@@ -43,21 +43,7 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
             sources=sources
         )
         
-        # Build a plain-text sources block to send after media (avoid markdown pitfalls)
-        sources_md = ""
-        if sources:
-            try:
-                header = "Источники:"  # plain header; URLs will auto-link
-                lines = []
-                for title, url in (sources or [])[:4]:
-                    safe_title = re.sub(r"[\n\r]", " ", str(title or "")).strip()[:80]
-                    safe_url = str(url or "").strip()
-                    if safe_url:
-                        lines.append(f"- {safe_title} — {safe_url}")
-                if lines:
-                    sources_md = "\n\n" + header + "\n" + "\n".join(lines)
-            except Exception:
-                sources_md = ""
+
 
         if image_urls:
             # Try sending all images with text as media group
@@ -65,38 +51,24 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                 logger.info(f"Attempting to send live fact with {len(image_urls)} images for {place}")
                 logger.debug(f"Live formatted response length: {len(formatted_response)} chars")
 
-                # Build a safe caption: remove Sources section and strip Markdown to avoid entity errors
-                caption_candidate = _strip_live_sources(formatted_response)
-                def _to_plain(md: str) -> str:
-                    try:
-                        # Convert [title](url) → title
-                        s = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\\1", md)
-                        # Remove emphasis/backticks that can break parsing in captions
-                        for ch in ("*", "_", "`"):
-                            s = s.replace(ch, "")
-                        return s
-                    except Exception:
-                        return md
-                caption_text = _to_plain(caption_candidate)
+                # Use full response as caption but ensure Markdown is safe
+                caption_text = formatted_response
                 
                 if len(caption_text) <= 1024:
                     # Caption fits in Telegram limit, send as media group with caption
                     media_list = []
                     for i, image_url in enumerate(image_urls):
                         if i == 0:
-                            # First image gets the plain fact as caption (no parse_mode)
-                            media_list.append(InputMediaPhoto(media=image_url, caption=caption_text))
+                            # First image gets the full fact as caption with Markdown
+                            media_list.append(InputMediaPhoto(media=image_url, caption=caption_text, parse_mode="Markdown"))
                         else:
                             # Other images get no caption
                             media_list.append(InputMediaPhoto(media=image_url))
 
                     if len(media_list) == 1:
-                        await bot.send_photo(chat_id=chat_id, photo=image_urls[0], caption=caption_text)
+                        await bot.send_photo(chat_id=chat_id, photo=image_urls[0], caption=caption_text, parse_mode="Markdown")
                     else:
                         await bot.send_media_group(chat_id=chat_id, media=media_list)
-                    # After media group, send sources as a separate message to preserve links
-                    if sources_md:
-                        await bot.send_message(chat_id=chat_id, text=sources_md)
                     logger.info(f"Successfully sent {len(image_urls)} live images with caption in media group for {place}")
                 else:
                     # Caption too long → first photo with shortened caption + rest without captions
@@ -115,13 +87,10 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                     media_list = []
                     for i, image_url in enumerate(image_urls):
                         if i == 0:
-                            media_list.append(InputMediaPhoto(media=image_url, caption=short_caption))
+                            media_list.append(InputMediaPhoto(media=image_url, caption=short_caption, parse_mode="Markdown"))
                         else:
                             media_list.append(InputMediaPhoto(media=image_url))
                     await bot.send_media_group(chat_id=chat_id, media=media_list)
-                    # After media group, send sources as a separate message to preserve links
-                    if sources_md:
-                        await bot.send_message(chat_id=chat_id, text=sources_md)
                     logger.info(f"Successfully sent long live text + {len(image_urls)} images as media group for {place}")
                 return
                 
@@ -141,7 +110,7 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                         retry_media_list = []
                         for i, image_url in enumerate(image_urls[:2]):
                             if i == 0:
-                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=caption_text))
+                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=caption_text, parse_mode="Markdown"))
                             else:
                                 retry_media_list.append(InputMediaPhoto(media=image_url))
                         
@@ -149,9 +118,6 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                             chat_id=chat_id,
                             media=retry_media_list
                         )
-                        # After media group, send sources as a separate message to preserve links
-                        if sources_md:
-                            await bot.send_message(chat_id=chat_id, text=sources_md)
                         logger.info(f"Successfully sent {len(retry_media_list)} live images on retry for {place}")
                         return
                     except Exception as retry_error:
@@ -531,6 +497,10 @@ class LiveLocationTracker:
                     # Import get_localized_message at top of function to avoid circular imports
                     from ..handlers.location import get_localized_message
                     formatted_response = await get_localized_message(session_data.user_id, 'live_fact_format', number=session_data.fact_count, place=place, fact=fact)
+                    
+                    # Add sources to the main message if available
+                    if 'sources_block' in locals() and sources_block:
+                        formatted_response = f"{formatted_response}{sources_block}"
 
                     # Save fact to history to avoid repetition
                     session_data.fact_history.append(f"{place}: {fact}")

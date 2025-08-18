@@ -1359,6 +1359,12 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         # Use explicit parameters (backward compatible - defaults to None)
         sources_hint = sources
 
+        # Log input parameters for debugging duplicate images issue
+        logger.info(f"[IMG_SEARCH] Starting image search for: '{search_keywords}'")
+        logger.info(f"[IMG_SEARCH] Coordinates: lat={lat}, lon={lon}")
+        logger.info(f"[IMG_SEARCH] Place hint: '{place_hint}'")
+        logger.info(f"[IMG_SEARCH] Sources: {len(sources_hint) if sources_hint else 0} items")
+
         # Normalize keywords
         clean_keywords = (search_keywords or '').replace(' + ', ' ').replace('+', ' ').strip()
 
@@ -1523,25 +1529,35 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             return out
 
         async def _commons_geosearch(session, lat_val, lon_val, limit: int = 10) -> list[dict]:
+            # Increase search radius to get more diverse results
             data = await _fetch_json(session, "https://commons.wikimedia.org/w/api.php", {
                 'action': 'query', 'list': 'geosearch', 'gscoord': f"{lat_val}|{lon_val}",
-                'gsradius': 200, 'gslimit': limit, 'format': 'json'
+                'gsradius': 500, 'gslimit': limit * 2, 'format': 'json'  # Increased radius and limit
             })
             items = []
             try:
-                for item in data.get('query', {}).get('geosearch', []):
+                geosearch_results = data.get('query', {}).get('geosearch', [])
+                logger.info(f"[IMG_SEARCH] Commons geosearch found {len(geosearch_results)} items at {lat_val}, {lon_val}")
+                
+                for item in geosearch_results:
                     title = item.get('title')
                     if not title or not title.startswith('File:'):
                         continue
                     filename = title.split(':', 1)[-1]
+                    
+                    # Skip generic file names that tend to be repeated
+                    lower_filename = filename.lower()
+                    if any(skip in lower_filename for skip in ['logo', 'emblem', 'coat_of_arms', 'flag']):
+                        continue
+                        
                     ii = await _imageinfo_for_filename(session, filename)
                     if ii:
                         # Attach distance if present
                         if 'dist' in item:
                             ii['distance'] = item['dist']
                         items.append(ii)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Commons geosearch error: {e}")
             return items
 
         def _pick_urls_from_infos(infos: list[dict], need: int, place_hint_text: str | None = None, sources_list: list[tuple[str, str]] | None = None) -> list[str]:
@@ -1592,13 +1608,44 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 return (token_bonus + dist_bonus, landscape, width)
 
             infos_sorted = sorted(infos, key=score, reverse=True)
-            urls: list[str] = []
+            
+            # Filter out duplicates and near-duplicates by filename similarity
+            seen_bases = set()
+            filtered_infos = []
             for ii in infos_sorted:
+                url = ii.get('thumburl') or ii.get('url')
+                if not url:
+                    continue
+                    
+                # Extract base filename without size/extension variations
+                import re
+                filename = url.split('/')[-1]
+                # Remove size markers like -1600px-, _thumb_, etc
+                base = re.sub(r'[-_]\d+px[-_]|_thumb_?|\.thumb\.|/thumb/', '', filename.lower())
+                base = re.sub(r'\.(jpg|jpeg|png|svg|webp).*', '', base)
+                
+                if base not in seen_bases:
+                    seen_bases.add(base)
+                    filtered_infos.append(ii)
+                    
+            # Take URLs from filtered list
+            urls: list[str] = []
+            for ii in filtered_infos:
                 url = ii.get('thumburl') or ii.get('url')
                 if url and url not in urls:
                     urls.append(url)
                 if len(urls) >= need:
                     break
+                    
+            # If we have fewer images than needed, add some variety by taking lower-scored images
+            if len(urls) < need and len(filtered_infos) > len(urls):
+                for ii in filtered_infos[len(urls):]:
+                    url = ii.get('thumburl') or ii.get('url')
+                    if url and url not in urls:
+                        urls.append(url)
+                    if len(urls) >= need:
+                        break
+                        
             return urls
 
         results: list[str] = []
@@ -1606,6 +1653,10 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             async with aiohttp.ClientSession() as session:
                 # 1) Try to identify QID strictly by place_hint/keywords
                 qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords, place_hint)
+                if qid:
+                    logger.info(f"[IMG_SEARCH] Found QID: {qid} for '{clean_keywords}'")
+                else:
+                    logger.info(f"[IMG_SEARCH] No QID found for '{clean_keywords}'")
                 infos: list[dict] = []
                 # Prepare concurrent tasks for POI image sources
                 import asyncio as _asyncio
@@ -1656,6 +1707,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 # Try Commons geosearch around POI coordinates
                 # First try: use provided POI coordinates (from Coordinates field in answer)
                 if lat is not None and lon is not None:
+                    logger.info(f"[IMG_SEARCH] Using POI coordinates for Commons geosearch: {lat}, {lon}")
                     tasks.append(_commons_geosearch(session, lat, lon, limit=max(6, max_images)))
                 # Second try: derive POI coordinates from Search keywords  
                 elif len(infos) < max_images and clean_keywords:
@@ -1696,6 +1748,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
         if results:
             logger.info(f"Commons/Wikidata images found: {len(results)} for '{clean_keywords}'")
+            # Log the actual URLs to debug duplicate images
+            for i, url in enumerate(results[:3]):
+                logger.info(f"[IMG_SEARCH] Image {i+1}: {url}")
         else:
             logger.info(f"No images via Commons/Wikidata for '{clean_keywords}'")
         return results
