@@ -43,6 +43,22 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
             sources=sources
         )
         
+        # Build a plain-text sources block to send after media (avoid markdown pitfalls)
+        sources_md = ""
+        if sources:
+            try:
+                header = "Источники:"  # plain header; URLs will auto-link
+                lines = []
+                for title, url in (sources or [])[:4]:
+                    safe_title = re.sub(r"[\n\r]", " ", str(title or "")).strip()[:80]
+                    safe_url = str(url or "").strip()
+                    if safe_url:
+                        lines.append(f"- {safe_title} — {safe_url}")
+                if lines:
+                    sources_md = "\n\n" + header + "\n" + "\n".join(lines)
+            except Exception:
+                sources_md = ""
+
         if image_urls:
             # Try sending all images with text as media group
             try:
@@ -78,6 +94,9 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                         await bot.send_photo(chat_id=chat_id, photo=image_urls[0], caption=caption_text)
                     else:
                         await bot.send_media_group(chat_id=chat_id, media=media_list)
+                    # After media group, send sources as a separate message to preserve links
+                    if sources_md:
+                        await bot.send_message(chat_id=chat_id, text=sources_md)
                     logger.info(f"Successfully sent {len(image_urls)} live images with caption in media group for {place}")
                 else:
                     # Caption too long → first photo with shortened caption + rest without captions
@@ -100,6 +119,9 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                         else:
                             media_list.append(InputMediaPhoto(media=image_url))
                     await bot.send_media_group(chat_id=chat_id, media=media_list)
+                    # After media group, send sources as a separate message to preserve links
+                    if sources_md:
+                        await bot.send_message(chat_id=chat_id, text=sources_md)
                     logger.info(f"Successfully sent long live text + {len(image_urls)} images as media group for {place}")
                 return
                 
@@ -127,6 +149,9 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                             chat_id=chat_id,
                             media=retry_media_list
                         )
+                        # After media group, send sources as a separate message to preserve links
+                        if sources_md:
+                            await bot.send_message(chat_id=chat_id, text=sources_md)
                         logger.info(f"Successfully sent {len(retry_media_list)} live images on retry for {place}")
                         return
                     except Exception as retry_error:
@@ -506,8 +531,6 @@ class LiveLocationTracker:
                     # Import get_localized_message at top of function to avoid circular imports
                     from ..handlers.location import get_localized_message
                     formatted_response = await get_localized_message(session_data.user_id, 'live_fact_format', number=session_data.fact_count, place=place, fact=fact)
-                    if 'sources_block' in locals() and sources_block:
-                        formatted_response = f"{formatted_response}{sources_block}"
 
                     # Save fact to history to avoid repetition
                     session_data.fact_history.append(f"{place}: {fact}")

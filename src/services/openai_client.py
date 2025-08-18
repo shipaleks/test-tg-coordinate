@@ -1544,16 +1544,55 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 pass
             return items
 
-        def _pick_urls_from_infos(infos: list[dict], need: int) -> list[str]:
-            # Prefer large width, landscape, recent
+        def _pick_urls_from_infos(infos: list[dict], need: int, place_hint_text: str | None = None, sources_list: list[tuple[str, str]] | None = None) -> list[str]:
+            # Prefer token/distance relevance, then landscape, then width
             def score(ii: dict) -> tuple:
                 width = ii.get('thumbwidth') or ii.get('width') or 0
                 height = ii.get('thumbheight') or ii.get('height') or 0
-                ts = ii.get('timestamp') or ''
                 landscape = 1 if width and height and width >= height else 0
-                return (landscape, width)
+
+                # Build haystack from fields
+                haystack = (ii.get('descriptionurl') or ii.get('url') or '').lower()
+                try:
+                    em = ii.get('extmetadata') or {}
+                    for k in ('ImageDescription', 'ObjectName'):
+                        v = em.get(k, {}).get('value') if isinstance(em.get(k), dict) else em.get(k)
+                        if v:
+                            haystack += f" {str(v).lower()}"
+                except Exception:
+                    pass
+
+                # Tokens from place hint and sources' titles
+                tokens = set()
+                if place_hint_text:
+                    tokens.update(place_hint_text.lower().split())
+                if sources_list:
+                    for t, _ in (sources_list or []):
+                        tokens.update((t or '').lower().split())
+
+                token_bonus = 0
+                for t in tokens:
+                    if t and len(t) > 2 and t in haystack:
+                        token_bonus += 1
+
+                # Distance bonus if available
+                dist_bonus = 0
+                try:
+                    d = ii.get('distance')
+                    if isinstance(d, (int, float)):
+                        if d <= 60:
+                            dist_bonus = 3
+                        elif d <= 120:
+                            dist_bonus = 2
+                        elif d <= 200:
+                            dist_bonus = 1
+                except Exception:
+                    pass
+
+                return (token_bonus + dist_bonus, landscape, width)
+
             infos_sorted = sorted(infos, key=score, reverse=True)
-            urls = []
+            urls: list[str] = []
             for ii in infos_sorted:
                 url = ii.get('thumburl') or ii.get('url')
                 if url and url not in urls:
@@ -1639,7 +1678,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                             infos.append(res)
 
                 if infos:
-                    results = _pick_urls_from_infos(infos, max_images)
+                    results = _pick_urls_from_infos(infos, max_images, place_hint, sources_hint)
                 # Final fallback to legacy page media search if still empty
                 if not results and clean_keywords:
                     results = await self._search_wikipedia_images(clean_keywords, 'en', max_images)
