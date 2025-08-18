@@ -1582,14 +1582,20 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 # 1) Try to identify QID strictly by place_hint/keywords
                 qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords, place_hint)
                 infos: list[dict] = []
+                # Prepare concurrent tasks for POI image sources
+                import asyncio as _asyncio
+                tasks: list = []
                 if qid:
-                    filename = await _p18_for_qid(session, qid)
-                    if filename:
-                        ii = await _imageinfo_for_filename(session, filename)
-                        if ii:
-                            infos.append(ii)
-                    if len(infos) < max_images:
-                        infos += await _commons_depicts_for_qid(session, qid, limit=max(3, max_images))
+                    async def _p18_info():
+                        try:
+                            filename = await _p18_for_qid(session, qid)
+                            if filename:
+                                return await _imageinfo_for_filename(session, filename)
+                        except Exception:
+                            return None
+                        return None
+                    tasks.append(_p18_info())
+                    tasks.append(_commons_depicts_for_qid(session, qid, limit=max(3, max_images)))
                 # 2) If still no images and we have sources in the fact, try to parse QIDs/File:* from sources
                 if not infos and sources_hint:
                     try:
@@ -1629,8 +1635,19 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         poi_coords = await self.get_coordinates_from_search_keywords(clean_keywords, user_lat=lat, user_lon=lon)
                     except Exception:
                         poi_coords = None
-                if poi_coords and len(infos) < max_images:
-                    infos += await _commons_geosearch(session, poi_coords[0], poi_coords[1], limit=max(6, max_images))
+                if poi_coords:
+                    tasks.append(_commons_geosearch(session, poi_coords[0], poi_coords[1], limit=max(6, max_images)))
+
+                # Execute all prepared tasks concurrently and merge results
+                if tasks:
+                    results_lists = await _asyncio.gather(*tasks, return_exceptions=True)
+                    for res in results_lists:
+                        if isinstance(res, list):
+                            for ii in res:
+                                if ii:
+                                    infos.append(ii)
+                        elif isinstance(res, dict):
+                            infos.append(res)
 
                 if infos:
                     results = _pick_urls_from_infos(infos, max_images)
