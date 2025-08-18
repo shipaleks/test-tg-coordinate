@@ -1358,6 +1358,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         lat = None
         lon = None
         place_hint = None
+        sources_hint = None
         try:
             # Inspect caller locals to fetch keyword-only arguments if provided
             # This is a safe no-op for older call sites/tests
@@ -1365,10 +1366,12 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             lat = caller_locals.get('lat') if 'lat' in caller_locals else caller_locals.get('latitude')
             lon = caller_locals.get('lon') if 'lon' in caller_locals else caller_locals.get('longitude')
             place_hint = caller_locals.get('place') or caller_locals.get('location_title')
+            sources_hint = caller_locals.get('sources') or caller_locals.get('sources_list')
         except Exception:
             lat = None
             lon = None
             place_hint = None
+            sources_hint = None
 
         # Normalize keywords
         clean_keywords = (search_keywords or '').replace(' + ', ' ').replace('+', ' ').strip()
@@ -1576,6 +1579,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         results: list[str] = []
         try:
             async with aiohttp.ClientSession() as session:
+                # 1) Try to identify QID strictly by place_hint/keywords
                 qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords, place_hint)
                 infos: list[dict] = []
                 if qid:
@@ -1586,6 +1590,38 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                             infos.append(ii)
                     if len(infos) < max_images:
                         infos += await _commons_depicts_for_qid(session, qid, limit=max(3, max_images))
+                # 2) If still no images and we have sources in the fact, try to parse QIDs/File:* from sources
+                if not infos and sources_hint:
+                    try:
+                        for title, url in (sources_hint or [])[:4]:
+                            if not url:
+                                continue
+                            # Try to detect a Wikidata QID in the URL
+                            import re as _re
+                            m = _re.search(r"/(Q\d+)(?:[#/?]|$)", url)
+                            if m:
+                                q = m.group(1)
+                                fn = await _p18_for_qid(session, q)
+                                if fn:
+                                    ii = await _imageinfo_for_filename(session, fn)
+                                    if ii:
+                                        infos.append(ii)
+                                        if len(infos) >= max_images:
+                                            break
+                            # Or a Commons File: link
+                            if 'File:' in url or 'Special:FilePath' in url:
+                                # Try to extract filename segment
+                                from urllib.parse import unquote
+                                part = url.split('File:')[-1]
+                                part = part.split('?')[0]
+                                filename = unquote(part)
+                                ii = await _imageinfo_for_filename(session, filename)
+                                if ii:
+                                    infos.append(ii)
+                                    if len(infos) >= max_images:
+                                        break
+                    except Exception:
+                        pass
                 # Try Commons geosearch around POI coordinates derived from Search keywords first
                 poi_coords = None
                 if len(infos) < max_images and clean_keywords:

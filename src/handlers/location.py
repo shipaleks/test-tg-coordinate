@@ -235,7 +235,7 @@ async def _send_text_resilient(
         else:
             raise
 
-async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, user_id=None, reply_to_message_id=None, html_text: str | None = None, lat: float | None = None, lon: float | None = None):
+async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, user_id=None, reply_to_message_id=None, html_text: str | None = None, lat: float | None = None, lon: float | None = None, sources: list[tuple[str, str]] | None = None):
     """Send fact message with Wikipedia images if available.
     
     Args:
@@ -250,9 +250,10 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
     try:
         # Try to get Wikipedia images
         openai_client = get_openai_client()
-        # Expose coords as local variables for the image pipeline's optional introspection
+        # Expose hints for the image pipeline via local variable names
         latitude = lat
         longitude = lon
+        sources_list = sources
         image_urls = await openai_client.get_wikipedia_images(search_keywords, max_images=4)  # Max 4 for media group
         
         if image_urls:
@@ -576,6 +577,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     u = _sanitize_url(url)
                     html_bullets.append(f"- <b><a href=\"{u}\">{t}</a></b>")
                 html_sources_block = "\n\n" + _label_to_html(src_label) + "\n" + "\n".join(html_bullets)
+            extracted_sources = sources
         else:
             # Legacy: try to pull sources from the whole response
             sources = _extract_sources_from_answer(response)
@@ -593,6 +595,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     u = _sanitize_url(url)
                     html_bullets.append(f"- <b><a href=\"{u}\">{t}</a></b>")
                 html_sources_block = "\n\n" + _label_to_html(src_label) + "\n" + "\n".join(html_bullets)
+            extracted_sources = sources
 
         # Format the response for static location (Markdown primary, HTML fallback)
         formatted_response = await get_localized_message(user_id, 'static_fact_format', place=place, fact=fact)
@@ -626,6 +629,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 html_text=html_formatted,
                 lat=lat,
                 lon=lon,
+                sources=extracted_sources,
             )
         else:
             # No search keywords, send just text
@@ -842,6 +846,7 @@ async def handle_interval_callback(
                 user_id=user_id,
                 lat=lat,
                 lon=lon,
+                sources=_extract_sources_from_answer(answer_content) if answer_match else _extract_sources_from_answer(response),
             )
         else:
             # Legacy fallback: try to extract search keywords from old format
@@ -857,6 +862,7 @@ async def handle_interval_callback(
                     user_id=user_id,
                     lat=lat,
                     lon=lon,
+                    sources=_extract_sources_from_answer(answer_content) if answer_match else _extract_sources_from_answer(response),
                 )
             else:
                 # No search keywords, send just text
