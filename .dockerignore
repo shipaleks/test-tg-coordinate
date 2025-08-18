@@ -73,7 +73,6 @@ Thumbs.db
 *.log
 
 # Documentation
-docs/
 README.md
 DEPLOYMENT.md
 
