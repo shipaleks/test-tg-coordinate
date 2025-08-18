@@ -165,7 +165,7 @@ QUALITY SELECTION (internal):
 - Generate 2–3 variants; select the best: surprising, specific, verifiable, and vivid. Output only the final choice.
 
 OUTPUT FORMAT:
-- Do NOT place URLs in the main fact text. At the end add a separate section: 'Источники' (RU) or 'Sources' (other languages), 2–3 bullets in the form: "Concise title — URL". Prefer canonical, clean links.
+- Do NOT place URLs in the main fact text. At the end add a separate section: 'Источники' (RU) or 'Sources' (other languages), 2–4 bullets in the form: "Concise title — URL". Always include actual clickable URLs, not just titles. Prefer canonical, clean links.
 
 WRITING RULES:
 • Start with the surprise, not with generic context.
@@ -211,6 +211,7 @@ Interesting fact: [100–120 words. Surprising opening → Human story → Why i
 Sources/Источники:
 - [Concise source title] — [URL]
 - [Concise source title] — [URL]
+(Add 1-2 more sources if relevant)
 </answer>
 """
         else:
@@ -231,6 +232,7 @@ Interesting fact: [60–80 words. Surprising detail → Quick context (with name
 Sources/Источники:
 - [Concise source title] — [URL]
 - [Concise source title] — [URL]
+(Add 1-2 more sources if relevant)
 </answer>
 """
 

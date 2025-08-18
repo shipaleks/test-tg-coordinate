@@ -441,9 +441,9 @@ class LiveLocationTracker:
                             from ..handlers.location import get_localized_message as _get_msg
                             src_label = await _get_msg(session_data.user_id, 'sources_label')
                             bullets = []
-                            for title, url in sources[:3]:
-                                # No markdown here (we ship as caption or as text separately elsewhere)
-                                bullets.append(f"- {title}")
+                            for title, url in sources[:4]:
+                                safe_title = re.sub(r"[\[\]]", "", title)[:80]
+                                bullets.append(f"- [{safe_title}]({url})")
                             sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
                     
                     # Legacy fallback for old format responses

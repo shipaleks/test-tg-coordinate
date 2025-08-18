@@ -581,7 +581,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if sources:
                 src_label = await get_localized_message(user_id, 'sources_label')
                 bullets = []
-                for title, url in sources[:3]:
+                for title, url in sources[:4]:
                     # Build bolded emoji bullet with Markdown link
                     safe_title = re.sub(r"[\[\]]", "", title)[:80]
                     safe_url = _sanitize_url(url)
@@ -589,7 +589,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
                 # HTML version with anchors
                 html_bullets = []
-                for title, url in sources[:3]:
+                for title, url in sources[:4]:
                     t = _escape_html(title)[:80]
                     u = _sanitize_url(url)
                     html_bullets.append(f"- <b><a href=\"{u}\">{t}</a></b>")
@@ -601,13 +601,13 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if sources:
                 src_label = await get_localized_message(user_id, 'sources_label')
                 bullets = []
-                for title, url in sources[:3]:
+                for title, url in sources[:4]:
                     safe_title = re.sub(r"[\[\]]", "", title)[:80]
                     safe_url = _sanitize_url(url)
                     bullets.append(f"- **[{safe_title}]({safe_url})**")
                 sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
                 html_bullets = []
-                for title, url in sources[:3]:
+                for title, url in sources[:4]:
                     t = _escape_html(title)[:80]
                     u = _sanitize_url(url)
                     html_bullets.append(f"- <b><a href=\"{u}\">{t}</a></b>")
@@ -842,7 +842,7 @@ async def handle_interval_callback(
             if sources:
                 src_label = await get_localized_message(user_id, 'sources_label')
                 bullets = []
-                for title, url in sources[:3]:
+                for title, url in sources[:4]:
                     safe_title = re.sub(r"[\[\]]", "", title)[:80]
                     bullets.append(f"- [{safe_title}]({url})")
                 sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
