@@ -48,52 +48,55 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
             try:
                 logger.info(f"Attempting to send live fact with {len(image_urls)} images for {place}")
                 logger.debug(f"Live formatted response length: {len(formatted_response)} chars")
+
+                # Build a safe caption: remove Sources section and strip Markdown to avoid entity errors
+                caption_candidate = _strip_live_sources(formatted_response)
+                def _to_plain(md: str) -> str:
+                    try:
+                        # Convert [title](url) → title
+                        s = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\\1", md)
+                        # Remove emphasis/backticks that can break parsing in captions
+                        for ch in ("*", "_", "`"):
+                            s = s.replace(ch, "")
+                        return s
+                    except Exception:
+                        return md
+                caption_text = _to_plain(caption_candidate)
                 
-                if len(formatted_response) <= 1024:
+                if len(caption_text) <= 1024:
                     # Caption fits in Telegram limit, send as media group with caption
                     media_list = []
                     for i, image_url in enumerate(image_urls):
                         if i == 0:
-                            # First image gets the full fact as caption
-                            media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
+                            # First image gets the plain fact as caption (no parse_mode)
+                            media_list.append(InputMediaPhoto(media=image_url, caption=caption_text))
                         else:
                             # Other images get no caption
                             media_list.append(InputMediaPhoto(media=image_url))
 
                     if len(media_list) == 1:
-                        await bot.send_photo(chat_id=chat_id, photo=image_urls[0], caption=formatted_response, parse_mode="Markdown")
+                        await bot.send_photo(chat_id=chat_id, photo=image_urls[0], caption=caption_text)
                     else:
                         await bot.send_media_group(chat_id=chat_id, media=media_list)
                     logger.info(f"Successfully sent {len(image_urls)} live images with caption in media group for {place}")
                 else:
                     # Caption too long → first photo with shortened caption + rest without captions
-                    # Safely truncate without breaking markdown entities
+                    # Safely truncate without breaking words
                     max_len = 1020
-                    if len(formatted_response) > max_len:
+                    if len(caption_text) > max_len:
                         # Find a good breaking point (space, newline) before max_len
                         break_point = max_len
                         for i in range(max_len-1, max_len-200, -1):
-                            if formatted_response[i] in ' \n':
+                            if caption_text[i] in ' \n':
                                 break_point = i
                                 break
-                        short_caption = formatted_response[:break_point].rstrip() + "..."
-                        # Ensure markdown is balanced by counting asterisks and brackets
-                        asterisk_count = short_caption.count('*') 
-                        bracket_count = short_caption.count('[') - short_caption.count(']')
-                        paren_count = short_caption.count('(') - short_caption.count(')')
-                        # Add missing closing markers
-                        if asterisk_count % 2 == 1:
-                            short_caption += '*'
-                        if bracket_count > 0:
-                            short_caption = short_caption.replace('[', '', bracket_count)  # Remove unmatched [
-                        if paren_count > 0:
-                            short_caption = short_caption.replace('(', '', paren_count)  # Remove unmatched (
+                        short_caption = caption_text[:break_point].rstrip() + "..."
                     else:
-                        short_caption = formatted_response
+                        short_caption = caption_text
                     media_list = []
                     for i, image_url in enumerate(image_urls):
                         if i == 0:
-                            media_list.append(InputMediaPhoto(media=image_url, caption=short_caption, parse_mode="Markdown"))
+                            media_list.append(InputMediaPhoto(media=image_url, caption=short_caption))
                         else:
                             media_list.append(InputMediaPhoto(media=image_url))
                     await bot.send_media_group(chat_id=chat_id, media=media_list)
@@ -116,7 +119,7 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                         retry_media_list = []
                         for i, image_url in enumerate(image_urls[:2]):
                             if i == 0:
-                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
+                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=caption_text))
                             else:
                                 retry_media_list.append(InputMediaPhoto(media=image_url))
                         
