@@ -40,7 +40,8 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
             lat=lat,
             lon=lon,
             place_hint=place,
-            sources=sources
+            sources=sources,
+            fact_text=formatted_response  # Pass full fact text for better relevance
         )
         
 

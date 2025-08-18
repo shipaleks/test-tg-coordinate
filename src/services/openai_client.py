@@ -1343,27 +1343,42 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             logger.warning(f"Error parsing coordinates: {e}")
             return None
 
-    async def get_wikipedia_images(self, search_keywords: str, max_images: int = 5, *, lat: float | None = None, lon: float | None = None, place_hint: str | None = None, sources: list[tuple[str, str]] | None = None) -> list[str]:
-        """Get multiple images using a Wikidata/Commons pipeline with fallbacks.
-
-        Backward compatible facade that now prefers:
-          coords/title → Wikipedia Geosearch → page QID → P18 → Commons thumb URLs;
-          fallbacks to Commons depicts (P180) and Commons geosearch;
-          final fallback to legacy Wikipedia-page media search.
-
-        NOTE: To keep backward compatibility with callers/tests, this method
-        accepts only (search_keywords, max_images). If latitude/longitude are
-        desired, callers may pass them via keyword-only args (lat, lon), which
-        will be ignored by older tests using positional args.
+    async def get_wikipedia_images(self, search_keywords: str, max_images: int = 5, *, lat: float | None = None, lon: float | None = None, place_hint: str | None = None, sources: list[tuple[str, str]] | None = None, fact_text: str | None = None) -> list[str]:
+        """Get images relevant to the fact using the new search engine.
+        
+        Maintains backward compatibility while providing better relevance.
         """
-        # Use explicit parameters (backward compatible - defaults to None)
+        # Use new image search engine if we have enough context
+        if (place_hint or fact_text) and lat is not None and lon is not None:
+            from .image_search import ImageSearchEngine
+            
+            try:
+                async with ImageSearchEngine() as engine:
+                    # Use fact_text if provided, otherwise use search_keywords as fallback
+                    fact_content = fact_text or search_keywords
+                    place_name = place_hint or search_keywords
+                    coordinates = (lat, lon)
+                    sources_list = sources or []
+                    
+                    images = await engine.search_images(
+                        fact_text=fact_content,
+                        place_name=place_name,
+                        coordinates=coordinates,
+                        sources=sources_list,
+                        max_images=max_images
+                    )
+                    
+                    if images:
+                        logger.info(f"New image search found {len(images)} images for '{place_name}'")
+                        return images
+                        
+            except Exception as e:
+                logger.warning(f"New image search failed, falling back to legacy: {e}")
+        
+        # Fallback to legacy search
         sources_hint = sources
 
-        # Log input parameters for debugging duplicate images issue
-        logger.info(f"[IMG_SEARCH] Starting image search for: '{search_keywords}'")
-        logger.info(f"[IMG_SEARCH] Coordinates: lat={lat}, lon={lon}")
-        logger.info(f"[IMG_SEARCH] Place hint: '{place_hint}'")
-        logger.info(f"[IMG_SEARCH] Sources: {len(sources_hint) if sources_hint else 0} items")
+
 
         # Normalize keywords
         clean_keywords = (search_keywords or '').replace(' + ', ' ').replace('+', ' ').strip()
@@ -1537,7 +1552,6 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             items = []
             try:
                 geosearch_results = data.get('query', {}).get('geosearch', [])
-                logger.info(f"[IMG_SEARCH] Commons geosearch found {len(geosearch_results)} items at {lat_val}, {lon_val}")
                 
                 for item in geosearch_results:
                     title = item.get('title')
@@ -1653,10 +1667,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             async with aiohttp.ClientSession() as session:
                 # 1) Try to identify QID strictly by place_hint/keywords
                 qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords, place_hint)
-                if qid:
-                    logger.info(f"[IMG_SEARCH] Found QID: {qid} for '{clean_keywords}'")
-                else:
-                    logger.info(f"[IMG_SEARCH] No QID found for '{clean_keywords}'")
+
                 infos: list[dict] = []
                 # Prepare concurrent tasks for POI image sources
                 import asyncio as _asyncio
@@ -1707,7 +1718,6 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 # Try Commons geosearch around POI coordinates
                 # First try: use provided POI coordinates (from Coordinates field in answer)
                 if lat is not None and lon is not None:
-                    logger.info(f"[IMG_SEARCH] Using POI coordinates for Commons geosearch: {lat}, {lon}")
                     tasks.append(_commons_geosearch(session, lat, lon, limit=max(6, max_images)))
                 # Second try: derive POI coordinates from Search keywords  
                 elif len(infos) < max_images and clean_keywords:
@@ -1748,11 +1758,6 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
         if results:
             logger.info(f"Commons/Wikidata images found: {len(results)} for '{clean_keywords}'")
-            # Log the actual URLs to debug duplicate images
-            for i, url in enumerate(results[:3]):
-                logger.info(f"[IMG_SEARCH] Image {i+1}: {url}")
-        else:
-            logger.info(f"No images via Commons/Wikidata for '{clean_keywords}'")
         return results
 
     async def _search_wikipedia_images(self, search_term: str, lang: str, max_images: int = 5) -> list[str]:
