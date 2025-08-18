@@ -211,9 +211,19 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         # Priority 1: file_id from env (HOWTO_VIDEO_FILE_ID)
         file_id = os.getenv("HOWTO_VIDEO_FILE_ID")
+        width_env = os.getenv("HOWTO_VIDEO_WIDTH")
+        height_env = os.getenv("HOWTO_VIDEO_HEIGHT")
+        video_kwargs = {"supports_streaming": True}
+        try:
+            if width_env and height_env:
+                video_kwargs["width"] = int(width_env)
+                video_kwargs["height"] = int(height_env)
+        except Exception:
+            # Ignore invalid width/height
+            pass
         if file_id:
             try:
-                await context.bot.send_video(chat_id=chat_id, video=file_id)
+                await context.bot.send_video(chat_id=chat_id, video=file_id, **video_kwargs)
                 logger.info("Sent how-to HD video via file_id")
                 sent = True
             except Exception as e:
@@ -227,7 +237,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 if file_path.exists():
                     try:
                         with open(file_path, "rb") as f:
-                            await context.bot.send_video(chat_id=chat_id, video=f)
+                            await context.bot.send_video(chat_id=chat_id, video=f, **video_kwargs)
                         logger.info(f"Sent how-to video from {file_path}")
                         sent = True
                         break
