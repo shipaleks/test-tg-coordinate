@@ -180,20 +180,20 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         'ru': [
             "Что такое живая локация: ты делишься местоположением в реальном времени на выбранный срок. Telegram можно закрыть — факты придут пушами.",
             "Шаг 1/3. Нажми 📎 внизу.",
-            "Шаг 2/3. 📍 Геопозиция/Location → 🔴 Транслировать геопозицию/Share Live Location.",
-            "Шаг 3/3. Поставь 60 мин — дальше я сам присылаю факты каждые 5–60 мин.",
+            "Шаг 2/3. Открой вкладку 📍 Геопозиция/Location снизу.",
+            "Шаг 3/3. Выбери 🔴 Транслировать геопозицию/Share Live Location.",
         ],
         'en': [
             "Live location = share your real‑time location for a chosen time. You can close Telegram — I’ll keep sending facts.",
             "Step 1/3. Tap 📎 below.",
-            "Step 2/3. 📍 Location → 🔴 Share Live Location.",
-            "Step 3/3. Choose 60 min — I’ll auto‑send facts every 5–60 min.",
+            "Step 2/3. Open the 📍 Location tab at the bottom.",
+            "Step 3/3. Choose 🔴 Share Live Location.",
         ],
         'fr': [
             "Position en direct = partager votre position en temps réel pendant une durée choisie. Vous pouvez fermer Telegram — j’enverrai quand même les faits.",
             "Étape 1/3. Touchez 📎 en bas.",
-            "Étape 2/3. 📍 Location → 🔴 Share Live Location.",
-            "Étape 3/3. Choisissez 60 min — j’enverrai des faits automatiquement (5–60 min).",
+            "Étape 2/3. Ouvrez l’onglet 📍 Localisation/Location en bas.",
+            "Étape 3/3. Choisissez 🔴 Partager la position en direct/Share Live Location.",
         ],
     }
     labels = {
@@ -204,47 +204,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     lang_steps = steps.get(language, steps['en'])
     lang_labels = labels.get(language, labels['en'])
 
-    # Send onboarding video (HD). Prefer file_id from env (Railway), fallback to local file in docs/.
-    try:
-        import os
-        sent = False
-
-        # Priority 1: file_id from env (HOWTO_VIDEO_FILE_ID)
-        file_id = os.getenv("HOWTO_VIDEO_FILE_ID")
-        width_env = os.getenv("HOWTO_VIDEO_WIDTH")
-        height_env = os.getenv("HOWTO_VIDEO_HEIGHT")
-        video_kwargs = {"supports_streaming": True}
-        try:
-            if width_env and height_env:
-                video_kwargs["width"] = int(width_env)
-                video_kwargs["height"] = int(height_env)
-        except Exception:
-            # Ignore invalid width/height
-            pass
-        if file_id:
-            try:
-                await context.bot.send_video(chat_id=chat_id, video=file_id, **video_kwargs)
-                logger.info("Sent how-to HD video via file_id")
-                sent = True
-            except Exception as e:
-                logger.warning(f"Failed to send HD video via file_id: {e}")
-
-        # Priority 2: local file for dev (docs/howtobot_hd.mp4, then howtobot.mp4)
-        if not sent:
-            base_path = Path(__file__).resolve().parent.parent
-            for relative_path in ["docs/howtobot_hd.mp4", "docs/howtobot.mp4"]:
-                file_path = base_path / relative_path
-                if file_path.exists():
-                    try:
-                        with open(file_path, "rb") as f:
-                            await context.bot.send_video(chat_id=chat_id, video=f, **video_kwargs)
-                        logger.info(f"Sent how-to video from {file_path}")
-                        sent = True
-                        break
-                    except Exception as e:
-                        logger.warning(f"Failed to send video from {file_path}: {e}")
-    except Exception as e:
-        logger.warning(f"Failed to send onboarding video: {e}")
+    # No video or GIF: send only text + step images
 
     # Send definition text first
     if lang_steps:
