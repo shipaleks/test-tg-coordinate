@@ -343,8 +343,8 @@ class LiveLocationTracker:
             # Desired interval between facts
             desired_interval_seconds = session_data.fact_interval_minutes * 60
 
-            # Initial wait: account for ~3 minutes model latency so the next fact lands close to user interval
-            initial_sleep = max(desired_interval_seconds - 180, 30)
+            # Initial wait: 30 seconds to give user time to start walking
+            initial_sleep = 30
             await asyncio.sleep(initial_sleep)
 
             while True:

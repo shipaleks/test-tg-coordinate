@@ -299,7 +299,29 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                 else:
                     # Caption too long, send text first then all images as media group
                     # When caption too long, prefer: first photo with shortened caption + rest without captions
-                    short_caption = formatted_response[:1020]
+                    # Safely truncate without breaking markdown entities
+                    max_len = 1020
+                    if len(formatted_response) > max_len:
+                        # Find a good breaking point (space, newline) before max_len
+                        break_point = max_len
+                        for i in range(max_len-1, max_len-200, -1):
+                            if formatted_response[i] in ' \n':
+                                break_point = i
+                                break
+                        short_caption = formatted_response[:break_point].rstrip() + "..."
+                        # Ensure markdown is balanced by counting asterisks and brackets
+                        asterisk_count = short_caption.count('*') 
+                        bracket_count = short_caption.count('[') - short_caption.count(']')
+                        paren_count = short_caption.count('(') - short_caption.count(')')
+                        # Add missing closing markers
+                        if asterisk_count % 2 == 1:
+                            short_caption += '*'
+                        if bracket_count > 0:
+                            short_caption = short_caption.replace('[', '', bracket_count)  # Remove unmatched [
+                        if paren_count > 0:
+                            short_caption = short_caption.replace('(', '', paren_count)  # Remove unmatched (
+                    else:
+                        short_caption = formatted_response
                     media_list = []
                     for i, image_url in enumerate(image_urls):
                         if i == 0:
@@ -771,174 +793,6 @@ async def handle_interval_callback(
                                                  interval=interval_minutes)
 
         await query.edit_message_text(text=confirmation_text, parse_mode="Markdown")
-
-        # Send initial fact immediately (live location - detailed with o4-mini)
-        openai_client = get_openai_client()
-        response = await openai_client.get_nearby_fact(lat, lon, is_live_location=True, user_id=user_id)
-
-        # Parse the response to extract place and fact
-        place = await get_localized_message(user_id, 'near_you')  # Default location
-        fact = response  # Default to full response if parsing fails
-        search_keywords = ""
-
-        # Try to parse structured response from <answer> tags first
-        answer_match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
-        if answer_match:
-            answer_content = answer_match.group(1).strip()
-            
-            # Extract location from answer content
-            location_match = re.search(r"Location:\s*(.+?)(?:\n|$)", answer_content)
-            if location_match:
-                place = location_match.group(1).strip()
-            
-            # Extract precise coordinates if provided
-            coord_match = re.search(r"Coordinates:\s*([\-\d\.]+)\s*,\s*([\-\d\.]+)", answer_content)
-            if coord_match:
-                try:
-                    lat = float(coord_match.group(1))
-                    lon = float(coord_match.group(2))
-                except Exception:
-                    pass
-
-            # Extract search keywords from answer content
-            search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
-            if search_match:
-                search_keywords = search_match.group(1).strip()
-            
-            # Extract fact from answer content (stop before Sources/Источники if present)
-            fact_match = re.search(
-                r"Interesting fact:\s*(.*?)(?=\n(?:Sources|Источники)\s*:|$)",
-                answer_content,
-                re.DOTALL,
-            )
-            if fact_match:
-                fact = _strip_sources_section(fact_match.group(1).strip())
-        
-        # Legacy fallback for old format responses
-        else:
-            lines = response.split("\n")
-            
-            # Try to parse old structured response format
-            for i, line in enumerate(lines):
-                if line.startswith("Локация:"):
-                    place = line.replace("Локация:", "").strip()
-                elif line.startswith("Интересный факт:"):
-                    # Join all lines after Интересный факт: as the fact might be multiline
-                    fact_lines = []
-                    # Start from the current line, removing the prefix
-                    fact_lines.append(line.replace("Интересный факт:", "").strip())
-                    # Add all subsequent lines
-                    for j in range(i + 1, len(lines)):
-                        if lines[j].strip():  # Only add non-empty lines
-                            fact_lines.append(lines[j].strip())
-                    fact = " ".join(fact_lines)
-                    break
-
-        # Get the fact number (will be incremented by _fact_sending_loop)
-        tracker = get_live_location_tracker()
-        if user_id in tracker._active_sessions:
-            # Don't increment here - _fact_sending_loop will do it
-            fact_number = tracker._active_sessions[user_id].fact_count + 1
-        else:
-            fact_number = 1  # Fallback
-
-        # Extract and format sources for live fact as well
-        sources_block = ""
-        if answer_match:
-            sources = _extract_sources_from_answer(answer_content)
-            if sources:
-                src_label = await get_localized_message(user_id, 'sources_label')
-                bullets = []
-                for title, url in sources[:4]:
-                    safe_title = re.sub(r"[\[\]]", "", title)[:80]
-                    bullets.append(f"- [{safe_title}]({url})")
-                sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
-
-        # Format the initial fact with number
-        initial_fact_response = await get_localized_message(user_id, 'live_fact_format', number=fact_number, place=place, fact=fact)
-        if sources_block:
-            initial_fact_response = f"{initial_fact_response}{sources_block}"
-        live_html_text = _escape_html(initial_fact_response)
-        live_html_text = live_html_text.replace("🔴 *Факт #", "🔴 <b>Факт #")
-        live_html_text = live_html_text.replace("*\n\n📍 *Место:*", "</b>\n\n📍 <b>Место:</b>")
-        live_html_text = live_html_text.replace("*\n\n📍 *Place:*", "</b>\n\n📍 <b>Place:</b>")
-        live_html_text = live_html_text.replace("*\n\n📍 *Lieu :*", "</b>\n\n📍 <b>Lieu :</b>")
-
-        # Save initial fact to history
-        if user_id in tracker._active_sessions:
-            tracker._active_sessions[user_id].fact_history.append(f"{place}: {fact}")
-
-        # Send initial fact with images using extracted search keywords
-        if search_keywords:
-            await send_fact_with_images(
-                context.bot, 
-                chat_id, 
-                initial_fact_response, 
-                search_keywords, 
-                place,
-                user_id=user_id,
-                lat=lat,
-                lon=lon,
-                sources=_extract_sources_from_answer(answer_content) if answer_match else _extract_sources_from_answer(response),
-            )
-        else:
-            # Legacy fallback: try to extract search keywords from old format
-            legacy_search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
-            if legacy_search_match:
-                legacy_search_keywords = legacy_search_match.group(1).strip()
-                await send_fact_with_images(
-                    context.bot, 
-                    chat_id, 
-                    initial_fact_response, 
-                    legacy_search_keywords, 
-                    place,
-                    user_id=user_id,
-                    lat=lat,
-                    lon=lon,
-                    sources=_extract_sources_from_answer(answer_content) if answer_match else _extract_sources_from_answer(response),
-                )
-            else:
-                # No search keywords, send just text
-                await _send_text_resilient(context.bot, chat_id, initial_fact_response, html_text=live_html_text)
-
-        # Try to parse coordinates and send location for navigation using search keywords (live location)
-        coordinates = None
-        try:
-            parse_method = getattr(openai_client, "parse_coordinates_from_response", None)
-            if parse_method and inspect.iscoroutinefunction(parse_method):
-                coordinates = await parse_method(response, lat, lon)
-        except Exception:
-            coordinates = None
-        if coordinates:
-            venue_lat, venue_lon = coordinates
-            try:
-                # Send venue with location for navigation
-                await context.bot.send_venue(
-                    chat_id=chat_id,
-                    latitude=venue_lat,
-                    longitude=venue_lon,
-                    title=place,
-                    address=await get_localized_message(user_id, 'attraction_address', place=place),
-                )
-                logger.info(
-                    f"Sent venue location for live session navigation: {place} at {venue_lat}, {venue_lon}"
-                )
-            except Exception as venue_error:
-                logger.warning(f"Failed to send venue for live session: {venue_error}")
-                # Fallback to simple location
-                try:
-                    await context.bot.send_location(
-                        chat_id=chat_id,
-                        latitude=venue_lat,
-                        longitude=venue_lon,
-                    )
-                    logger.info(
-                        f"Sent location as fallback for live session: {venue_lat}, {venue_lon}"
-                    )
-                except Exception as loc_error:
-                    logger.error(
-                        f"Failed to send location for live session: {loc_error}"
-                    )
 
         logger.info(
             f"Started live location tracking for user {user_id} with {interval_minutes} min interval"
