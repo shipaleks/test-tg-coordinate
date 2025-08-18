@@ -145,6 +145,7 @@ MANDATORY ONLINE VERIFICATION (web sources):
 ATLAS OBSCURA METHOD (do these in order):
 1) PRECISE LOCATION ANALYSIS
    - Identify what is exactly at these coordinates (building, corner, gate, tunnel access).
+   - Find the EXACT street address with house number when possible (e.g., "24 rue de la Glacière" not just "rue de la Glacière").
    - Confirm the correct city by coordinates; never mix cities.
    - Note the immediate surroundings (50–100 m) and neighborhood character.
    - FACT‑CHECK that the place truly exists here before proceeding.
@@ -205,8 +206,8 @@ Follow the method above to find the most surprising true detail about THIS exact
 Present your final answer strictly in this structure:
 <answer>
 Location: [Street address / building / precise intersection]
-Coordinates: [LAT, LON in decimal degrees, 5–6 decimals, exact point of the described place]
-Search: [Geocoding query optimized for Nominatim, with commas and city name]
+Coordinates: [LAT, LON of the EXACT point being described, not user location! Use 6 decimal places (e.g., 48.835615, 2.345458) for meter-level precision. If describing a building, use its entrance coordinates. If describing an intersection, use the exact crossing point.]
+Search: [Geocoding query for the EXACT place described, optimized for Nominatim API - include house number, street name, city. Example: "24 rue de la Glacière, Paris, France"]
 Interesting fact: [100–120 words. Surprising opening → Human story → Why it matters → What to look for today. Names/dates only if verified. No inline URLs.]
 Sources/Источники:
 - [Concise source title] — [URL]
@@ -226,8 +227,8 @@ Apply the method above to find one concise, surprising, verified detail.
 Format the answer strictly as:
 <answer>
 Location: [Exact place name; not "near"/generic area]
-Coordinates: [LAT, LON in decimal degrees, 5–6 decimals, exact point of the described place]
-Search: ["Place, Street/District, City" — commas, official names, with city]
+Coordinates: [LAT, LON of the EXACT point being described, not user location! Use 6 decimal places (e.g., 48.835615, 2.345458) for meter-level precision. If describing a building, use its entrance coordinates. If describing an intersection, use the exact crossing point.]
+Search: [Geocoding query for the EXACT place described, optimized for Nominatim API - include house number, street name, city. Example: "24 rue de la Glacière, Paris, France"]
 Interesting fact: [60–80 words. Surprising detail → Quick context (with name/date) → What is visible today. No inline URLs.]
 Sources/Источники:
 - [Concise source title] — [URL]
@@ -894,12 +895,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             return None
 
     async def get_coordinates_from_nominatim(
-        self, place_name: str
+        self, place_name: str, user_lat: float = None, user_lon: float = None
     ) -> tuple[float, float] | None:
         """Get coordinates using OpenStreetMap Nominatim service.
 
         Args:
             place_name: Name of the place to search
+            user_lat: User's latitude to prioritize nearby results
+            user_lon: User's longitude to prioritize nearby results
 
         Returns:
             Tuple of (latitude, longitude) if found, None otherwise
@@ -907,13 +910,26 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         # Try multiple search strategies
         search_strategies = []
         
-        # Strategy 1: Try exact search first
-        search_strategies.append({
-            "q": place_name,
+        # Base parameters for all strategies
+        base_params = {
             "format": "json",
             "limit": 5,  # Get more results to choose from
             "addressdetails": 1,
             "namedetails": 1,
+        }
+        
+        # Add viewbox if user coordinates are provided to prioritize nearby results
+        if user_lat is not None and user_lon is not None:
+            # Create a viewbox of ~2km around user location
+            base_params.update({
+                "viewbox": f"{user_lon-0.02},{user_lat-0.02},{user_lon+0.02},{user_lat+0.02}",
+                "bounded": "0"  # Don't restrict to viewbox, just prioritize
+            })
+        
+        # Strategy 1: Try exact search first
+        search_strategies.append({
+            **base_params,
+            "q": place_name,
             "extratags": 1,
             "accept-language": "fr,en,ru",  # Multi-language support
         })
@@ -1128,6 +1144,10 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         """
         logger.info(f"Searching coordinates for keywords: {search_keywords}")
         
+        # Clean search keywords for better results
+        # Remove quotes and extra spaces
+        clean_keywords = search_keywords.replace('"', '').replace("'", '').strip()
+        
         # Extract city name from keywords for validation
         city_name = None
         common_cities = {
@@ -1142,12 +1162,12 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         }
         
         for city, (city_lat, city_lon, radius) in common_cities.items():
-            if city in search_keywords:
+            if city in clean_keywords:
                 city_name = city
                 break
 
         # Try original keywords first
-        nominatim_coords = await self.get_coordinates_from_nominatim(search_keywords)
+        nominatim_coords = await self.get_coordinates_from_nominatim(clean_keywords, user_lat, user_lon)
         if nominatim_coords:
             # Validate coordinates are in the expected city
             if city_name and not self._validate_city_coordinates(nominatim_coords[0], nominatim_coords[1], city_name):
@@ -1248,7 +1268,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         for pattern in fallback_patterns:
             if pattern and pattern != search_keywords:  # Don't retry the original
                 logger.info(f"Trying fallback search: {pattern}")
-                coords = await self.get_coordinates_from_nominatim(pattern)
+                coords = await self.get_coordinates_from_nominatim(pattern, user_lat, user_lon)
                 if coords:
                     # Validate coordinates if we have city context, but relax for generic fallback patterns
                     if city_name:
