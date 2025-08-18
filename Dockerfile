@@ -13,9 +13,8 @@ RUN apt-get update && apt-get install -y \
 COPY pyproject.toml ./
 COPY requirements.txt ./
 COPY src/ ./src/
-COPY docs/*.gif ./docs/
-COPY docs/*.mp4 ./docs/
-COPY docs/*.PNG ./docs/
+# Copy full docs directory (avoids lstat issues with globs on some builders)
+COPY docs/ ./docs/
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt && \
