@@ -204,7 +204,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     lang_steps = steps.get(language, steps['en'])
     lang_labels = labels.get(language, labels['en'])
 
-    # Always try to send GIF first
+    # Always try to send GIF first (optional)
     try:
         import os
         candidates = []
@@ -267,9 +267,45 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except Exception as e:
         logger.warning(f"Failed to send how-to gif: {e}")
 
-    # Send all steps sequentially (no buttons)
-    for line in lang_steps:
-        await context.bot.send_message(chat_id=chat_id, text=line)
+    # Send definition text first
+    if lang_steps:
+        await context.bot.send_message(chat_id=chat_id, text=lang_steps[0])
+
+    # Then send 3 step messages with images if available
+    step_images = [
+        os.getenv("HOWTO_STEP1_PATH"),
+        os.getenv("HOWTO_STEP2_PATH"),
+        os.getenv("HOWTO_STEP3_PATH"),
+    ]
+    default_names = ["IMG_9249.PNG", "IMG_9248.PNG", "IMG_9247.PNG"]
+
+    for idx in range(1, min(4, len(lang_steps))):
+        caption = lang_steps[idx]
+        img_candidates = []
+        if step_images[idx-1]:
+            img_candidates.append(Path(step_images[idx-1]))
+        # common locations
+        here = Path(__file__).resolve().parent.parent
+        name = default_names[idx-1]
+        img_candidates += [
+            here / name,
+            here / "docs" / name,
+            here / "assets" / name,
+            Path(name).resolve(),
+        ]
+        sent_photo = False
+        for p in img_candidates:
+            try:
+                if p and p.exists() and p.is_file():
+                    with p.open("rb") as f:
+                        await context.bot.send_photo(chat_id=chat_id, photo=f, caption=caption)
+                    logger.info(f"Sent onboarding step {idx} image from {p}")
+                    sent_photo = True
+                    break
+            except Exception as e:
+                logger.warning(f"Failed to send photo {p}: {e}")
+        if not sent_photo:
+            await context.bot.send_message(chat_id=chat_id, text=caption)
 
 
 # Removed callback-based onboarding (now sequential messages without buttons)
