@@ -114,10 +114,10 @@ class AsyncDonorsWrapper:
         if self._is_postgres:
             try:
                 return await self._db.has_language_set(user_id)  # type: ignore[attr-defined]
-            except Exception:
-                # Fallback heuristic
-                language = await self.get_user_language(user_id)
-                return language != "ru"
+            except Exception as e:
+                # If we cannot check explicitly, default to False so the menu is shown
+                logger.warning(f"Postgres has_language_set check failed for user {user_id}: {e}. Defaulting to False.")
+                return False
         else:
             return self._db.has_language_set(user_id)  # type: ignore[attr-defined]
     
