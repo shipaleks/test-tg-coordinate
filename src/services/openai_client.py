@@ -1524,7 +1524,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 for hit in data.get('query', {}).get('search', []):
                     title = hit.get('title')  # "File:..."
                     if not title:
-                    continue
+                        continue
                     filename = title.split(':', 1)[-1]
                     ii = await _imageinfo_for_filename(session, filename)
                     if ii:
@@ -1570,7 +1570,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 if url and url not in urls:
                     urls.append(url)
                 if len(urls) >= need:
-                                    break
+                    break
             return urls
 
         results: list[str] = []
@@ -1612,7 +1612,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                             try:
                                 results = await self._search_wikipedia_images(clean_keywords, lg, max_images)
                             except Exception:
-                    continue
+                                pass
         except Exception as e:
             logger.debug(f"Commons pipeline failed: {e}")
 
