@@ -1343,7 +1343,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             logger.warning(f"Error parsing coordinates: {e}")
             return None
 
-    async def get_wikipedia_images(self, search_keywords: str, max_images: int = 5) -> list[str]:
+    async def get_wikipedia_images(self, search_keywords: str, max_images: int = 5, *, lat: float | None = None, lon: float | None = None, place_hint: str | None = None, sources: list[tuple[str, str]] | None = None) -> list[str]:
         """Get multiple images using a Wikidata/Commons pipeline with fallbacks.
 
         Backward compatible facade that now prefers:
@@ -1356,26 +1356,8 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         desired, callers may pass them via keyword-only args (lat, lon), which
         will be ignored by older tests using positional args.
         """
-        # Keyword-only optional hints (ignored if not provided by caller)
-        import inspect as _inspect
-        frame = _inspect.currentframe()
-        lat = None
-        lon = None
-        place_hint = None
-        sources_hint = None
-        try:
-            # Inspect caller locals to fetch keyword-only arguments if provided
-            # This is a safe no-op for older call sites/tests
-            caller_locals = frame.f_back.f_locals if frame and frame.f_back else {}
-            lat = caller_locals.get('lat') if 'lat' in caller_locals else caller_locals.get('latitude')
-            lon = caller_locals.get('lon') if 'lon' in caller_locals else caller_locals.get('longitude')
-            place_hint = caller_locals.get('place') or caller_locals.get('location_title')
-            sources_hint = caller_locals.get('sources') or caller_locals.get('sources_list')
-        except Exception:
-            lat = None
-            lon = None
-            place_hint = None
-            sources_hint = None
+        # Use explicit parameters (backward compatible - defaults to None)
+        sources_hint = sources
 
         # Normalize keywords
         clean_keywords = (search_keywords or '').replace(' + ', ' ').replace('+', ' ').strip()

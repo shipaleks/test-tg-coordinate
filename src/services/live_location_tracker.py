@@ -18,7 +18,7 @@ from ..utils.formatting_utils import remove_bare_links_from_text as _remove_bare
 logger = logging.getLogger(__name__)
 
 
-async def send_live_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, lat: float | None = None, lon: float | None = None):
+async def send_live_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, lat: float | None = None, lon: float | None = None, sources: list[tuple[str, str]] | None = None):
     """Send live fact message with Wikipedia images if available.
     
     Args:
@@ -34,7 +34,14 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
         # Provide coords via local names for optional introspection inside pipeline
         latitude = lat
         longitude = lon
-        image_urls = await openai_client.get_wikipedia_images(search_keywords, max_images=4)  # Max 4 for media group
+        image_urls = await openai_client.get_wikipedia_images(
+            search_keywords, 
+            max_images=4,  # Max 4 for media group
+            lat=lat,
+            lon=lon,
+            place_hint=place,
+            sources=sources
+        )
         
         if image_urls:
             # Try sending all images with text as media group
@@ -488,6 +495,7 @@ class LiveLocationTracker:
                             place,
                             lat=session_data.latitude,
                             lon=session_data.longitude,
+                            sources=sources,
                         )
                     else:
                         # Legacy fallback: try to extract search keywords from old format
@@ -502,6 +510,7 @@ class LiveLocationTracker:
                                 place,
                                 lat=session_data.latitude,
                                 lon=session_data.longitude,
+                                sources=sources,
                             )
                         else:
                             # No search keywords, send just text
@@ -623,9 +632,10 @@ class LiveLocationTracker:
                     # Let the main loop handle expiration
                     break
                 
-                # Check if we haven't received updates in 3 minutes
+                # Check if we haven't received updates in 10 minutes
+                # (give more time for slow fact generation and sparse location updates)
                 time_since_update = current_time - session_data.last_update
-                if time_since_update > timedelta(minutes=3):
+                if time_since_update > timedelta(minutes=10):
                     logger.info(
                         f"Health monitor detected stopped live location for user {session_data.user_id} "
                         f"(last update: {time_since_update.total_seconds():.0f}s ago)"

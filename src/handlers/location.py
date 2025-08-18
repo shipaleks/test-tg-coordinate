@@ -254,7 +254,14 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
         latitude = lat
         longitude = lon
         sources_list = sources
-        image_urls = await openai_client.get_wikipedia_images(search_keywords, max_images=4)  # Max 4 for media group
+        image_urls = await openai_client.get_wikipedia_images(
+            search_keywords, 
+            max_images=4,  # Max 4 for media group
+            lat=lat,
+            lon=lon,
+            place_hint=place,
+            sources=sources
+        )
         
         if image_urls:
             # Try sending all images with text as media group
@@ -827,11 +834,11 @@ async def handle_interval_callback(
                     fact = " ".join(fact_lines)
                     break
 
-        # Get the tracker to increment fact counter for initial fact
+        # Get the fact number (will be incremented by _fact_sending_loop)
         tracker = get_live_location_tracker()
         if user_id in tracker._active_sessions:
-            tracker._active_sessions[user_id].fact_count += 1
-            fact_number = tracker._active_sessions[user_id].fact_count
+            # Don't increment here - _fact_sending_loop will do it
+            fact_number = tracker._active_sessions[user_id].fact_count + 1
         else:
             fact_number = 1  # Fallback
 
