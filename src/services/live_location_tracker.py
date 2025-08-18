@@ -52,33 +52,22 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                         else:
                             # Other images get no caption
                             media_list.append(InputMediaPhoto(media=image_url))
-                    
-                    await bot.send_media_group(
-                        chat_id=chat_id,
-                        media=media_list
-                    )
+
+                    if len(media_list) == 1:
+                        await bot.send_photo(chat_id=chat_id, photo=image_urls[0], caption=formatted_response, parse_mode="Markdown")
+                    else:
+                        await bot.send_media_group(chat_id=chat_id, media=media_list)
                     logger.info(f"Successfully sent {len(image_urls)} live images with caption in media group for {place}")
                 else:
-                    # Caption too long, send text first then all images as media group
-                    # Prefer resilient send to preserve formatting if Markdown fails
-                    try:
-                        await bot.send_message(
-                            chat_id=chat_id,
-                            text=formatted_response,
-                            parse_mode="Markdown"
-                        )
-                    except Exception:
-                        await bot.send_message(chat_id=chat_id, text=formatted_response)
-                    
-                    # Send all images as media group without captions
+                    # Caption too long → first photo with shortened caption + rest without captions
+                    short_caption = formatted_response[:1020]
                     media_list = []
-                    for image_url in image_urls:
-                        media_list.append(InputMediaPhoto(media=image_url))
-                    
-                    await bot.send_media_group(
-                        chat_id=chat_id,
-                        media=media_list
-                    )
+                    for i, image_url in enumerate(image_urls):
+                        if i == 0:
+                            media_list.append(InputMediaPhoto(media=image_url, caption=short_caption, parse_mode="Markdown"))
+                        else:
+                            media_list.append(InputMediaPhoto(media=image_url))
+                    await bot.send_media_group(chat_id=chat_id, media=media_list)
                     logger.info(f"Successfully sent long live text + {len(image_urls)} images as media group for {place}")
                 return
                 

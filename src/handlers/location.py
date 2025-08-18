@@ -40,7 +40,7 @@ LOCATION_MESSAGES = {
         'interval_10min': "Каждые 10 минут", 
         'interval_30min': "Каждые 30 минут",
         'interval_60min': "Каждые 60 минут",
-        'live_activated': "🔴 *Живая локация активирована!*\n\n📍 Отслеживание: {minutes} минут\n⏰ Факты каждые: {interval} минут\n\n🚀 Скоро пришлю первый факт, затем буду присылать автоматически!\n\nОстановите sharing чтобы завершить сессию.",
+        'live_activated': "🔴 *Живая локация активирована!*\n\n📍 Отслеживание: {minutes} минут\n⏰ Факты каждые: {interval} минут\n\n🚀 Первый факт придёт примерно через 3–5 минут, затем — автоматически по расписанию.\n\nОстановите sharing чтобы завершить сессию.",
         'place_label': "📍 *Место:*",
         'fact_label': "💡 *Факт:*",
         'sources_label': "🔗 *Источники:*",
@@ -61,7 +61,7 @@ LOCATION_MESSAGES = {
         'interval_10min': "Every 10 minutes",
         'interval_30min': "Every 30 minutes", 
         'interval_60min': "Every 60 minutes",
-        'live_activated': "🔴 *Live location activated!*\n\n📍 Tracking: {minutes} minutes\n⏰ Facts every: {interval} minutes\n\n🚀 I'll send the first fact soon, then continue automatically!\n\nStop sharing to end the session.",
+        'live_activated': "🔴 *Live location activated!*\n\n📍 Tracking: {minutes} minutes\n⏰ Facts every: {interval} minutes\n\n🚀 The first fact will arrive in about 3–5 minutes, then continue automatically.\n\nStop sharing to end the session.",
         'place_label': "📍 *Place:*",
         'fact_label': "💡 *Fact:*",
         'sources_label': "🔗 *Sources:*",
@@ -82,7 +82,7 @@ LOCATION_MESSAGES = {
         'interval_10min': "Toutes les 10 minutes",
         'interval_30min': "Toutes les 30 minutes",
         'interval_60min': "Toutes les 60 minutes",
-        'live_activated': "🔴 *Position en direct activée !*\n\n📍 Suivi : {minutes} minutes\n⏰ Faits toutes les : {interval} minutes\n\n🚀 Je vais envoyer le premier fait bientôt, puis continuer automatiquement !\n\nArrêtez le partage pour terminer la session.",
+        'live_activated': "🔴 *Position en direct activée !*\n\n📍 Suivi : {minutes} minutes\n⏰ Faits toutes les : {interval} minutes\n\n🚀 Le premier fait arrivera dans ~3–5 minutes, puis automatiquement.\n\nArrêtez le partage pour terminer la session.",
         'place_label': "📍 *Lieu :*",
         'fact_label': "💡 *Fait :*",
         'sources_label': "🔗 *Sources :*",
@@ -273,25 +273,33 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                             # Other images get no caption
                             media_list.append(InputMediaPhoto(media=image_url))
                     
-                    await bot.send_media_group(
-                        chat_id=chat_id,
-                        media=media_list,
-                        reply_to_message_id=reply_to_message_id
-                    )
+                    # Prefer single post: if more than one image, still send as media group; if exactly one, send as single photo
+                    if len(media_list) == 1:
+                        await bot.send_photo(
+                            chat_id=chat_id,
+                            photo=image_urls[0],
+                            caption=formatted_response,
+                            parse_mode="Markdown",
+                            reply_to_message_id=reply_to_message_id
+                        )
+                    else:
+                        await bot.send_media_group(
+                            chat_id=chat_id,
+                            media=media_list,
+                            reply_to_message_id=reply_to_message_id
+                        )
                     logger.info(f"Successfully sent {len(image_urls)} images with caption in media group for {place}")
                 else:
                     # Caption too long, send text first then all images as media group
-                    await _send_text_resilient(bot, chat_id, formatted_response, reply_to_message_id, html_text=html_text)
-                    
-                    # Send all images as media group without captions
+                    # When caption too long, prefer: first photo with shortened caption + rest without captions
+                    short_caption = formatted_response[:1020]
                     media_list = []
-                    for image_url in image_urls:
-                        media_list.append(InputMediaPhoto(media=image_url))
-                    
-                    await bot.send_media_group(
-                        chat_id=chat_id,
-                        media=media_list
-                    )
+                    for i, image_url in enumerate(image_urls):
+                        if i == 0:
+                            media_list.append(InputMediaPhoto(media=image_url, caption=short_caption, parse_mode="Markdown"))
+                        else:
+                            media_list.append(InputMediaPhoto(media=image_url))
+                    await bot.send_media_group(chat_id=chat_id, media=media_list, reply_to_message_id=reply_to_message_id)
                     logger.info(f"Successfully sent long text + {len(image_urls)} images as media group for {place}")
                 return
                 
