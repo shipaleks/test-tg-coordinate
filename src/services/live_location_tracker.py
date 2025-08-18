@@ -67,7 +67,29 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                     logger.info(f"Successfully sent {len(image_urls)} live images with caption in media group for {place}")
                 else:
                     # Caption too long → first photo with shortened caption + rest without captions
-                    short_caption = formatted_response[:1020]
+                    # Safely truncate without breaking markdown entities
+                    max_len = 1020
+                    if len(formatted_response) > max_len:
+                        # Find a good breaking point (space, newline) before max_len
+                        break_point = max_len
+                        for i in range(max_len-1, max_len-200, -1):
+                            if formatted_response[i] in ' \n':
+                                break_point = i
+                                break
+                        short_caption = formatted_response[:break_point].rstrip() + "..."
+                        # Ensure markdown is balanced by counting asterisks and brackets
+                        asterisk_count = short_caption.count('*') 
+                        bracket_count = short_caption.count('[') - short_caption.count(']')
+                        paren_count = short_caption.count('(') - short_caption.count(')')
+                        # Add missing closing markers
+                        if asterisk_count % 2 == 1:
+                            short_caption += '*'
+                        if bracket_count > 0:
+                            short_caption = short_caption.replace('[', '', bracket_count)  # Remove unmatched [
+                        if paren_count > 0:
+                            short_caption = short_caption.replace('(', '', paren_count)  # Remove unmatched (
+                    else:
+                        short_caption = formatted_response
                     media_list = []
                     for i, image_url in enumerate(image_urls):
                         if i == 0:
@@ -411,6 +433,8 @@ class LiveLocationTracker:
                     place = await get_localized_message(session_data.user_id, 'near_you')  # Default location
                     fact = response  # Default to full response if parsing fails
                     search_keywords = ""
+                    poi_lat = None  # POI coordinates from the fact
+                    poi_lon = None
 
                     # Try to parse structured response from <answer> tags first
                     answer_match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
@@ -422,12 +446,12 @@ class LiveLocationTracker:
                         if location_match:
                             place = location_match.group(1).strip()
                         
-                        # Extract precise coordinates if provided
+                        # Extract precise POI coordinates if provided (don't overwrite user coordinates!)
                         coord_match = re.search(r"Coordinates:\s*([\-\d\.]+)\s*,\s*([\-\d\.]+)", answer_content)
                         if coord_match:
                             try:
-                                session_data.latitude = float(coord_match.group(1))
-                                session_data.longitude = float(coord_match.group(2))
+                                poi_lat = float(coord_match.group(1))
+                                poi_lon = float(coord_match.group(2))
                             except Exception:
                                 pass
 
@@ -493,8 +517,8 @@ class LiveLocationTracker:
                             formatted_response, 
                             search_keywords, 
                             place,
-                            lat=session_data.latitude,
-                            lon=session_data.longitude,
+                            lat=poi_lat,  # Use POI coordinates for image search
+                            lon=poi_lon,
                             sources=sources,
                         )
                     else:
@@ -508,8 +532,8 @@ class LiveLocationTracker:
                                 formatted_response, 
                                 legacy_search_keywords, 
                                 place,
-                                lat=session_data.latitude,
-                                lon=session_data.longitude,
+                                lat=poi_lat,  # Use POI coordinates for image search
+                                lon=poi_lon,
                                 sources=sources,
                             )
                         else:
@@ -520,12 +544,20 @@ class LiveLocationTracker:
                                 parse_mode="Markdown",
                             )
 
-                    # Try to parse coordinates and send location for navigation using search keywords (background fact)
-                    coordinates = await openai_client.parse_coordinates_from_response(
-                        response, session_data.latitude, session_data.longitude
-                    )
-                    if coordinates:
-                        venue_lat, venue_lon = coordinates
+                    # Use POI coordinates for navigation venue if available
+                    if poi_lat is not None and poi_lon is not None:
+                        venue_lat, venue_lon = poi_lat, poi_lon
+                    else:
+                        # Try to parse coordinates from response as fallback
+                        coordinates = await openai_client.parse_coordinates_from_response(
+                            response, session_data.latitude, session_data.longitude
+                        )
+                        if coordinates:
+                            venue_lat, venue_lon = coordinates
+                        else:
+                            venue_lat, venue_lon = None, None
+                    
+                    if venue_lat is not None and venue_lon is not None:
                         try:
                             # Send venue with location for navigation
                             await bot.send_venue(
