@@ -181,19 +181,19 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             "Что такое живая локация: ты делишься местоположением в реальном времени на выбранный срок. Telegram можно закрыть — факты придут пушами.",
             "Шаг 1/3. Нажми 📎 внизу.",
             "Шаг 2/3. Открой вкладку 📍 Геопозиция/Location снизу.",
-            "Шаг 3/3. Выбери 🔴 Транслировать геопозицию/Share Live Location.",
+            "Шаг 3/3. Выбери 🟢 Транслировать геопозицию/Share My Live Location.",
         ],
         'en': [
             "Live location = share your real‑time location for a chosen time. You can close Telegram — I’ll keep sending facts.",
             "Step 1/3. Tap 📎 below.",
             "Step 2/3. Open the 📍 Location tab at the bottom.",
-            "Step 3/3. Choose 🔴 Share Live Location.",
+            "Step 3/3. Choose 🟢 Share My Live Location.",
         ],
         'fr': [
             "Position en direct = partager votre position en temps réel pendant une durée choisie. Vous pouvez fermer Telegram — j’enverrai quand même les faits.",
             "Étape 1/3. Touchez 📎 en bas.",
             "Étape 2/3. Ouvrez l’onglet 📍 Localisation/Location en bas.",
-            "Étape 3/3. Choisissez 🔴 Partager la position en direct/Share Live Location.",
+            "Étape 3/3. Choisissez 🟢 Partager la position en direct/Share My Live Location.",
         ],
     }
     labels = {
