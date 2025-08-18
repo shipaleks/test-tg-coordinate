@@ -1,0 +1,68 @@
+# Media Files Setup for Railway
+
+Bot Voyage использует медиафайлы (GIF/видео и изображения) для обучения пользователей включению живой локации. На Railway эти файлы нужно загрузить заранее и использовать через file_id.
+
+## Шаги настройки
+
+### 1. Локальная загрузка файлов
+
+Запустите скрипт `upload_media.py` локально:
+
+```bash
+# Установите переменные окружения
+export TELEGRAM_BOT_TOKEN="your_bot_token"
+export TELEGRAM_CHAT_ID="your_chat_id"  # Получите, написав боту и проверив getUpdates
+
+# Запустите скрипт
+python upload_media.py
+```
+
+Скрипт загрузит все медиафайлы в Telegram и выведет их file_id.
+
+### 2. Настройка переменных окружения на Railway
+
+Добавьте следующие переменные окружения в настройках Railway:
+
+- `HOWTO_GIF_FILE_ID` - file_id для howtobot.mp4 или howtobot.gif
+- `HOWTO_STEP1_FILE_ID` - file_id для IMG_9249.PNG (шаг 1)
+- `HOWTO_STEP2_FILE_ID` - file_id для IMG_9248.PNG (шаг 2)
+- `HOWTO_STEP3_FILE_ID` - file_id для IMG_9247.PNG (шаг 3)
+
+### 3. Как получить chat_id
+
+Если вы не знаете свой chat_id:
+
+1. Напишите боту любое сообщение
+2. Откройте в браузере: `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates`
+3. Найдите `"chat":{"id":123456789}` - это ваш chat_id
+
+## Приоритеты загрузки
+
+Бот пытается загрузить медиа в следующем порядке:
+
+1. **file_id из переменных окружения** (приоритет для Railway)
+2. **Локальные файлы** (для разработки)
+
+## Структура файлов
+
+```
+docs/
+├── howtobot.mp4      # Видео-инструкция (приоритет)
+├── howtobot.gif      # GIF-инструкция (fallback)
+├── IMG_9249.PNG      # Шаг 1: Нажать скрепку
+├── IMG_9248.PNG      # Шаг 2: Выбрать Location
+└── IMG_9247.PNG      # Шаг 3: Share Live Location
+```
+
+## Отладка
+
+Проверьте логи Railway для сообщений:
+- `Sent how-to video via file_id` - видео отправлено успешно
+- `Sent step X image via file_id` - изображение шага отправлено
+- `Failed to send...` - ошибка отправки
+
+## Примечания
+
+- file_id постоянны для каждого бота (не меняются)
+- Размер файлов: до 50MB для видео, до 10MB для фото
+- Поддерживаемые форматы: MP4, GIF, PNG, JPEG

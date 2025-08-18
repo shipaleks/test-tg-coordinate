@@ -207,103 +207,93 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Always try to send GIF first (optional)
     try:
         import os
-        candidates = []
-        env_path = os.getenv("HOWTO_GIF_PATH")
-        if env_path:
-            candidates.append(Path(env_path))
-        # Project root: src/main.py -> src -> project root
-        here = Path(__file__).resolve().parent.parent
-        candidates += [
-            here / "howtobot.gif",
-            here / "howtobot.mp4",
-            here / "docs" / "howtobot.gif",
-            here / "docs" / "howtobot.mp4",
-            here / "assets" / "howtobot.gif",
-            here / "assets" / "howtobot.mp4",
-            Path("howtobot.gif").resolve(),
-            Path("howtobot.mp4").resolve(),
-        ]
         sent = False
-        for p in candidates:
-            if p.exists() and p.is_file():
+        
+        # First priority: use file_id from environment (best for Railway)
+        file_id = os.getenv("HOWTO_GIF_FILE_ID")
+        if file_id:
+            try:
+                # Try as video first (for mp4)
+                await context.bot.send_video(chat_id=chat_id, video=file_id)
+                logger.info("Sent how-to video via file_id")
+                sent = True
+            except Exception:
                 try:
-                    if p.suffix.lower() == ".mp4":
-                        with p.open("rb") as f:
-                            await context.bot.send_video(chat_id=chat_id, video=f, supports_streaming=True)
-                        logger.info(f"Sent how-to video from {p}")
-                    else:
-                        with p.open("rb") as f:
-                            await context.bot.send_animation(chat_id=chat_id, animation=f)
-                        logger.info(f"Sent how-to gif from {p}")
+                    # Fallback to animation (for gif)
+                    await context.bot.send_animation(chat_id=chat_id, animation=file_id)
+                    logger.info("Sent how-to animation via file_id")
                     sent = True
-                    break
                 except Exception as e:
-                    logger.warning(f"send_* failed for {p}: {e}; trying as document")
+                    logger.warning(f"Failed to send media via file_id: {e}")
+        
+        # Second priority: try local files (for local development)
+        if not sent:
+            base_path = Path(__file__).resolve().parent.parent
+            media_files = [
+                ("docs/howtobot.mp4", "video"),
+                ("docs/howtobot.gif", "animation"),
+            ]
+            
+            for relative_path, media_type in media_files:
+                file_path = base_path / relative_path
+                if file_path.exists():
                     try:
-                        with p.open("rb") as f:
-                            await context.bot.send_document(chat_id=chat_id, document=f)
-                        logger.info(f"Sent how-to as document from {p}")
+                        with open(file_path, "rb") as f:
+                            if media_type == "video":
+                                await context.bot.send_video(chat_id=chat_id, video=f)
+                            else:
+                                await context.bot.send_animation(chat_id=chat_id, animation=f)
+                        logger.info(f"Sent {media_type} from {file_path}")
                         sent = True
                         break
-                    except Exception as e2:
-                        logger.warning(f"send_document failed for {p}: {e2}")
-        if not sent:
-            file_id = os.getenv("HOWTO_GIF_FILE_ID")
-            file_url = os.getenv("HOWTO_GIF_URL")
-            if file_id:
-                try:
-                    await context.bot.send_animation(chat_id=chat_id, animation=file_id)
-                    logger.info("Sent how-to via file_id (animation)")
-                except Exception:
-                    await context.bot.send_video(chat_id=chat_id, video=file_id, supports_streaming=True)
-                    logger.info("Sent how-to via file_id (video)")
-            elif file_url:
-                try:
-                    await context.bot.send_animation(chat_id=chat_id, animation=file_url)
-                    logger.info("Sent how-to via URL (animation)")
-                except Exception:
-                    await context.bot.send_video(chat_id=chat_id, video=file_url, supports_streaming=True)
-                    logger.info("Sent how-to via URL (video)")
+                    except Exception as e:
+                        logger.warning(f"Failed to send {media_type} from {file_path}: {e}")
     except Exception as e:
-        logger.warning(f"Failed to send how-to gif: {e}")
+        logger.warning(f"Failed to send how-to media: {e}")
 
     # Send definition text first
     if lang_steps:
         await context.bot.send_message(chat_id=chat_id, text=lang_steps[0])
 
     # Then send 3 step messages with images if available
-    step_images = [
-        os.getenv("HOWTO_STEP1_PATH"),
-        os.getenv("HOWTO_STEP2_PATH"),
-        os.getenv("HOWTO_STEP3_PATH"),
+    import os
+    base_path = Path(__file__).resolve().parent.parent
+    step_images = ["IMG_9249.PNG", "IMG_9248.PNG", "IMG_9247.PNG"]
+    step_file_ids = [
+        os.getenv("HOWTO_STEP1_FILE_ID"),
+        os.getenv("HOWTO_STEP2_FILE_ID"), 
+        os.getenv("HOWTO_STEP3_FILE_ID"),
     ]
-    default_names = ["IMG_9249.PNG", "IMG_9248.PNG", "IMG_9247.PNG"]
 
     for idx in range(1, min(4, len(lang_steps))):
         caption = lang_steps[idx]
-        img_candidates = []
-        if step_images[idx-1]:
-            img_candidates.append(Path(step_images[idx-1]))
-        # common locations
-        here = Path(__file__).resolve().parent.parent
-        name = default_names[idx-1]
-        img_candidates += [
-            here / name,
-            here / "docs" / name,
-            here / "assets" / name,
-            Path(name).resolve(),
-        ]
         sent_photo = False
-        for p in img_candidates:
+        
+        # First priority: use file_id from environment (best for Railway)
+        file_id = step_file_ids[idx-1]
+        if file_id:
             try:
-                if p and p.exists() and p.is_file():
-                    with p.open("rb") as f:
-                        await context.bot.send_photo(chat_id=chat_id, photo=f, caption=caption)
-                    logger.info(f"Sent onboarding step {idx} image from {p}")
-                    sent_photo = True
-                    break
+                await context.bot.send_photo(chat_id=chat_id, photo=file_id, caption=caption)
+                logger.info(f"Sent step {idx} image via file_id")
+                sent_photo = True
             except Exception as e:
-                logger.warning(f"Failed to send photo {p}: {e}")
+                logger.warning(f"Failed to send step {idx} photo via file_id: {e}")
+        
+        # Second priority: try local file (for local development)
+        if not sent_photo:
+            image_name = step_images[idx-1]
+            image_path = base_path / "docs" / image_name
+            
+            if image_path.exists():
+                try:
+                    with open(image_path, "rb") as f:
+                        await context.bot.send_photo(chat_id=chat_id, photo=f, caption=caption)
+                    logger.info(f"Sent step {idx} image from {image_path}")
+                    sent_photo = True
+                except Exception as e:
+                    logger.warning(f"Failed to send photo {image_path}: {e}")
+        
+        # Fallback to text-only message
         if not sent_photo:
             await context.bot.send_message(chat_id=chat_id, text=caption)
 
