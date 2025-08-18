@@ -198,54 +198,6 @@ def _label_to_html(label: str) -> str:
     return re.sub(r"\*(.+?)\*", r"<b>\\1</b>", label)
 
 
-def _extract_what_to_see_tokens(text: str) -> list[str]:
-    """Extract salient 'what to see today' tokens from response text.
-
-    Supports RU/EN variants like 'Что увидеть сегодня' / 'Что видно сегодня' / 'What to look for today' / 'What to see today'.
-    Returns normalized tokens for ranking images (e.g., 'plaque', 'market', 'vespasienne', 'arch', 'square').
-    """
-    try:
-        tokens: list[str] = []
-        # Find the segment after the marker
-        m = re.search(r"(Что\s+(увидеть|видно)\s+сегодня|What\s+to\s+(look\s+for|see)\s+today)\s*[:：]?\s*(.*)$",
-                      text, re.IGNORECASE | re.DOTALL)
-        segment = m.group(4).strip() if m else ""
-        hay = segment.lower()
-        # Simple keyword mapping
-        mapping = [
-            (['plaque', 'memorial', 'tablica', 'таблич', 'мемориал', 'пластин'], 'plaque'),
-            (['vespasienne', 'urinoir', 'pissoir', 'писсуар', 'уринуар'], 'vespasienne'),
-            (['market', 'marché', 'рынок'], 'market'),
-            (['arch', 'арка'], 'arch'),
-            (['square', 'сквер', 'square '], 'square'),
-            (['gate', 'ворота', 'porte'], 'gate'),
-            (['entrance', 'вход'], 'entrance'),
-            (['metro', 'метро', 'station'], 'metro'),
-            (['bridge', 'pont', 'мост'], 'bridge'),
-            (['church', 'église', 'церковь'], 'church'),
-        ]
-        for keys, norm in mapping:
-            if any(k in hay for k in keys):
-                tokens.append(norm)
-        # Also pick named POIs mentioned explicitly after marker (e.g., 'Square Grangé')
-        named = re.findall(r"([A-ZÉÈÀÂÎÔÙÛÄËÏÖÜÇ][\w\-’'`]+(?:\s+[A-Z0-9ÉÈÀÂÎÔÙÛÄËÏÖÜÇ][\w\-’'`]+){0,3})",
-                           segment)
-        for n in named:
-            val = n.strip().lower()
-            if len(val) >= 3 and val not in tokens:
-                tokens.append(val)
-        # Deduplicate preserve order
-        seen = set()
-        result = []
-        for t in tokens:
-            if t not in seen:
-                seen.add(t)
-                result.append(t)
-        return result
-    except Exception:
-        return []
-
-
 async def _send_text_resilient(
     bot,
     chat_id: int,
@@ -283,7 +235,7 @@ async def _send_text_resilient(
         else:
             raise
 
-async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, user_id=None, reply_to_message_id=None, html_text: str | None = None, lat: float | None = None, lon: float | None = None, poi_tokens: list[str] | None = None):
+async def send_fact_with_images(bot, chat_id, formatted_response, search_keywords, place, user_id=None, reply_to_message_id=None, html_text: str | None = None, lat: float | None = None, lon: float | None = None):
     """Send fact message with Wikipedia images if available.
     
     Args:
@@ -301,17 +253,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
         # Expose coords as local variables for the image pipeline's optional introspection
         latitude = lat
         longitude = lon
-        # Decide how many images to request (configurable)
-        import os
-        try:
-            desired_max = int(os.getenv("IMAGES_STATIC_MAX", "5"))
-        except Exception:
-            desired_max = 5
-        # Respect Telegram media group limit (10)
-        desired_max = max(1, min(10, desired_max))
-        # Provide POI tokens via locals for the image pipeline (optional introspection)
-        what_to_see_tokens = poi_tokens or []
-        image_urls = await openai_client.get_wikipedia_images(search_keywords, max_images=desired_max)
+        image_urls = await openai_client.get_wikipedia_images(search_keywords, max_images=4)  # Max 4 for media group
         
         if image_urls:
             # Try sending all images with text as media group
@@ -668,17 +610,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if html_sources_block:
             html_formatted = f"{html_formatted}{html_sources_block}"
         
-        # Collect POI hint tokens from the response for better image relevance
-        poi_tokens: list[str] = []
-        try:
-            # Prefer analyzing the structured answer content if available
-            if 'answer_content' in locals() and answer_content:
-                poi_tokens = _extract_what_to_see_tokens(answer_content)
-            else:
-                poi_tokens = _extract_what_to_see_tokens(response)
-        except Exception:
-            poi_tokens = []
-
         # Send fact with images using extracted search keywords
         if final_search_keywords:
             # Pass coordinates opportunistically via keyword locals for the new pipeline
@@ -695,7 +626,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 html_text=html_formatted,
                 lat=lat,
                 lon=lon,
-                poi_tokens=poi_tokens,
             )
         else:
             # No search keywords, send just text
@@ -902,16 +832,6 @@ async def handle_interval_callback(
             tracker._active_sessions[user_id].fact_history.append(f"{place}: {fact}")
 
         # Send initial fact with images using extracted search keywords
-        # Extract tokens for live initial fact as well
-        live_poi_tokens: list[str] = []
-        try:
-            if 'answer_content' in locals() and answer_content:
-                live_poi_tokens = _extract_what_to_see_tokens(answer_content)
-            else:
-                live_poi_tokens = _extract_what_to_see_tokens(response)
-        except Exception:
-            live_poi_tokens = []
-
         if search_keywords:
             await send_fact_with_images(
                 context.bot, 
@@ -922,7 +842,6 @@ async def handle_interval_callback(
                 user_id=user_id,
                 lat=lat,
                 lon=lon,
-                poi_tokens=live_poi_tokens,
             )
         else:
             # Legacy fallback: try to extract search keywords from old format
@@ -938,7 +857,6 @@ async def handle_interval_callback(
                     user_id=user_id,
                     lat=lat,
                     lon=lon,
-                    poi_tokens=live_poi_tokens,
                 )
             else:
                 # No search keywords, send just text

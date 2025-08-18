@@ -1360,16 +1360,15 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         place_hint = None
         try:
             # Inspect caller locals to fetch keyword-only arguments if provided
+            # This is a safe no-op for older call sites/tests
             caller_locals = frame.f_back.f_locals if frame and frame.f_back else {}
             lat = caller_locals.get('lat') if 'lat' in caller_locals else caller_locals.get('latitude')
             lon = caller_locals.get('lon') if 'lon' in caller_locals else caller_locals.get('longitude')
             place_hint = caller_locals.get('place') or caller_locals.get('location_title')
-            poi_tokens = caller_locals.get('poi_tokens') or caller_locals.get('what_to_see_tokens') or []
         except Exception:
             lat = None
             lon = None
             place_hint = None
-            poi_tokens = []
 
         # Normalize keywords
         clean_keywords = (search_keywords or '').replace(' + ', ' ').replace('+', ' ').strip()
@@ -1398,41 +1397,8 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         def _cache_set(cache: dict, key: str, val):
             cache[key] = (val, time.time())
 
-        async def _qid_from_coords_or_search(session, lat_val, lon_val, keywords: str, place_text: str | None, poi_coords: tuple[float, float] | None) -> str | None:
+        async def _qid_from_coords_or_search(session, lat_val, lon_val, keywords: str, place_text: str | None) -> str | None:
             languages = ['ru', 'en', 'fr', 'de', 'es', 'it']
-            # If we have POI coords, try geosearch at POI FIRST
-            if poi_coords is not None:
-                plat, plon = poi_coords
-                for lang in languages:
-                    params = {
-                        'action': 'query', 'list': 'geosearch',
-                        'gscoord': f"{plat}|{plon}", 'gsradius': 120, 'gslimit': 10,
-                        'format': 'json'
-                    }
-                    data = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", params)
-                    if not data:
-                        continue
-                    pages = data.get('query', {}).get('geosearch', [])
-                    if not pages:
-                        continue
-                    pages.sort(key=lambda p: p.get('dist', 1e9))
-                    pageid = pages[0].get('pageid')
-                    if not pageid:
-                        continue
-                    cached = _cache_get(self._qid_cache, f"pageid:{pageid}")
-                    if cached:
-                        return cached
-                    pp = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
-                        'action': 'query', 'prop': 'pageprops', 'ppprop': 'wikibase_item',
-                        'pageids': pageid, 'format': 'json'
-                    })
-                    try:
-                        qid = next(iter(pp['query']['pages'].values()))['pageprops']['wikibase_item']
-                        if qid:
-                            _cache_set(self._qid_cache, f"pageid:{pageid}", qid)
-                            return qid
-                    except Exception:
-                        pass
             # Prefer title/keyword resolution FIRST (so image matches POI from the fact)
             titles_to_try: list[tuple[str, str]] = []  # (lang, title)
             if place_text:
@@ -1558,7 +1524,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 for hit in data.get('query', {}).get('search', []):
                     title = hit.get('title')  # "File:..."
                     if not title:
-                        continue
+                    continue
                     filename = title.split(':', 1)[-1]
                     ii = await _imageinfo_for_filename(session, filename)
                     if ii:
@@ -1567,10 +1533,10 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 pass
             return out
 
-        async def _commons_geosearch(session, lat_val, lon_val, limit: int = 10, radius_m: int = 200) -> list[dict]:
+        async def _commons_geosearch(session, lat_val, lon_val, limit: int = 10) -> list[dict]:
             data = await _fetch_json(session, "https://commons.wikimedia.org/w/api.php", {
                 'action': 'query', 'list': 'geosearch', 'gscoord': f"{lat_val}|{lon_val}",
-                'gsradius': max(30, min(500, radius_m)), 'gslimit': limit, 'format': 'json'
+                'gsradius': 200, 'gslimit': limit, 'format': 'json'
             })
             items = []
             try:
@@ -1596,46 +1562,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 height = ii.get('thumbheight') or ii.get('height') or 0
                 ts = ii.get('timestamp') or ''
                 landscape = 1 if width and height and width >= height else 0
-                title = (ii.get('descriptionurl') or ii.get('url') or '').lower()
-                # Include extmetadata description as haystack
-                try:
-                    em = ii.get('extmetadata') or {}
-                    desc = ''
-                    for k in ('ImageDescription', 'ObjectName'):
-                        v = em.get(k, {}).get('value') if isinstance(em.get(k), dict) else em.get(k)
-                        if v:
-                            desc += f" {str(v).lower()}"
-                    title += desc
-                except Exception:
-                    pass
-                # Token match bonus if any poi token appears in title/url
-                token_bonus = 0
-                try:
-                    for t in poi_tokens:
-                        if t and t.lower() in title:
-                            token_bonus += 1
-                except Exception:
-                    token_bonus = 0
-                # Distance bonus (closer better)
-                dist_bonus = 0
-                try:
-                    d = ii.get('distance')
-                    if isinstance(d, (int, float)):
-                        if d <= 60:
-                            dist_bonus = 3
-                        elif d <= 120:
-                            dist_bonus = 2
-                        elif d <= 200:
-                            dist_bonus = 1
-                except Exception:
-                    pass
-                # Negative penalties for irrelevant stadiums/arenas unless explicitly requested
-                neg = 0
-                banned = ['stade', 'stadium', 'arena', 'football', 'rugby']
-                if not any(x in (poi_tokens or []) for x in ['stadium', 'stade', 'arena']):
-                    if any(b in title for b in banned):
-                        neg = -5
-                return (token_bonus + dist_bonus + neg, landscape, width)
+                return (landscape, width)
             infos_sorted = sorted(infos, key=score, reverse=True)
             urls = []
             for ii in infos_sorted:
@@ -1643,118 +1570,13 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 if url and url not in urls:
                     urls.append(url)
                 if len(urls) >= need:
-                    break
-            return urls
-
-        async def _search_openverse_images(keywords: str, need: int) -> list[str]:
-            if not keywords or need <= 0:
-                return []
-            try:
-                # Cache key
-                ck = f"openverse:{keywords}:{need}"
-                cached = _cache_get(self._fileinfo_cache, ck)
-                if cached:
-                    return cached.get('urls', [])
-            except Exception:
-                pass
-            urls = []
-            try:
-                async with aiohttp.ClientSession() as session:
-                    params = {
-                        'q': keywords,
-                        'license_type': 'all-cc',
-                        'page_size': min(need * 3, 50),
-                    }
-                    data = await _fetch_json(session, 'https://api.openverse.engineering/v1/images', params)
-                    for item in (data or {}).get('results', []):
-                        # Basic quality/size heuristics
-                        url = item.get('thumbnail') or item.get('url')
-                        width = item.get('width') or 0
-                        height = item.get('height') or 0
-                        if not url:
-                            continue
-                        if width and height and width < 600:
-                            continue
-                        if url not in urls:
-                            urls.append(url)
-                        if len(urls) >= need:
-                            break
-                # Cache small structure
-                try:
-                    _cache_set(self._fileinfo_cache, ck, {'urls': urls})
-                except Exception:
-                    pass
-            except Exception as e:
-                logger.debug(f"Openverse search failed: {e}")
-            return urls
-
-        async def _search_flickr_images(poi_lat: float | None, poi_lon: float | None, keywords: str, need: int) -> list[str]:
-            import os
-            api_key = os.getenv('FLICKR_API_KEY')
-            if not api_key or need <= 0:
-                return []
-            # Prefer geofilter if coords available; else keyword search
-            params = {
-                'method': 'flickr.photos.search',
-                'api_key': api_key,
-                'format': 'json',
-                'nojsoncallback': 1,
-                'safe_search': 1,
-                'content_type': 1,
-                'extras': 'url_l,url_o,owner_name,license,date_taken,geo',
-                # CC licenses only
-                'license': '1,2,3,4,5,6,9,10',
-                'per_page': min(need * 5, 50),
-                'sort': 'relevance',
-            }
-            if poi_lat is not None and poi_lon is not None:
-                params['lat'] = poi_lat
-                params['lon'] = poi_lon
-                params['radius'] = 0.2  # km
-                params['radius_units'] = 'km'
-            else:
-                params['text'] = keywords
-            urls: list[str] = []
-            try:
-                async with aiohttp.ClientSession() as session:
-                    data = await _fetch_json(session, 'https://api.flickr.com/services/rest/', params)
-                    for ph in (data or {}).get('photos', {}).get('photo', []):
-                        url = ph.get('url_l') or ph.get('url_o')
-                        if not url:
-                            # Construct static URL if sizes missing
-                            farm = ph.get('farm')
-                            server = ph.get('server')
-                            pid = ph.get('id')
-                            secret = ph.get('secret')
-                            if all([farm, server, pid, secret]):
-                                url = f"https://farm{farm}.staticflickr.com/{server}/{pid}_{secret}_b.jpg"
-                        if not url:
-                            continue
-                        if url not in urls:
-                            urls.append(url)
-                        if len(urls) >= need:
-                            break
-            except Exception as e:
-                logger.debug(f"Flickr search failed: {e}")
+                                    break
             return urls
 
         results: list[str] = []
-        import os as _os
-        enable_openverse = _os.getenv("IMAGE_SOURCES_OPENVERSE", "false").lower() == "true"
-        enable_flickr = (_os.getenv("IMAGE_SOURCES_FLICKR", "false").lower() == "true") and bool(_os.getenv("FLICKR_API_KEY"))
-        allow_user_geo_fallback = _os.getenv("ALLOW_USER_GEO_FALLBACK", "false").lower() == "true"
-
         try:
-            # Derive POI coordinates early to help QID resolution
-            poi_coords = None
-            if clean_keywords:
-                try:
-                    poi_coords = await self.get_coordinates_from_search_keywords(clean_keywords, user_lat=lat, user_lon=lon)
-                except Exception:
-                    poi_coords = None
-
             async with aiohttp.ClientSession() as session:
-                qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords, place_hint, poi_coords)
+                qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords, place_hint)
                 infos: list[dict] = []
                 if qid:
                     filename = await _p18_for_qid(session, qid)
@@ -1764,68 +1586,33 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                             infos.append(ii)
                     if len(infos) < max_images:
                         infos += await _commons_depicts_for_qid(session, qid, limit=max(3, max_images))
-                if poi_coords and len(infos) < max_images:
-                    # Adjust radius based on tokens: micro-objects need tighter radius
-                    base_radius = 200
+                # Try Commons geosearch around POI coordinates derived from Search keywords first
+                poi_coords = None
+                if len(infos) < max_images and clean_keywords:
                     try:
-                        if any(t in (poi_tokens or []) for t in ['plaque', 'arch', 'entrance']):
-                            base_radius = 80
-                        elif any(t in (poi_tokens or []) for t in ['market', 'square', 'church']):
-                            base_radius = 150
+                        poi_coords = await self.get_coordinates_from_search_keywords(clean_keywords, user_lat=lat, user_lon=lon)
                     except Exception:
-                        pass
-                    infos += await _commons_geosearch(session, poi_coords[0], poi_coords[1], limit=max(6, max_images), radius_m=base_radius)
-                # Optional last resort: Commons geosearch near USER location (disabled by default)
-                if allow_user_geo_fallback and (lat is not None and lon is not None) and len(infos) < max_images:
-                    infos += await _commons_geosearch(session, lat, lon, limit=max(6, max_images), radius_m=150)
+                        poi_coords = None
+                if poi_coords and len(infos) < max_images:
+                    infos += await _commons_geosearch(session, poi_coords[0], poi_coords[1], limit=max(6, max_images))
+                # Last resort: Commons geosearch near USER location
+                if (lat is not None and lon is not None) and len(infos) < max_images:
+                    infos += await _commons_geosearch(session, lat, lon, limit=max(6, max_images))
 
                 if infos:
                     results = _pick_urls_from_infos(infos, max_images)
-                # Supplement with Openverse/Flickr if lacking (opt-in)
-                if enable_openverse and len(results) < max_images:
-                    need_more = max_images - len(results)
-                    # Prefer Openverse (broad CC catalog)
-                    ov_urls = await _search_openverse_images(place_hint or clean_keywords, need_more)
-                    for u in ov_urls:
-                        if u not in results:
-                            results.append(u)
-                            need_more -= 1
-                            if need_more <= 0:
-                                break
-                if enable_flickr and len(results) < max_images:
-                    need_more = max_images - len(results)
-                    # Flickr if API key present, using POI coords if available, else keywords
-                    flickr_urls = await _search_flickr_images(
-                        poi_coords[0] if 'poi_coords' in locals() and poi_coords else lat,
-                        poi_coords[1] if 'poi_coords' in locals() and poi_coords else lon,
-                        place_hint or clean_keywords,
-                        need_more,
-                    )
-                    for u in flickr_urls:
-                        if u not in results:
-                            results.append(u)
-                            need_more -= 1
-                            if need_more <= 0:
-                                break
-                # Final fallback to legacy page media search if still lacking
-                if len(results) < max_images and clean_keywords:
-                    legacy_left = max_images - len(results)
-                    legacy = await self._search_wikipedia_images(clean_keywords, 'en', legacy_left)
-                    for u in legacy or []:
-                        if u not in results:
-                            results.append(u)
-                    if len(results) < max_images:
+                # Final fallback to legacy page media search if still empty
+                if not results and clean_keywords:
+                    results = await self._search_wikipedia_images(clean_keywords, 'en', max_images)
+                    if not results:
+                        # try a few more langs quickly
                         for lg in ['ru', 'fr']:
-                            if len(results) >= max_images:
+                            if results:
                                 break
                             try:
-                                rem = max_images - len(results)
-                                more = await self._search_wikipedia_images(clean_keywords, lg, rem)
-                                for u in more or []:
-                                    if u not in results:
-                                        results.append(u)
+                                results = await self._search_wikipedia_images(clean_keywords, lg, max_images)
                             except Exception:
-                                continue
+                    continue
         except Exception as e:
             logger.debug(f"Commons pipeline failed: {e}")
 
