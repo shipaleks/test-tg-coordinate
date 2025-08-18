@@ -1432,7 +1432,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                             return qid
                     except Exception:
                         continue
-            # Finally, fallback to geosearch near USER coords (least preferred)
+            # Finally, fallback to geosearch near provided coords (if available)
             if lat_val is not None and lon_val is not None:
                 for lang in languages:
                     params = {
@@ -1614,15 +1614,18 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                                         break
                     except Exception:
                         pass
-                # Try Commons geosearch around POI coordinates derived from Search keywords first
-                poi_coords = None
-                if len(infos) < max_images and clean_keywords:
+                # Try Commons geosearch around POI coordinates
+                # First try: use provided POI coordinates (from Coordinates field in answer)
+                if lat is not None and lon is not None:
+                    tasks.append(_commons_geosearch(session, lat, lon, limit=max(6, max_images)))
+                # Second try: derive POI coordinates from Search keywords  
+                elif len(infos) < max_images and clean_keywords:
                     try:
-                        poi_coords = await self.get_coordinates_from_search_keywords(clean_keywords, user_lat=lat, user_lon=lon)
+                        poi_coords = await self.get_coordinates_from_search_keywords(clean_keywords)
+                        if poi_coords:
+                            tasks.append(_commons_geosearch(session, poi_coords[0], poi_coords[1], limit=max(6, max_images)))
                     except Exception:
-                        poi_coords = None
-                if poi_coords:
-                    tasks.append(_commons_geosearch(session, poi_coords[0], poi_coords[1], limit=max(6, max_images)))
+                        pass
 
                 # Execute all prepared tasks concurrently and merge results
                 if tasks:
