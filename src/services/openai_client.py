@@ -692,25 +692,13 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             except Exception as e:
                 logger.warning(f"GPT-5 Responses path failed: {e}. Falling back to standard models.")
 
-            # Choose model based on location type and premium status
-            model_to_use = "o4-mini"  # Default model for live
-            max_tokens_limit = 10000
-
+            # Choose model independent of donation status
             if is_live_location:
-                if is_premium_user:
-                    # Premium users get o3 for live locations (detailed analysis)
-                    model_to_use = "o3"
-                    max_tokens_limit = 12000
-                    logger.info(f"Using o3 model for premium user {user_id} (live location)")
-                else:
-                    model_to_use = "o4-mini"
-                    max_tokens_limit = 10000
+                model_to_use = "o4-mini"
+                max_tokens_limit = 10000
             else:
-                # Static locations use gpt-4.1 (fast, concise)
                 model_to_use = "gpt-4.1"
                 max_tokens_limit = 400
-                if is_premium_user:
-                    logger.info(f"Using gpt-4.1 for premium user {user_id} (static location - speed priority)")
 
             response = None
             if is_live_location:
