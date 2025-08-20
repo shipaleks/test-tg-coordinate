@@ -662,37 +662,17 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 language_instructions=language_instructions,
             )
 
-            # Optional GPT-5 (Responses API) path with built-in web_search tool
-            # Enable with USE_GPT5_RESPONSES=true in environment. Falls back automatically on errors.
+            # Always attempt GPT-5 Responses first (with web_search), then fallback on error
             try:
-                enable_flag = os.getenv("USE_GPT5_RESPONSES", "").lower() == "true"
-                # Auto-enable on Railway or webhook (production-like) environments
-                on_railway = any(
-                    os.getenv(k) for k in (
-                        "RAILWAY_ENVIRONMENT",
-                        "RAILWAY_ENVIRONMENT_NAME",
-                        "RAILWAY_PROJECT_ID",
-                        "RAILWAY_SERVICE_ID",
-                    )
-                )
-                has_webhook = bool(os.getenv("WEBHOOK_URL"))
-                enable_gpt5 = enable_flag or on_railway or has_webhook
-
-                if enable_gpt5:
-                    why = (
-                        "USE_GPT5_RESPONSES=true"
-                        if enable_flag
-                        else ("Railway env detected" if on_railway else "WEBHOOK_URL set")
-                    )
-                    logger.info(f"Attempting GPT-5 Responses with web_search... ({why})")
-                    content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location, user_id=user_id)
-                    if content:
-                        logger.info("GPT-5 Responses: success (web_search enabled)")
-                        return content.strip()
+                logger.info("Attempting GPT-5 Responses with web_search... (forced)")
+                content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location, user_id=user_id)
+                if content:
+                    logger.info("GPT-5 Responses: success (web_search enabled)")
+                    return content.strip()
             except Exception as e:
                 logger.warning(f"GPT-5 Responses path failed: {e}. Falling back to standard models.")
 
-            # Choose model independent of donation status
+            # Default fallback models (only if GPT-5 path fails)
             if is_live_location:
                 model_to_use = "o4-mini"
                 max_tokens_limit = 10000
@@ -1657,7 +1637,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 url = ii.get('thumburl') or ii.get('url')
                 if not url:
                     continue
-                    
+
                 # Extract base filename without size/extension variations
                 import re
                 filename = url.split('/')[-1]
