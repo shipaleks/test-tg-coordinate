@@ -133,59 +133,109 @@ class OpenAIClient:
 
         Keeps rich guidance, removes repetition, and enforces link formatting.
         """
-        core_rules = f"""Atlas Obscura–style location facts in {user_language}. Goal: surprising, specific, verifiable detail about THIS exact spot that locals never knew.
+        core_rules = f"""You are writing Atlas Obscura–style location facts. Goal: the most surprising, specific, verifiable detail about THIS exact spot that would make locals say "I never knew that!"
 
-VERIFICATION: Use web_search 2+ times (coordinates + facts). Cross-check sources for names/dates/numbers.
+IMPORTANT: Respond entirely in {user_language} (analysis and final answer).
 
-METHOD:
-1) LOCATION: Identify exact address with house number (e.g., "24 rue de la Glacière"). Verify city by coordinates.
-2) RESEARCH: A) This spot: prior uses, hidden features, specific incidents B) Vicinity (100m): underground, vanished buildings, origins C) If A/B fail: wider area stories
-3) HUMAN ELEMENT: Who/what/when (verified names or roles, exact dates or ranges like "1920‑е")
-4) VISIBLE TODAY: Real details visitors can see (no imaginary plaques/marks)
+MANDATORY ONLINE VERIFICATION (web sources):
+- Verify coordinates, names, dates, and numbers using reliable sources.
+- When a web_search tool is available, call it at least twice with distinct queries to gather sources (coordinates + factual verification) BEFORE composing the final answer; synthesize a verified result.
+- Cross-check at least two independent sources for any specific names/dates/numbers. Prefer high‑credibility sources when in doubt.
 
-WRITING: Start with surprise → name/date → what's visible. Every sentence adds new info. Accuracy over drama.
+ATLAS OBSCURA METHOD (do these in order):
+1) PRECISE LOCATION ANALYSIS
+   - Identify what is exactly at these coordinates (building, corner, gate, tunnel access).
+   - Find the EXACT street address with house number when possible (e.g., "24 rue de la Glacière" not just "rue de la Glacière").
+   - Confirm the correct city by coordinates; never mix cities.
+   - Note the immediate surroundings (50–100 m) and neighborhood character.
+   - FACT‑CHECK that the place truly exists here before proceeding.
 
-AVOID: Wrong dates, false attributions, invented details, rounded numbers, dramatization.
+2) DEEP RESEARCH FOR THE UNEXPECTED (expand outward only if needed)
+   A) This exact spot: prior uses, hidden features, specific incidents, famous visitors doing something here.
+   B) Immediate vicinity: underground features, vanished buildings, street‑name origins, visible architectural details with stories.
+   C) Wider area (only if A/B fail): transformation stories, documented legends, hidden infrastructure.
 
-OUTPUT: Main text without URLs. End with 'Sources'/'Источники': 2–4 items "Title — URL"
-SEARCH FIELD: "Address, City" format for Nominatim"""
+3) HUMAN ELEMENT (documented)
+   - Who decided and why (use roles or names only if verified); what event happened; when (exact if sure, otherwise ranges like "в 1920‑е").
+   - No invented specifics. If uncertain, generalize the role instead of fabricating a name.
 
-        # Add language-specific instructions if provided
-        if language_instructions:
-            system_prompt = f"{core_rules}\n\n{language_instructions}".strip()
-        else:
-            system_prompt = core_rules.strip()
+4) WHAT'S VISIBLE TODAY (real, verifiable)
+   - Specific details visitors can actually see (rings in masonry, blocked windows, anchor points). No imaginary plaques/signatures/marks.
+
+QUALITY SELECTION (internal):
+- Generate 2–3 variants; select the best: surprising, specific, verifiable, and vivid. Output only the final choice.
+
+OUTPUT FORMAT:
+- Do NOT place URLs in the main fact text. At the end add a separate section: 'Источники' (RU) or 'Sources' (other languages), 2–4 bullets in the form: "Concise title — URL". Always include actual clickable URLs, not just titles. Prefer canonical, clean links.
+
+WRITING RULES:
+• Start with the surprise, not with generic context.
+• Include at least one name or date (exact if certain; otherwise a precise range/period).
+• Tell what a visitor can look for today (physically verifiable).
+• Every sentence should add new, concrete information; avoid filler and dramatization.
+• Accuracy over drama. Distinguish documented history from legend (label legends as such).
+
+COMMON ERRORS TO AVOID:
+1) Confusing expo/era dates; 2) False attributions (not every iron = Eiffel);
+3) Invented details (plaques/marks/signatures); 4) Rounded numbers instead of exact counts;
+5) Oversimplifying complex processes; 6) Hollywood dramatization; 7) Inventing architectural features.
+
+CRITICAL FOR SEARCH FIELD (geocoding via Nominatim):
+- Use commas between components; include full city; prefer official names; avoid adjectives like "former"/"old".
+"""
+
+        language_block = f"""
+LANGUAGE REQUIREMENTS:
+Write your response in {user_language}.
+{language_instructions}"""
+
+        system_prompt = f"{core_rules}\n\n{language_block}".strip()
 
         prev_block = ""
         if previous_facts:
             prev_text = "\n".join([f"- {fact}" for fact in previous_facts[-5:]])
-            prev_block = f"\n\nAVOID repeating:\n{prev_text}"
+            prev_block = f"""\nPREVIOUS FACTS ALREADY MENTIONED (avoid repeating places/details):\n{prev_text}\n\nCRITICAL: Choose a DIFFERENT spot/aspect than anything listed above."""
 
         if is_live_location:
-            user_prompt = f"""User at: {lat}, {lon}
-Max distance: 500m from these coordinates.{prev_block}
+            user_prompt = f"""Analyze these coordinates: {lat}, {lon}
 
+CRITICAL: This is the user's CURRENT location. Mention only places actually at or very near (≤500 m) these exact coordinates. Do NOT pull famous landmarks from other parts of the city unless they are genuinely visible or directly relevant to this precise spot.{prev_block}
+
+Follow the method above to find the most surprising true detail about THIS exact place.
+
+Present your final answer strictly in this structure:
 <answer>
-Location: [Exact address with house number]
-Coordinates: [LAT, LON of described place - 6 decimals]
-Search: [Full address for Nominatim]
-Interesting fact: [100-120 words. Surprise → Story → What's visible today]
+Location: [Street address / building / precise intersection]
+Coordinates: [LAT, LON of the EXACT point being described, not user location! Use 6 decimal places (e.g., 48.835615, 2.345458) for meter-level precision. If describing a building, use its entrance coordinates. If describing an intersection, use the exact crossing point.]
+Search: [Geocoding query for the EXACT place described, optimized for Nominatim API - include house number, street name, city. Example: "24 rue de la Glacière, Paris, France"]
+Interesting fact: [100–120 words. Surprising opening → Human story → Why it matters → What to look for today. Names/dates only if verified. No inline URLs.]
 Sources/Источники:
-- [Title] — [URL]
-- [Title] — [URL]
-</answer>"""
+- [Concise source title] — [URL]
+- [Concise source title] — [URL]
+(Add 1-2 more sources if relevant)
+</answer>
+"""
         else:
-            user_prompt = f"""Coordinates: {lat}, {lon}{prev_block}
+            user_prompt = f"""Here are the coordinates to analyze:
+<coordinates>
+Latitude: {lat}
+Longitude: {lon}
+</coordinates>{prev_block}
 
+Apply the method above to find one concise, surprising, verified detail.
+
+Format the answer strictly as:
 <answer>
-Location: [Exact place name with address]
-Coordinates: [LAT, LON of described place - 6 decimals]
-Search: [Full address for Nominatim]
-Interesting fact: [60-80 words. Surprise → Context → What's visible]
+Location: [Exact place name; not "near"/generic area]
+Coordinates: [LAT, LON of the EXACT point being described, not user location! Use 6 decimal places (e.g., 48.835615, 2.345458) for meter-level precision. If describing a building, use its entrance coordinates. If describing an intersection, use the exact crossing point.]
+Search: [Geocoding query for the EXACT place described, optimized for Nominatim API - include house number, street name, city. Example: "24 rue de la Glacière, Paris, France"]
+Interesting fact: [60–80 words. Surprising detail → Quick context (with name/date) → What is visible today. No inline URLs.]
 Sources/Источники:
-- [Title] — [URL]
-- [Title] — [URL]
-</answer>"""
+- [Concise source title] — [URL]
+- [Concise source title] — [URL]
+(Add 1-2 more sources if relevant)
+</answer>
+"""
 
         return system_prompt, user_prompt
 
@@ -238,12 +288,17 @@ Sources/Источники:
             # Special instructions for Russian language quality
             language_instructions = ""
             if user_language == "ru":
-                language_instructions = """RUSSIAN STYLE:
-- Живой язык образованного рассказчика, не Wikipedia
-- Активный залог: "Здесь построили", не "было построено"
-- Тире для акцентов: "В подвале — настоящая тайна"
-- Избегать: "является", "представляет собой", "находится"
-- Пример: "В подвале дома на Малой Бронной видны кольца — здесь держали леопардов для коллекционеров"."""
+                language_instructions = """
+SPECIAL REQUIREMENTS FOR RUSSIAN:
+- Пишите на естественном, живом русском языке - как если бы делились невероятным открытием с другом
+- Используйте образные выражения и яркие детали, но избегайте слишком многочисленных прилагательных, излишне сложных конструкций и надрывной театральности театральности
+- Соблюдайте грамотную русскую речь: избегайте англицизмов и калек в случаях, когда существуют удачные русские слова
+- Используйте для акцентов тире и паузы, а не лишние запятые: "В подвале этого дома — настоящая тайна"
+- Пишите в активном залоге: "Здесь расстреляли...", не "Здесь был расстрелян..."
+- Старайтесь звучать как образованный носитель языка, который делится удивительными местными историями
+- Хороший пример: "В подвале элегантного дома на Малой Бронной до сих пор видны металлические кольца — здесь десять лет держали на карантине леопардов и тигров для московских коллекционеров."
+- Избегайте канцелярита и Wikipedia-стиля: нет фразам "является", "представляет собой", "находится"
+- Стремитесь передать живую речь человека с высшим филологическим образованием, а не написанный бюрократический текст"""
 
             # Choose appropriate system prompt based on location type
             if is_live_location:
@@ -619,8 +674,8 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             # Default fallback models (only if GPT-5 path fails)
             if is_live_location:
-                    model_to_use = "o4-mini"
-                    max_tokens_limit = 10000
+                model_to_use = "o4-mini"
+                max_tokens_limit = 10000
             else:
                 model_to_use = "gpt-4.1"
                 max_tokens_limit = 400
