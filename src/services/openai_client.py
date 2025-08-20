@@ -848,7 +848,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             # Map our levels to API levels
             level_map = {
-                "minimal": "low",
+                "minimal": "minimal",
                 "low": "low",
                 "medium": "medium",
                 "high": "high",
