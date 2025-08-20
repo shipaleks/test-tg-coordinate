@@ -773,7 +773,8 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             gpt5_system_prompt = (
                 system_prompt
                 + "\n\nTOOLS AVAILABLE:\n"
-                + "- web_search: You have access to a web_search tool. You MUST call web_search at least twice with distinct queries to collect sources (coordinates and factual verification) before composing the final answer. Do not include tool call results verbatim; only output the final verified answer.\n"
+                + "- web_search: Built-in search tool. Use it immediately without asking for permission. Run at least two distinct queries (coordinates + facts). Do not print raw tool output; synthesize a verified answer with Sources.\n"
+                + "\nPOLICY:\n- Do not ask the user for approval to use tools. If a tool is available and needed, call it.\n"
             )
             messages = [
                 {"role": "system", "content": [{"type": "input_text", "text": gpt5_system_prompt}]},
@@ -811,12 +812,15 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             except Exception:
                 user_model = "gpt-5"
 
-            logger.info(f"GPT-5 Responses: sending request (model={user_model}, reasoning={api_effort})")
+            # Force web_search tool usage when on gpt-5-mini to avoid permission asking behavior
+            forced_tool_choice = {"type": "web_search"} if (user_model or "gpt-5").startswith("gpt-5-mini") else "auto"
+
+            logger.info(f"GPT-5 Responses: sending request (model={user_model}, reasoning={api_effort}, tool_choice={forced_tool_choice})")
             response = await self.client.responses.create(
                 model=user_model,
                 input=messages,
                 tools=tools,
-                tool_choice="auto",
+                tool_choice=forced_tool_choice,
                 reasoning=reasoning,
             )
 
