@@ -75,7 +75,7 @@ class PostgresDatabase:
                 # Ensure reasoning column exists
                 try:
                     await conn.execute(
-                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS reasoning TEXT DEFAULT 'minimal'"
+                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS reasoning TEXT DEFAULT 'low'"
                     )
                 except Exception:
                     pass

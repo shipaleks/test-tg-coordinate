@@ -836,8 +836,8 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             ]
             tools = [{"type": "web_search"}]
 
-            # Resolve per-user reasoning (default minimal)
-            reasoning_level = "minimal"
+            # Resolve per-user reasoning (default low)
+            reasoning_level = "low"
             try:
                 if user_id:
                     from .async_donors_wrapper import get_async_donors_db
@@ -848,12 +848,12 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             # Map our levels to API levels
             level_map = {
-                "minimal": "minimal",
+                "minimal": "low",   # minimal not supported with web_search → degrade to low
                 "low": "low",
                 "medium": "medium",
                 "high": "high",
             }
-            api_effort = level_map.get(reasoning_level, "low")
+            api_effort = level_map.get(reasoning_level or "low", "low")
             reasoning = {"effort": api_effort}
 
             logger.info(f"GPT-5 Responses: sending request (reasoning={api_effort})")

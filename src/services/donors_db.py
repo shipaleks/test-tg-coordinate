@@ -124,7 +124,7 @@ class DonorsDatabase:
                             CREATE TABLE IF NOT EXISTS user_preferences (
                             user_id INTEGER PRIMARY KEY,
                             language TEXT DEFAULT 'en',
-                            reasoning TEXT DEFAULT 'minimal',
+                            reasoning TEXT DEFAULT 'low',
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                             updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
@@ -178,7 +178,7 @@ class DonorsDatabase:
                                 CREATE TABLE IF NOT EXISTS user_preferences (
                                     user_id INTEGER PRIMARY KEY,
                                     language TEXT DEFAULT 'en',
-                                    reasoning TEXT DEFAULT 'minimal',
+                                    reasoning TEXT DEFAULT 'low',
                                     created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                                     updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                                 )
