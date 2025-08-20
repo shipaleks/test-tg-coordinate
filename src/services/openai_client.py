@@ -133,55 +133,27 @@ class OpenAIClient:
 
         Keeps rich guidance, removes repetition, and enforces link formatting.
         """
-        core_rules = f"""You are writing Atlas Obscura–style location facts. Goal: the most surprising, specific, verifiable detail about THIS exact spot that would make locals say "I never knew that!"
+        core_rules = f"""Atlas Obscura–style facts in {user_language}. Goal: the most surprising, specific, verifiable detail about THIS exact spot.
 
-IMPORTANT: Respond entirely in {user_language} (analysis and final answer).
+Verification:
+- Use web_search at least twice (coordinates + facts); cross‑check dates/names/numbers; prefer reliable sources.
 
-MANDATORY ONLINE VERIFICATION (web sources):
-- Verify coordinates, names, dates, and numbers using reliable sources.
-- When a web_search tool is available, call it at least twice with distinct queries to gather sources (coordinates + factual verification) BEFORE composing the final answer; synthesize a verified result.
-- Cross-check at least two independent sources for any specific names/dates/numbers. Prefer high‑credibility sources when in doubt.
+Method:
+1) Location: exact address with house number; verify city by coordinates; note surroundings (50–100 m).
+2) Research: A) this spot (past uses, hidden features, specific incidents, who/when) B) vicinity (<100 m) C) wider area (only if A/B fail).
+3) Visible today: concrete details a visitor can see (no imaginary plaques/signatures/marks).
 
-ATLAS OBSCURA METHOD (do these in order):
-1) PRECISE LOCATION ANALYSIS
-   - Identify what is exactly at these coordinates (building, corner, gate, tunnel access).
-   - Find the EXACT street address with house number when possible (e.g., "24 rue de la Glacière" not just "rue de la Glacière").
-   - Confirm the correct city by coordinates; never mix cities.
-   - Note the immediate surroundings (50–100 m) and neighborhood character.
-   - FACT‑CHECK that the place truly exists here before proceeding.
+Writing:
+- Start with the surprise; include one specific name/date; each sentence adds new info; accuracy over drama.
 
-2) DEEP RESEARCH FOR THE UNEXPECTED (expand outward only if needed)
-   A) This exact spot: prior uses, hidden features, specific incidents, famous visitors doing something here.
-   B) Immediate vicinity: underground features, vanished buildings, street‑name origins, visible architectural details with stories.
-   C) Wider area (only if A/B fail): transformation stories, documented legends, hidden infrastructure.
+Avoid:
+- Wrong dates, false attributions, invented details, rounded numbers, over‑drama, made‑up features.
 
-3) HUMAN ELEMENT (documented)
-   - Who decided and why (use roles or names only if verified); what event happened; when (exact if sure, otherwise ranges like "в 1920‑е").
-   - No invented specifics. If uncertain, generalize the role instead of fabricating a name.
+Output:
+- No URLs in main text. End with 'Источники'/'Sources': 2–4 bullets "Title — URL".
 
-4) WHAT'S VISIBLE TODAY (real, verifiable)
-   - Specific details visitors can actually see (rings in masonry, blocked windows, anchor points). No imaginary plaques/signatures/marks.
-
-QUALITY SELECTION (internal):
-- Generate 2–3 variants; select the best: surprising, specific, verifiable, and vivid. Output only the final choice.
-
-OUTPUT FORMAT:
-- Do NOT place URLs in the main fact text. At the end add a separate section: 'Источники' (RU) or 'Sources' (other languages), 2–4 bullets in the form: "Concise title — URL". Always include actual clickable URLs, not just titles. Prefer canonical, clean links.
-
-WRITING RULES:
-• Start with the surprise, not with generic context.
-• Include at least one name or date (exact if certain; otherwise a precise range/period).
-• Tell what a visitor can look for today (physically verifiable).
-• Every sentence should add new, concrete information; avoid filler and dramatization.
-• Accuracy over drama. Distinguish documented history from legend (label legends as such).
-
-COMMON ERRORS TO AVOID:
-1) Confusing expo/era dates; 2) False attributions (not every iron = Eiffel);
-3) Invented details (plaques/marks/signatures); 4) Rounded numbers instead of exact counts;
-5) Oversimplifying complex processes; 6) Hollywood dramatization; 7) Inventing architectural features.
-
-CRITICAL FOR SEARCH FIELD (geocoding via Nominatim):
-- Use commas between components; include full city; prefer official names; avoid adjectives like "former"/"old".
+Search field:
+- "Address, City" format for Nominatim.
 """
 
         language_block = f"""
@@ -666,16 +638,16 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             try:
                 logger.info("Attempting GPT-5 Responses with web_search... (forced)")
                 content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location, user_id=user_id)
-                if content:
-                    logger.info("GPT-5 Responses: success (web_search enabled)")
-                    return content.strip()
+                    if content:
+                        logger.info("GPT-5 Responses: success (web_search enabled)")
+                        return content.strip()
             except Exception as e:
                 logger.warning(f"GPT-5 Responses path failed: {e}. Falling back to standard models.")
 
             # Default fallback models (only if GPT-5 path fails)
             if is_live_location:
-                model_to_use = "o4-mini"
-                max_tokens_limit = 10000
+                    model_to_use = "o4-mini"
+                    max_tokens_limit = 10000
             else:
                 model_to_use = "gpt-4.1"
                 max_tokens_limit = 400
@@ -1419,7 +1391,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Prefer title/keyword resolution FIRST (so image matches POI from the fact)
             titles_to_try: list[tuple[str, str]] = []  # (lang, title)
             if place_text:
-                for lang in languages:
+        for lang in languages:
                     titles_to_try.append((lang, place_text))
             if keywords:
                 # Try exact title path via keywords
@@ -1541,7 +1513,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 for hit in data.get('query', {}).get('search', []):
                     title = hit.get('title')  # "File:..."
                     if not title:
-                        continue
+                    continue
                     filename = title.split(':', 1)[-1]
                     ii = await _imageinfo_for_filename(session, filename)
                     if ii:
@@ -1577,7 +1549,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         if 'dist' in item:
                             ii['distance'] = item['dist']
                         items.append(ii)
-            except Exception as e:
+                except Exception as e:
                 logger.debug(f"Commons geosearch error: {e}")
             return items
 
