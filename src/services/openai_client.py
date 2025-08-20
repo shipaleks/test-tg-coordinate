@@ -638,16 +638,16 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             try:
                 logger.info("Attempting GPT-5 Responses with web_search... (forced)")
                 content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location, user_id=user_id)
-                    if content:
-                        logger.info("GPT-5 Responses: success (web_search enabled)")
-                        return content.strip()
+                if content:
+                    logger.info("GPT-5 Responses: success (web_search enabled)")
+                    return content.strip()
             except Exception as e:
                 logger.warning(f"GPT-5 Responses path failed: {e}. Falling back to standard models.")
 
             # Default fallback models (only if GPT-5 path fails)
             if is_live_location:
-                    model_to_use = "o4-mini"
-                    max_tokens_limit = 10000
+                model_to_use = "o4-mini"
+                max_tokens_limit = 10000
             else:
                 model_to_use = "gpt-4.1"
                 max_tokens_limit = 400
@@ -1391,7 +1391,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Prefer title/keyword resolution FIRST (so image matches POI from the fact)
             titles_to_try: list[tuple[str, str]] = []  # (lang, title)
             if place_text:
-        for lang in languages:
+                for lang in languages:
                     titles_to_try.append((lang, place_text))
             if keywords:
                 # Try exact title path via keywords
@@ -1513,7 +1513,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 for hit in data.get('query', {}).get('search', []):
                     title = hit.get('title')  # "File:..."
                     if not title:
-                    continue
+                        continue
                     filename = title.split(':', 1)[-1]
                     ii = await _imageinfo_for_filename(session, filename)
                     if ii:
@@ -1549,7 +1549,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         if 'dist' in item:
                             ii['distance'] = item['dist']
                         items.append(ii)
-                except Exception as e:
+            except Exception as e:
                 logger.debug(f"Commons geosearch error: {e}")
             return items
 
