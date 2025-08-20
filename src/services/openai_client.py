@@ -801,9 +801,19 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             api_effort = level_map.get(reasoning_level or "low", "low")
             reasoning = {"effort": api_effort}
 
-            logger.info(f"GPT-5 Responses: sending request (reasoning={api_effort})")
+            # Fetch per-user model if available
+            user_model = "gpt-5"
+            try:
+                if user_id:
+                    from .async_donors_wrapper import get_async_donors_db
+                    db = await get_async_donors_db()
+                    user_model = (await db.get_user_model(user_id)) or "gpt-5"
+            except Exception:
+                user_model = "gpt-5"
+
+            logger.info(f"GPT-5 Responses: sending request (model={user_model}, reasoning={api_effort})")
             response = await self.client.responses.create(
-                model="gpt-5",
+                model=user_model,
                 input=messages,
                 tools=tools,
                 tool_choice="auto",

@@ -148,6 +148,20 @@ class AsyncDonorsWrapper:
         else:
             return self._db.set_user_reasoning(user_id, level)  # type: ignore[attr-defined]
 
+    async def get_user_model(self, user_id: int) -> str:
+        await self._ensure_initialized()
+        if self._is_postgres:
+            return await self._db.get_user_model(user_id)  # type: ignore[attr-defined]
+        else:
+            return self._db.get_user_model(user_id)  # type: ignore[attr-defined]
+
+    async def set_user_model(self, user_id: int, model: str) -> bool:
+        await self._ensure_initialized()
+        if self._is_postgres:
+            return await self._db.set_user_model(user_id, model)  # type: ignore[attr-defined]
+        else:
+            return self._db.set_user_model(user_id, model)  # type: ignore[attr-defined]
+
 
 # Global instance
 _async_db: Optional[AsyncDonorsWrapper] = None

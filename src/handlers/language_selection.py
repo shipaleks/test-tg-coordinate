@@ -12,23 +12,60 @@ from ..services.async_donors_wrapper import get_async_donors_db
 
 logger = logging.getLogger(__name__)
 async def reason_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Hidden command to set reasoning level: minimal, low, medium, high."""
+    """Hidden command to set reasoning (minimal/low/medium/high) and model (gpt-5/gpt-5-mini) via buttons."""
     user = update.effective_user
-    args = (context.args or [])
-    if not args:
-        await update.message.reply_text("Usage: /reason <minimal|low|medium|high>")
-        return
-    level = args[0].strip().lower()
-    valid = {"minimal", "low", "medium", "high"}
-    if level not in valid:
-        await update.message.reply_text("Allowed: minimal, low, medium, high")
-        return
     donors_db = await get_async_donors_db()
-    ok = await donors_db.set_user_reasoning(user.id, level)
-    if ok:
-        await update.message.reply_text(f"Reasoning set to: {level}")
-    else:
-        await update.message.reply_text("Failed to set reasoning")
+    current_level = await donors_db.get_user_reasoning(user.id)
+    current_model = await donors_db.get_user_model(user.id)
+
+    # Build inline keyboard
+    rows = []
+    # Reasoning row
+    for level in ["minimal", "low", "medium", "high"]:
+        mark = "✅" if level == current_level else ""
+        rows.append([
+            InlineKeyboardButton(f"{mark} Reasoning: {level}", callback_data=f"set_reason:{level}")
+        ])
+    # Model row
+    for model in ["gpt-5", "gpt-5-mini"]:
+        mark = "✅" if model == current_model else ""
+        rows.append([
+            InlineKeyboardButton(f"{mark} Model: {model}", callback_data=f"set_model:{model}")
+        ])
+
+    reply_markup = InlineKeyboardMarkup(rows)
+    await update.message.reply_text("Developer settings:", reply_markup=reply_markup)
+
+
+async def handle_reason_model_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    data = query.data or ""
+    donors_db = await get_async_donors_db()
+    user = query.from_user
+
+    if data.startswith("set_reason:"):
+        level = data.split(":", 1)[1]
+        await donors_db.set_user_reasoning(user.id, level)
+    elif data.startswith("set_model:"):
+        model = data.split(":", 1)[1]
+        await donors_db.set_user_model(user.id, model)
+
+    # Refresh menu
+    current_level = await donors_db.get_user_reasoning(user.id)
+    current_model = await donors_db.get_user_model(user.id)
+    rows = []
+    for level in ["minimal", "low", "medium", "high"]:
+        mark = "✅" if level == current_level else ""
+        rows.append([
+            InlineKeyboardButton(f"{mark} Reasoning: {level}", callback_data=f"set_reason:{level}")
+        ])
+    for model in ["gpt-5", "gpt-5-mini"]:
+        mark = "✅" if model == current_model else ""
+        rows.append([
+            InlineKeyboardButton(f"{mark} Model: {model}", callback_data=f"set_model:{model}")
+        ])
+    await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(rows))
 
 # Language mapping with flags and names
 LANGUAGES = {

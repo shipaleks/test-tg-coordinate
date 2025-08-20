@@ -125,6 +125,7 @@ class DonorsDatabase:
                             user_id INTEGER PRIMARY KEY,
                             language TEXT DEFAULT 'en',
                             reasoning TEXT DEFAULT 'low',
+                            model TEXT DEFAULT 'gpt-5',
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                             updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
@@ -179,6 +180,7 @@ class DonorsDatabase:
                                     user_id INTEGER PRIMARY KEY,
                                     language TEXT DEFAULT 'en',
                                     reasoning TEXT DEFAULT 'low',
+                                    model TEXT DEFAULT 'gpt-5',
                                     created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                                     updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                                 )
@@ -457,10 +459,10 @@ class DonorsDatabase:
                     # Use INSERT OR REPLACE to handle both new and existing users
                     # Preserve existing reasoning if present
                     conn.execute("""
-                        INSERT INTO user_preferences (user_id, language, reasoning, updated_at)
-                        VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'minimal'), ?)
+                        INSERT INTO user_preferences (user_id, language, reasoning, model, updated_at)
+                        VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'low'), COALESCE((SELECT model FROM user_preferences WHERE user_id = ?), 'gpt-5'), ?)
                         ON CONFLICT(user_id) DO UPDATE SET language=excluded.language, updated_at=excluded.updated_at
-                    """, (user_id, language, user_id, current_time))
+                    """, (user_id, language, user_id, user_id, current_time))
                     
                     conn.commit()
                     logger.info(f"Set language {language} for user {user_id}")
@@ -530,6 +532,20 @@ class DonorsDatabase:
             logger.error(f"Failed to get user reasoning for user {user_id}: {e}")
             return "minimal"
 
+    def get_user_model(self, user_id: int) -> str:
+        """Get user's preferred model (gpt-5 or gpt-5-mini)."""
+        try:
+            with self._lock:
+                with sqlite3.connect(self.db_path) as conn:
+                    row = conn.execute(
+                        "SELECT model FROM user_preferences WHERE user_id = ?",
+                        (user_id,)
+                    ).fetchone()
+                    return (row[0] if row and row[0] else "gpt-5").strip()
+        except Exception as e:
+            logger.error(f"Failed to get user model for user {user_id}: {e}")
+            return "gpt-5"
+
     def set_user_reasoning(self, user_id: int, level: str) -> bool:
         """Set user's preferred reasoning level."""
         try:
@@ -549,6 +565,27 @@ class DonorsDatabase:
                     return True
         except Exception as e:
             logger.error(f"Failed to set user reasoning for user {user_id}: {e}")
+            return False
+
+    def set_user_model(self, user_id: int, model: str) -> bool:
+        """Set user's preferred model (gpt-5 or gpt-5-mini)."""
+        try:
+            current_time = int(time.time())
+            with self._lock:
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.execute(
+                        """
+                        INSERT INTO user_preferences (user_id, language, reasoning, model, updated_at)
+                        VALUES (?, COALESCE((SELECT language FROM user_preferences WHERE user_id = ?), 'ru'), COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'low'), ?, ?)
+                        ON CONFLICT(user_id) DO UPDATE SET model=excluded.model, updated_at=excluded.updated_at
+                        """,
+                        (user_id, user_id, user_id, model, current_time)
+                    )
+                    conn.commit()
+                    logger.info(f"Set model {model} for user {user_id}")
+                    return True
+        except Exception as e:
+            logger.error(f"Failed to set user model for user {user_id}: {e}")
             return False
 
 

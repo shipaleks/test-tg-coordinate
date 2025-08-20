@@ -34,6 +34,7 @@ from .handlers.language_selection import (
     handle_custom_language_input,
     reset_language_command,
     reason_command,
+    handle_reason_model_callback,
 )
 from .services.async_donors_wrapper import get_async_donors_db
 from pathlib import Path
@@ -302,6 +303,8 @@ def main() -> None:
     application.add_handler(CommandHandler("reset", reset_language_command))
     # Hidden command to control reasoning effort per user
     application.add_handler(CommandHandler("reason", reason_command))
+    # Hidden callbacks for reasoning/model toggles
+    application.add_handler(CallbackQueryHandler(handle_reason_model_callback, pattern="^(set_reason|set_model):"))
 
     # Add universal button handlers (check multiple language variants)
     # Info button patterns
