@@ -139,7 +139,7 @@ Verification:
 - Use web_search at least twice (coordinates + facts); cross‑check dates/names/numbers; prefer reliable sources.
 
 Method:
-1) Location: exact address with house number; verify city by coordinates; note surroundings (50–100 m).
+1) Location: exact address with house number; verify city by coordinates; note surroundings (50–100 m). Distance rule: the POI MUST be within 300 m of the given coordinates (hard max 500 m). Prefer the closest valid spot; do not pick items beyond 500 m.
 2) Research: A) this spot (past uses, hidden features, specific incidents, who/when) B) vicinity (<100 m) C) wider area (only if A/B fail).
 3) Visible today: concrete details a visitor can see (no imaginary plaques/signatures/marks).
 
@@ -150,10 +150,14 @@ Avoid:
 - Wrong dates, false attributions, invented details, rounded numbers, over‑drama, made‑up features.
 
 Output:
-- No URLs in main text. End with 'Источники'/'Sources': 2–4 bullets "Title — URL".
+- No URLs in main text. End with ONE 'Источники'/'Sources' section: 2–4 bullets "Title — URL" (clickable, real links). Do not add any extra link lists (no second "🔗 Источники").
 
 Search field:
 - "Address, City" format for Nominatim.
+
+Strict formatting:
+- Output ONLY the <answer> block and nothing else (no prolog/epilog outside tags).
+- Keep 'Location/Coordinates/Search' only in their own lines; do not repeat them inside the fact paragraph.
 """
 
         language_block = f"""
@@ -172,6 +176,11 @@ Write your response in {user_language}.
             user_prompt = f"""Analyze these coordinates: {lat}, {lon}
 
 CRITICAL: This is the user's CURRENT location. Mention only places actually at or very near (≤500 m) these exact coordinates. Do NOT pull famous landmarks from other parts of the city unless they are genuinely visible or directly relevant to this precise spot.{prev_block}
+
+HARD CONSTRAINTS:
+- Prefer a POI within 300 m; never exceed 500 m.
+- Do NOT append any user's live location echoes or extra map messages outside <answer>.
+- Provide exactly one 'Sources/Источники' list inside <answer> (2–4 items) and no duplicates.
 
 Follow the method above to find the most surprising true detail about THIS exact place.
 
@@ -195,6 +204,11 @@ Longitude: {lon}
 </coordinates>{prev_block}
 
 Apply the method above to find one concise, surprising, verified detail.
+
+HARD CONSTRAINTS:
+- Prefer a POI within 300 m; never exceed 500 m.
+- Do NOT append any user's location echoes or extra messages outside <answer>.
+- Provide exactly one 'Sources/Источники' list inside <answer> (2–4 items) and no duplicates.
 
 Format the answer strictly as:
 <answer>
