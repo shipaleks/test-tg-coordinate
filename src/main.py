@@ -33,6 +33,7 @@ from .handlers.language_selection import (
     handle_language_selection,
     handle_custom_language_input,
     reset_language_command,
+    reason_command,
 )
 from .services.async_donors_wrapper import get_async_donors_db
 from pathlib import Path
@@ -299,6 +300,8 @@ def main() -> None:
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("dbtest", dbtest_command))
     application.add_handler(CommandHandler("reset", reset_language_command))
+    # Hidden command to control reasoning effort per user
+    application.add_handler(CommandHandler("reason", reason_command))
 
     # Add universal button handlers (check multiple language variants)
     # Info button patterns

@@ -72,6 +72,13 @@ class PostgresDatabase:
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+                # Ensure reasoning column exists
+                try:
+                    await conn.execute(
+                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS reasoning TEXT DEFAULT 'minimal'"
+                    )
+                except Exception:
+                    pass
                 
                 # Create indexes
                 await conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_user_id ON donations(user_id)")
@@ -287,6 +294,40 @@ class PostgresDatabase:
                 return True
         except Exception as e:
             logger.error(f"Failed to reset user language: {e}")
+            return False
+
+    async def get_user_reasoning(self, user_id: int) -> str:
+        """Get user's preferred reasoning effort (minimal/low/medium/high)."""
+        try:
+            async with self.pool.acquire() as conn:
+                level = await conn.fetchval(
+                    "SELECT reasoning FROM user_preferences WHERE user_id = $1",
+                    user_id,
+                )
+                return (level or "minimal").strip()
+        except Exception as e:
+            logger.error(f"Failed to get user reasoning: {e}")
+            return "minimal"
+
+    async def set_user_reasoning(self, user_id: int, level: str) -> bool:
+        """Set user's preferred reasoning effort (minimal/low/medium/high)."""
+        try:
+            async with self.pool.acquire() as conn:
+                # Preserve existing language if present
+                await conn.execute(
+                    """
+                    INSERT INTO user_preferences (user_id, language, reasoning, updated_at)
+                    VALUES ($1, COALESCE((SELECT language FROM user_preferences WHERE user_id=$1), 'ru'), $2, CURRENT_TIMESTAMP)
+                    ON CONFLICT (user_id)
+                    DO UPDATE SET reasoning = $2, updated_at = CURRENT_TIMESTAMP
+                    """,
+                    user_id,
+                    level,
+                )
+                logger.info(f"Set reasoning {level} for user {user_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to set user reasoning: {e}")
             return False
 
 

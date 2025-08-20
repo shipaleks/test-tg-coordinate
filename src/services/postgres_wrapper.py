@@ -131,6 +131,14 @@ class PostgresSyncWrapper:
     def reset_user_language(self, user_id: int) -> bool:
         """Reset user language to default."""
         return self.set_user_language(user_id, "ru")
+
+    def get_user_reasoning(self, user_id: int) -> str:
+        """Get user reasoning level (sync)."""
+        return self._run_async(self._db.get_user_reasoning(user_id))
+
+    def set_user_reasoning(self, user_id: int, level: str) -> bool:
+        """Set user reasoning level (sync)."""
+        return self._run_async(self._db.set_user_reasoning(user_id, level))
     
     def __del__(self):
         """Cleanup on deletion."""

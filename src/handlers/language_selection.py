@@ -11,6 +11,24 @@ from telegram.ext import ContextTypes
 from ..services.async_donors_wrapper import get_async_donors_db
 
 logger = logging.getLogger(__name__)
+async def reason_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Hidden command to set reasoning level: minimal, low, medium, high."""
+    user = update.effective_user
+    args = (context.args or [])
+    if not args:
+        await update.message.reply_text("Usage: /reason <minimal|low|medium|high>")
+        return
+    level = args[0].strip().lower()
+    valid = {"minimal", "low", "medium", "high"}
+    if level not in valid:
+        await update.message.reply_text("Allowed: minimal, low, medium, high")
+        return
+    donors_db = await get_async_donors_db()
+    ok = await donors_db.set_user_reasoning(user.id, level)
+    if ok:
+        await update.message.reply_text(f"Reasoning set to: {level}")
+    else:
+        await update.message.reply_text("Failed to set reasoning")
 
 # Language mapping with flags and names
 LANGUAGES = {

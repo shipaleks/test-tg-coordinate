@@ -685,7 +685,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         else ("Railway env detected" if on_railway else "WEBHOOK_URL set")
                     )
                     logger.info(f"Attempting GPT-5 Responses with web_search... ({why})")
-                    content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location)
+                    content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location, user_id=user_id)
                     if content:
                         logger.info("GPT-5 Responses: success (web_search enabled)")
                         return content.strip()
@@ -818,7 +818,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             logger.error(f"Failed to generate fact for {lat},{lon}: {e}")
             raise
 
-    async def _get_with_gpt5_responses(self, system_prompt: str, user_prompt: str, is_live: bool) -> str | None:
+    async def _get_with_gpt5_responses(self, system_prompt: str, user_prompt: str, is_live: bool, user_id: int | None = None) -> str | None:
         """Attempt to use GPT-5 Responses API with built-in web_search tool.
 
         Returns text content or None on failure.
@@ -835,9 +835,28 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 {"role": "user", "content": [{"type": "input_text", "text": user_prompt}]},
             ]
             tools = [{"type": "web_search"}]
-            reasoning = {"effort": "medium" if is_live else "low"}
 
-            logger.info(f"GPT-5 Responses: sending request (reasoning={'medium' if is_live else 'low'})")
+            # Resolve per-user reasoning (default minimal)
+            reasoning_level = "minimal"
+            try:
+                if user_id:
+                    from .async_donors_wrapper import get_async_donors_db
+                    db = await get_async_donors_db()
+                    reasoning_level = (await db.get_user_reasoning(user_id)) or "minimal"
+            except Exception:
+                reasoning_level = "minimal"
+
+            # Map our levels to API levels
+            level_map = {
+                "minimal": "low",
+                "low": "low",
+                "medium": "medium",
+                "high": "high",
+            }
+            api_effort = level_map.get(reasoning_level, "low")
+            reasoning = {"effort": api_effort}
+
+            logger.info(f"GPT-5 Responses: sending request (reasoning={api_effort})")
             response = await self.client.responses.create(
                 model="gpt-5",
                 input=messages,

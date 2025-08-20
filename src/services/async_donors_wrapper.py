@@ -132,6 +132,22 @@ class AsyncDonorsWrapper:
         else:
             return self._db.reset_user_language(user_id)  # type: ignore[attr-defined]
 
+    async def get_user_reasoning(self, user_id: int) -> str:
+        """Get user's preferred reasoning level (async)."""
+        await self._ensure_initialized()
+        if self._is_postgres:
+            return await self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
+        else:
+            return self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
+
+    async def set_user_reasoning(self, user_id: int, level: str) -> bool:
+        """Set user's preferred reasoning level (async)."""
+        await self._ensure_initialized()
+        if self._is_postgres:
+            return await self._db.set_user_reasoning(user_id, level)  # type: ignore[attr-defined]
+        else:
+            return self._db.set_user_reasoning(user_id, level)  # type: ignore[attr-defined]
+
 
 # Global instance
 _async_db: Optional[AsyncDonorsWrapper] = None
