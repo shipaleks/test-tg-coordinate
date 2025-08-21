@@ -68,7 +68,7 @@ class PostgresDatabase:
                     CREATE TABLE IF NOT EXISTS user_preferences (
                         user_id BIGINT PRIMARY KEY,
                         language TEXT DEFAULT 'ru',
-                        reasoning TEXT DEFAULT 'medium',
+                        reasoning TEXT DEFAULT 'high',
                         model TEXT DEFAULT 'gpt-5-mini',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -77,7 +77,7 @@ class PostgresDatabase:
                 # Ensure reasoning column exists
                 try:
                     await conn.execute(
-                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS reasoning TEXT DEFAULT 'medium'"
+                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS reasoning TEXT DEFAULT 'high'"
                     )
                 except Exception:
                     pass

@@ -124,8 +124,8 @@ class DonorsDatabase:
                             CREATE TABLE IF NOT EXISTS user_preferences (
                             user_id INTEGER PRIMARY KEY,
                             language TEXT DEFAULT 'en',
-                            reasoning TEXT DEFAULT 'low',
-                            model TEXT DEFAULT 'gpt-5',
+                            reasoning TEXT DEFAULT 'high',
+                            model TEXT DEFAULT 'gpt-5-mini',
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                             updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
@@ -179,8 +179,8 @@ class DonorsDatabase:
                                 CREATE TABLE IF NOT EXISTS user_preferences (
                                     user_id INTEGER PRIMARY KEY,
                                     language TEXT DEFAULT 'en',
-                                    reasoning TEXT DEFAULT 'low',
-                                    model TEXT DEFAULT 'gpt-5',
+                                    reasoning TEXT DEFAULT 'high',
+                                    model TEXT DEFAULT 'gpt-5-mini',
                                     created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                                     updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                                 )
@@ -460,7 +460,7 @@ class DonorsDatabase:
                     # Preserve existing reasoning if present
                     conn.execute("""
                         INSERT INTO user_preferences (user_id, language, reasoning, model, updated_at)
-                        VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'medium'), COALESCE((SELECT model FROM user_preferences WHERE user_id = ?), 'gpt-5-mini'), ?)
+                        VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'high'), COALESCE((SELECT model FROM user_preferences WHERE user_id = ?), 'gpt-5-mini'), ?)
                         ON CONFLICT(user_id) DO UPDATE SET language=excluded.language, updated_at=excluded.updated_at
                     """, (user_id, language, user_id, user_id, current_time))
                     
@@ -576,7 +576,7 @@ class DonorsDatabase:
                     conn.execute(
                         """
                         INSERT INTO user_preferences (user_id, language, reasoning, model, updated_at)
-                        VALUES (?, COALESCE((SELECT language FROM user_preferences WHERE user_id = ?), 'ru'), COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'medium'), ?, ?)
+                        VALUES (?, COALESCE((SELECT language FROM user_preferences WHERE user_id = ?), 'ru'), COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'high'), ?, ?)
                         ON CONFLICT(user_id) DO UPDATE SET model=excluded.model, updated_at=excluded.updated_at
                         """,
                         (user_id, user_id, user_id, model, current_time)

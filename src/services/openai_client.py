@@ -818,7 +818,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 "medium": "medium",
                 "high": "high",
             }
-            api_effort = level_map.get(reasoning_level or "medium", "medium")
+            api_effort = level_map.get(reasoning_level or "high", "high")
             reasoning = {"effort": api_effort}
 
             # Fetch per-user model if available (default: gpt-5-mini)
