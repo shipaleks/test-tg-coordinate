@@ -828,10 +828,10 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             except Exception:
                 user_model = "gpt-5"
 
-            # Force web_search tool usage when on gpt-5-mini to avoid permission asking behavior
-            forced_tool_choice = {"type": "web_search"} if (user_model or "gpt-5").startswith("gpt-5-mini") else "auto"
+            # Hosted web_search should use tool_choice="auto" per API guidance
+            forced_tool_choice = "auto"
 
-            logger.info(f"GPT-5 Responses: sending request (model={user_model}, reasoning={api_effort}, tool_choice={forced_tool_choice})")
+            logger.info(f"GPT-5 Responses: sending request (model={user_model}, reasoning={api_effort}, tool_choice=auto)")
             response = await self.client.responses.create(
                 model=user_model,
                 input=messages,
@@ -871,7 +871,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     model=user_model_retry,
                     input=messages,
                     tools=tools,
-                    tool_choice={"type": "web_search"},
+                    tool_choice="auto",
                     reasoning=reasoning,
                 )
                 content = getattr(retry, "output_text", None)
