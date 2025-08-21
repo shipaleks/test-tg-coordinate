@@ -10,7 +10,7 @@ from firebase_admin import firestore as admin_firestore
 _firestore: Optional[Any] = None
 
 
-def get_firestore() -> firestore.Client:
+def get_firestore() -> Any:
     global _firestore
     if _firestore is not None:
         return _firestore
