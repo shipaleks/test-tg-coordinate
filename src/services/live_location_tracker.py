@@ -553,6 +553,21 @@ class LiveLocationTracker:
                             venue_lat, venue_lon = coordinates
                         else:
                             venue_lat, venue_lon = None, None
+
+                    # If POI coords look suspiciously equal to user's live point, try Nominatim from Search
+                    try:
+                        too_close_to_user = False
+                        if venue_lat is not None and venue_lon is not None:
+                            dy = abs(venue_lat - session_data.latitude)
+                            dx = abs(venue_lon - session_data.longitude)
+                            too_close_to_user = (dy < 1e-6 and dx < 1e-6)
+                        if too_close_to_user and search_keywords:
+                            nomi = await openai_client.get_coordinates_from_search_keywords(search_keywords, session_data.latitude, session_data.longitude)
+                            if nomi:
+                                venue_lat, venue_lon = nomi
+                                logger.info(f"Adjusted venue via Nominatim from Search: {venue_lat}, {venue_lon}")
+                    except Exception:
+                        pass
                     
                     if venue_lat is not None and venue_lon is not None:
                         try:

@@ -862,8 +862,34 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 pass
             return None
         except Exception as e:
+            # If mini fails, auto-upgrade to gpt-5 and retry once
+            try:
+                logger.warning(f"GPT-5 Responses error with model: {e}")
+                user_model_retry = "gpt-5"
+                logger.info("Retrying GPT-5 Responses with model=gpt-5")
+                retry = await self.client.responses.create(
+                    model=user_model_retry,
+                    input=messages,
+                    tools=tools,
+                    tool_choice={"type": "web_search"},
+                    reasoning=reasoning,
+                )
+                content = getattr(retry, "output_text", None)
+                if content:
+                    logger.info("GPT-5 Responses: retry output_text received")
+                    return content
+                outputs = getattr(retry, "output", None)
+                if isinstance(outputs, list):
+                    for item in outputs:
+                        parts = item.get("content") if isinstance(item, dict) else None
+                        if isinstance(parts, list):
+                            for part in parts:
+                                if part.get("type") == "output_text" and part.get("text"):
+                                    logger.info("GPT-5 Responses: retry output_text extracted")
+                                    return part["text"]
+            except Exception as e2:
+                logger.warning(f"GPT-5 Responses retry failed: {e2}")
             # Surface upstream for caller to decide on fallback
-            logger.warning(f"GPT-5 Responses error: {e}")
             raise
 
     async def get_precise_coordinates(
