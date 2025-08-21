@@ -136,20 +136,23 @@ class OpenAIClient:
 
         Keeps rich guidance, removes repetition, and enforces link formatting.
         """
-        core_rules = f"""Atlas Obscura–style facts in {user_language}. Goal: the most surprising, specific, verifiable detail about THIS exact spot.
+        core_rules = f"""Atlas Obscura–style facts in {user_language}. Goal: the most surprising, specific, verifiable detail about a REAL PLACE near this spot.
 
 Verification:
 - Use web_search at least twice (coordinates + facts); cross‑check dates/names/numbers; prefer reliable sources.
 
 Method:
-1) Location: exact address with house number; verify city by coordinates; note surroundings (50–100 m). Distance rule: the POI MUST be within 300 m of the given coordinates (hard max 800 m). Prefer the closest valid spot; do not pick items beyond 800 m.
-2) Research: A) this spot (past uses, hidden features, specific incidents, who/when) B) vicinity (<100 m) C) wider area (only if A/B fail).
+1) Location: Find a real building/monument/place (not empty point). Exact address with house number. Distance: prefer within 500m, max 800m.
+2) Research: A) specific building/place (past uses, hidden features, incidents) B) vicinity (<200m) C) wider area if needed.
 3) Visible today: concrete details a visitor can see (no imaginary plaques/signatures/marks).
 
 Writing:
 - Start with the surprise; include one specific name/date; each sentence adds new info; accuracy over drama.
 
-Avoid:
+STRICTLY FORBIDDEN:
+- Meta-facts about coordinates being "unnamed"/"empty"/"безымянный"/"нет имени"
+- Mentioning technical tools (Nominatim, Overpass, reverse geocoding, панорамы)
+- Facts about the search process itself or coordinate analysis
 - Wrong dates, false attributions, invented details, rounded numbers, over‑drama, made‑up features.
 
 Output:
@@ -186,7 +189,9 @@ Write your response in {user_language}.
 CRITICAL: This is the user's CURRENT location. Mention only places actually at or very near (≤500 m) these exact coordinates. Do NOT pull famous landmarks from other parts of the city unless they are genuinely visible or directly relevant to this precise spot.{prev_block}
 
 HARD CONSTRAINTS:
-- Prefer a POI within 300 m; never exceed 500 m.
+- Prefer a POI within 500 m; max 800 m if nothing interesting closer.
+- NEVER write meta-facts about the coordinate itself being "unnamed" or "empty" - always find an actual place/building/feature.
+- If the exact point has no POI, immediately expand search to nearest interesting location.
 - Do NOT append any user's live location echoes or extra map messages outside <answer>.
 - Provide exactly one 'Sources/Источники' list inside <answer> (2–4 items) and no duplicates.
 
@@ -214,7 +219,9 @@ Longitude: {lon}
 Apply the method above to find one concise, surprising, verified detail.
 
 HARD CONSTRAINTS:
-- Prefer a POI within 300 m; never exceed 500 m.
+- Prefer a POI within 500 m; max 800 m if nothing interesting closer.
+- NEVER write meta-facts about the coordinate itself being "unnamed" or "empty" - always find an actual place/building/feature.
+- If the exact point has no POI, immediately expand search to nearest interesting location.
 - Do NOT append any user's location echoes or extra messages outside <answer>.
 - Provide exactly one 'Sources/Источники' list inside <answer> (2–4 items) and no duplicates.
 
@@ -801,6 +808,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 + "\n\nTOOLS AVAILABLE:\n"
                 + "- web_search: Built-in search tool. Use it immediately without asking for permission. Run at least two distinct queries (coordinates + facts). Do not print raw tool output; synthesize a verified answer with Sources.\n"
                 + "\nPOLICY:\n- Do not ask the user for approval to use tools. If a tool is available and needed, call it.\n"
+                + "- NEVER write about the coordinate itself being unnamed/empty - always find a real place/building/monument\n"
+                + "- NEVER mention technical tools like Nominatim, Overpass, reverse geocoding in your response\n"
+                + "- If the exact coordinates have no POI, immediately expand search to find the nearest interesting location\n"
             )
             messages = [
                 {"role": "system", "content": [{"type": "input_text", "text": gpt5_system_prompt}]},
