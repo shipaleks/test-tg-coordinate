@@ -36,6 +36,7 @@ from .handlers.language_selection import (
     reason_command,
     handle_reason_model_callback,
 )
+from .services.firebase_stats import ensure_user as fb_ensure_user
 from .services.async_donors_wrapper import get_async_donors_db
 from pathlib import Path
 
@@ -158,6 +159,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Handle /start command."""
     user = update.effective_user
     donors_db = await get_async_donors_db()
+    # Best-effort: register user in Firestore (non-blocking failure)
+    try:
+        await fb_ensure_user(user.id, user.username, user.first_name)
+    except Exception:
+        pass
     
     # Check if user has language set
     if not await donors_db.has_language_set(user.id):

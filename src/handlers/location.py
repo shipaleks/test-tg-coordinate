@@ -17,6 +17,8 @@ from urllib.parse import quote
 
 from ..services.live_location_tracker import get_live_location_tracker
 from ..services.openai_client import get_openai_client
+from ..services.firebase_stats import increment_fact_counters as fb_increment_fact
+from ..services.firebase_stats import record_movement as fb_record_movement
 import inspect
 from ..services.async_donors_wrapper import get_async_donors_db
 from ..utils.formatting_utils import (
@@ -519,6 +521,11 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         # For static locations, send immediate fact with history tracking
         openai_client = get_openai_client()
+        # Record a movement point for static location as well (best-effort)
+        try:
+            await fb_record_movement(user_id, lat, lon)
+        except Exception:
+            pass
         
         # Use coordinates as stable cache key instead of unreliable AI-generated keywords
         # Round coordinates to ~111m precision for caching (3 decimal places)
@@ -732,6 +739,12 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     logger.info(f"Sent location as fallback: {venue_lat}, {venue_lon}")
                 except Exception as loc_error:
                     logger.error(f"Failed to send location: {loc_error}")
+
+        # Increment counters in Firestore (best-effort)
+        try:
+            await fb_increment_fact(user_id, 1)
+        except Exception:
+            pass
 
         logger.info(f"Sent fact to user {user_id}")
 

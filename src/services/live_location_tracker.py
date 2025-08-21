@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from telegram import Bot, InputMediaPhoto
 
 from .openai_client import get_openai_client
+from .firebase_stats import increment_fact_counters as fb_increment_fact
+from .firebase_stats import record_movement as fb_record_movement
 from ..utils.formatting_utils import extract_sources_from_answer as _extract_live_sources
 from ..utils.formatting_utils import strip_sources_section as _strip_live_sources
 from ..utils.formatting_utils import remove_bare_links_from_text as _remove_bare_links_from_text
@@ -300,6 +302,12 @@ class LiveLocationTracker:
             latitude: New latitude
             longitude: New longitude
         """
+        # Best-effort: record movement point for this live update
+        try:
+            await fb_record_movement(user_id, latitude, longitude)
+        except Exception:
+            pass
+
         async with self._lock:
             if user_id in self._active_sessions:
                 session = self._active_sessions[user_id]
@@ -600,6 +608,12 @@ class LiveLocationTracker:
                                 logger.error(
                                     f"Failed to send location for background fact: {loc_error}"
                                 )
+
+                    # Best-effort: increment fact counters after successful send
+                    try:
+                        await fb_increment_fact(session_data.user_id, 1)
+                    except Exception:
+                        pass
 
                     logger.info(
                         f"Sent live location fact #{session_data.fact_count} to user {session_data.user_id}"

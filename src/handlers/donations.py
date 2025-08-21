@@ -11,6 +11,8 @@ from telegram import (
 from telegram.ext import ContextTypes
 
 from ..services.async_donors_wrapper import get_async_donors_db
+from ..services.firebase_stats import get_stats_for_user as fb_get_user_stats
+from ..services.firebase_stats import get_global_stats as fb_get_global_stats
 
 logger = logging.getLogger(__name__)
 
@@ -388,19 +390,15 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /stats command (for debugging/admin)."""
     try:
-        donors_db = await get_async_donors_db()
-        stats = await donors_db.get_stats()
-        
-        if not stats:
-            await update.message.reply_text("❌ Ошибка получения статистики")
-            return
-        
+        # Firebase-based counters (user facts, total facts, total users)
+        user_id = update.effective_user.id
+        user_facts = await fb_get_user_stats(user_id)
+        global_stats = await fb_get_global_stats()
         stats_text = (
-            "📊 *Статистика проекта*\n\n"
-            f"👥 Донатеров: {stats.get('total_donors', 0)}\n"
-            f"💰 Всего донатов: {stats.get('total_donations', 0)}\n"
-            f"⭐ Собрано звезд: {stats.get('total_stars', 0)}\n"
-            f"🎁 С бонусом: {stats.get('active_premium', 0)}"
+            "📊 *Статистика*\n\n"
+            f"Ты получил фактов: {user_facts}\n"
+            f"Всего фактов: {global_stats.get('total_facts', 0)}\n"
+            f"Пользователей: {global_stats.get('total_users', 0)}"
         )
         
         await update.message.reply_text(stats_text, parse_mode="Markdown")
