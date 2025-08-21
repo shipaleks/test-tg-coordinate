@@ -1,13 +1,13 @@
 import os
 import json
 import base64
-from typing import Optional
+from typing import Optional, Any
 
 import firebase_admin
 from firebase_admin import credentials
-from google.cloud import firestore
+from firebase_admin import firestore as admin_firestore
 
-_firestore: Optional[firestore.Client] = None
+_firestore: Optional[Any] = None
 
 
 def get_firestore() -> firestore.Client:
@@ -41,7 +41,8 @@ def get_firestore() -> firestore.Client:
     if not firebase_admin._apps:
         firebase_admin.initialize_app(cred)
 
-    _firestore = firestore.Client()
+    # Use Admin SDK's Firestore client so it leverages the provided credentials
+    _firestore = admin_firestore.client()
     return _firestore
 
 

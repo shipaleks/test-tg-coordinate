@@ -4,6 +4,7 @@ import logging
 
 from google.cloud.firestore import Client
 from google.cloud import firestore
+from firebase_admin import firestore as admin_firestore
 
 from .firebase_client import get_firestore
 
@@ -22,7 +23,7 @@ async def ensure_user(user_id: int, username: Optional[str], first_name: Optiona
         user_ref = db.collection(USERS_COLLECTION).document(str(user_id))
         metrics_ref = db.collection(METRICS_DOC_PATH[0]).document(METRICS_DOC_PATH[1])
 
-        @firestore.transactional
+        @admin_firestore.transactional
         def _tx(transaction):
             user_snapshot = user_ref.get(transaction=transaction)
             metrics_snapshot = metrics_ref.get(transaction=transaction)
@@ -42,7 +43,7 @@ async def ensure_user(user_id: int, username: Optional[str], first_name: Optiona
                     "created_at": _server_timestamp(),
                     "last_seen_at": _server_timestamp(),
                 })
-                transaction.update(metrics_ref, {"total_users": firestore.Increment(1)})
+                transaction.update(metrics_ref, {"total_users": admin_firestore.Increment(1)})
             else:
                 transaction.update(user_ref, {"last_seen_at": _server_timestamp()})
 
@@ -58,8 +59,8 @@ async def increment_fact_counters(user_id: int, delta: int = 1) -> None:
         metrics_ref = db.collection(METRICS_DOC_PATH[0]).document(METRICS_DOC_PATH[1])
 
         batch = db.batch()
-        batch.update(user_ref, {"facts_count": firestore.Increment(delta)})
-        batch.update(metrics_ref, {"total_facts": firestore.Increment(delta)})
+        batch.update(user_ref, {"facts_count": admin_firestore.Increment(delta)})
+        batch.update(metrics_ref, {"total_facts": admin_firestore.Increment(delta)})
         batch.commit()
     except Exception as e:
         logging.getLogger(__name__).warning(f"increment_fact_counters skipped: {e}")
