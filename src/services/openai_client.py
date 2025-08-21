@@ -256,31 +256,31 @@ Sources/Источники:
         Raises:
             Exception: If OpenAI API call fails
         """
-        async with self._api_semaphore:  # Ограничиваем доступ к OpenAI API
-            try:
-                # Check if user has premium access for o3 model and get language preference
-                is_premium_user = False
-                user_language = "ru"  # Default to Russian as most users are Russian-speaking
-                if user_id:
+        try:
+            # Check if user has premium access for o3 model and get language preference
+            is_premium_user = False
+            user_language = "ru"  # Default to Russian as most users are Russian-speaking
+            if user_id:
+                try:
+                    # Check if we're in async context (telegram handlers)
+                    import asyncio
                     try:
-                        # Check if we're in async context (telegram handlers)
-                        try:
-                            loop = asyncio.get_running_loop()
-                            # We're in async context, use async wrapper
-                            from .async_donors_wrapper import get_async_donors_db
-                            donors_db = await get_async_donors_db()
-                            is_premium_user = await donors_db.is_premium_user(user_id)
-                            user_language = await donors_db.get_user_language(user_id)
-                        except RuntimeError:
-                            # Not in async context, use sync wrapper
-                            donors_db = get_donors_db()
-                            is_premium_user = donors_db.is_premium_user(user_id)
-                            user_language = donors_db.get_user_language(user_id)
-                    except Exception as e:
-                        logger.warning(f"Failed to check user preferences for user {user_id}: {e}")
+                        loop = asyncio.get_running_loop()
+                        # We're in async context, use async wrapper
+                        from .async_donors_wrapper import get_async_donors_db
+                        donors_db = await get_async_donors_db()
+                        is_premium_user = await donors_db.is_premium_user(user_id)
+                        user_language = await donors_db.get_user_language(user_id)
+                    except RuntimeError:
+                        # Not in async context, use sync wrapper
+                        donors_db = get_donors_db()
+                        is_premium_user = donors_db.is_premium_user(user_id)
+                        user_language = donors_db.get_user_language(user_id)
+                except Exception as e:
+                    logger.warning(f"Failed to check user preferences for user {user_id}: {e}")
 
-                # Special instructions for Russian language quality
-                language_instructions = ""
+            # Special instructions for Russian language quality
+            language_instructions = ""
             if user_language == "ru":
                 language_instructions = """
 SPECIAL REQUIREMENTS FOR RUSSIAN:
@@ -684,24 +684,26 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 # Use advanced models for live (o3 for premium, o4-mini for regular)
                 try:
                     if model_to_use in ["o3", "o4-mini"]:
-                        response = await self.client.chat.completions.create(
-                            model=model_to_use,
-                            messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_prompt},
-                            ],
-                            max_completion_tokens=max_tokens_limit,
-                        )
+                        async with self._api_semaphore:
+                            response = await self.client.chat.completions.create(
+                                model=model_to_use,
+                                messages=[
+                                    {"role": "system", "content": system_prompt},
+                                    {"role": "user", "content": user_prompt},
+                                ],
+                                max_completion_tokens=max_tokens_limit,
+                            )
                     else:
-                        response = await self.client.chat.completions.create(
-                            model=model_to_use,
-                            messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_prompt},
-                            ],
-                            max_completion_tokens=max_tokens_limit,
-                            temperature=0.6,
-                        )
+                        async with self._api_semaphore:
+                            response = await self.client.chat.completions.create(
+                                model=model_to_use,
+                                messages=[
+                                    {"role": "system", "content": system_prompt},
+                                    {"role": "user", "content": user_prompt},
+                                ],
+                                max_completion_tokens=max_tokens_limit,
+                                temperature=0.6,
+                            )
                     logger.info(f"{model_to_use} (live) response: {response}")
                     content = (
                         response.choices[0].message.content
@@ -719,15 +721,16 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     logger.warning(
                         f"{model_to_use} failed ({e}), falling back to gpt-4.1"
                     )
-                    response = await self.client.chat.completions.create(
-                        model="gpt-4.1",
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        max_tokens=800,
-                        temperature=0.6,
-                    )
+                    async with self._api_semaphore:
+                        response = await self.client.chat.completions.create(
+                            model="gpt-4.1",
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            max_tokens=800,
+                            temperature=0.6,
+                        )
                     logger.info(f"gpt-4.1 fallback response: {response}")
                     content = (
                         response.choices[0].message.content
@@ -741,15 +744,16 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         logger.info(f"Sending prompt to GPT-4.1 with {len(previous_facts)} previous facts")
                         logger.debug(f"User prompt preview: {user_prompt[:200]}...")
 
-                    response = await self.client.chat.completions.create(
-                        model="gpt-4.1",
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        max_tokens=400,
-                        temperature=0.7,
-                    )
+                    async with self._api_semaphore:
+                        response = await self.client.chat.completions.create(
+                            model="gpt-4.1",
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            max_tokens=400,
+                            temperature=0.7,
+                        )
                     logger.info(f"gpt-4.1 (static location) response: {response}")
                     content = (
                         response.choices[0].message.content
@@ -767,23 +771,23 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     logger.error(f"gpt-4.1 failed for static location: {e}")
                     raise
 
-                if not content:
-                    logger.error(f"Empty content even after fallback: {response}")
-                    raise ValueError("Empty response from OpenAI")
+            if not content:
+                logger.error(f"Empty content even after fallback: {response}")
+                raise ValueError("Empty response from OpenAI")
 
-                logger.info(f"Generated fact for location {lat},{lon}")
+            logger.info(f"Generated fact for location {lat},{lon}")
 
-                # Post-process Russian text for better quality
-                final_content = content.strip()
-                if user_language == "ru" and ("Interesting fact:" in final_content or "Интересный факт:" in final_content):
-                    logger.info("Applying Russian language polish for better quality")
-                    final_content = self._postprocess_russian_fact(final_content)
+            # Post-process Russian text for better quality
+            final_content = content.strip()
+            if user_language == "ru" and ("Interesting fact:" in final_content or "Интересный факт:" in final_content):
+                logger.info("Applying Russian language polish for better quality")
+                final_content = self._postprocess_russian_fact(final_content)
 
-                return final_content
+            return final_content
 
-            except Exception as e:
-                logger.error(f"Failed to generate fact for {lat},{lon}: {e}")
-                raise
+        except Exception as e:
+            logger.error(f"Failed to generate fact for {lat},{lon}: {e}")
+            raise
 
     async def _get_with_gpt5_responses(self, system_prompt: str, user_prompt: str, is_live: bool, user_id: int | None = None) -> str | None:
         """Attempt to use GPT-5 Responses API with built-in web_search tool.
@@ -838,13 +842,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             forced_tool_choice = "auto"
 
             logger.info(f"GPT-5 Responses: sending request (model={user_model}, reasoning={api_effort}, tool_choice=auto)")
-            response = await self.client.responses.create(
-                model=user_model,
-                input=messages,
-                tools=tools,
-                tool_choice=forced_tool_choice,
-                reasoning=reasoning,
-            )
+            async with self._api_semaphore:
+                response = await self.client.responses.create(
+                    model=user_model,
+                    input=messages,
+                    tools=tools,
+                    tool_choice=forced_tool_choice,
+                    reasoning=reasoning,
+                )
 
             # Try convenience accessor first
             content = getattr(response, "output_text", None)
@@ -873,13 +878,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 logger.warning(f"GPT-5 Responses error with model: {e}")
                 user_model_retry = "gpt-5"
                 logger.info("Retrying GPT-5 Responses with model=gpt-5")
-                retry = await self.client.responses.create(
-                    model=user_model_retry,
-                    input=messages,
-                    tools=tools,
-                    tool_choice="auto",
-                    reasoning=reasoning,
-                )
+                async with self._api_semaphore:
+                    retry = await self.client.responses.create(
+                        model=user_model_retry,
+                        input=messages,
+                        tools=tools,
+                        tool_choice="auto",
+                        reasoning=reasoning,
+                    )
                 content = getattr(retry, "output_text", None)
                 if content:
                     logger.info("GPT-5 Responses: retry output_text received")
