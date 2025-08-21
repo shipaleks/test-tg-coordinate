@@ -547,6 +547,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         answer_match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
         if answer_match:
             answer_content = answer_match.group(1).strip()
+            poi_coords: tuple[float, float] | None = None
             
             # Extract location from answer content
             location_match = re.search(r"Location:\s*(.+?)(?:\n|$)", answer_content)
@@ -559,6 +560,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 try:
                     lat = float(coord_match.group(1))
                     lon = float(coord_match.group(2))
+                    poi_coords = (lat, lon)
                 except Exception:
                     pass
 
@@ -687,16 +689,23 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 parse_mode="Markdown",
             )
 
-        # Try to parse coordinates and send location for navigation using search keywords
-        coordinates = None
-        try:
-            parse_method = getattr(openai_client, "parse_coordinates_from_response", None)
-            if parse_method and inspect.iscoroutinefunction(parse_method):
-                coordinates = await parse_method(response, lat, lon)
-        except Exception:
-            coordinates = None
-        if coordinates:
-            venue_lat, venue_lon = coordinates
+        # Decide venue coordinates: prefer explicit POI coords from <answer>, otherwise parse
+        venue_lat = venue_lon = None
+        if answer_match and 'poi_coords' in locals() and poi_coords is not None:
+            venue_lat, venue_lon = poi_coords
+        else:
+            try:
+                parse_method = getattr(openai_client, "parse_coordinates_from_response", None)
+                if parse_method and inspect.iscoroutinefunction(parse_method):
+                    parsed = await parse_method(response, lat, lon)
+                else:
+                    parsed = None
+            except Exception:
+                parsed = None
+            if parsed:
+                venue_lat, venue_lon = parsed
+
+        if venue_lat is not None and venue_lon is not None:
             try:
                 # Send venue with location for navigation
                 await context.bot.send_venue(
