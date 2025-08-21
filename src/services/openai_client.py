@@ -139,7 +139,7 @@ Verification:
 - Use web_search at least twice (coordinates + facts); cross‑check dates/names/numbers; prefer reliable sources.
 
 Method:
-1) Location: exact address with house number; verify city by coordinates; note surroundings (50–100 m). Distance rule: the POI MUST be within 300 m of the given coordinates (hard max 500 m). Prefer the closest valid spot; do not pick items beyond 500 m.
+1) Location: exact address with house number; verify city by coordinates; note surroundings (50–100 m). Distance rule: the POI MUST be within 300 m of the given coordinates (hard max 800 m). Prefer the closest valid spot; do not pick items beyond 800 m.
 2) Research: A) this spot (past uses, hidden features, specific incidents, who/when) B) vicinity (<100 m) C) wider area (only if A/B fail).
 3) Visible today: concrete details a visitor can see (no imaginary plaques/signatures/marks).
 
@@ -151,13 +151,15 @@ Avoid:
 
 Output:
 - No URLs in main text. End with ONE 'Источники'/'Sources' section: 2–4 bullets "Title — URL" (clickable, real links). Do not add any extra link lists (no second "🔗 Источники").
+- Do NOT write exact numeric distance phrases like "в 220 метрах от вас" or similar; describe proximity qualitatively if needed.
 
 Search field:
 - "Address, City" format for Nominatim.
 
-Strict formatting:
+Strict formatting and verification:
 - Output ONLY the <answer> block and nothing else (no prolog/epilog outside tags).
 - Keep 'Location/Coordinates/Search' only in their own lines; do not repeat them inside the fact paragraph.
+- Always verify facts with multiple sources. If any detail is uncertain, either omit it or generalize without inventing specifics. Only include information you can support with your Sources.
 """
 
         language_block = f"""
