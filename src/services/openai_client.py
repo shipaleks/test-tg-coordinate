@@ -801,15 +801,15 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             ]
             tools = [{"type": "web_search"}]
 
-            # Resolve per-user reasoning (default low)
-            reasoning_level = "low"
+            # Resolve per-user reasoning (default medium)
+            reasoning_level = "medium"
             try:
                 if user_id:
                     from .async_donors_wrapper import get_async_donors_db
                     db = await get_async_donors_db()
-                    reasoning_level = (await db.get_user_reasoning(user_id)) or "minimal"
+                    reasoning_level = (await db.get_user_reasoning(user_id)) or "medium"
             except Exception:
-                reasoning_level = "minimal"
+                reasoning_level = "medium"
 
             # Map our levels to API levels
             level_map = {
@@ -818,18 +818,18 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 "medium": "medium",
                 "high": "high",
             }
-            api_effort = level_map.get(reasoning_level or "low", "low")
+            api_effort = level_map.get(reasoning_level or "medium", "medium")
             reasoning = {"effort": api_effort}
 
-            # Fetch per-user model if available
-            user_model = "gpt-5"
+            # Fetch per-user model if available (default: gpt-5-mini)
+            user_model = "gpt-5-mini"
             try:
                 if user_id:
                     from .async_donors_wrapper import get_async_donors_db
                     db = await get_async_donors_db()
-                    user_model = (await db.get_user_model(user_id)) or "gpt-5"
+                    user_model = (await db.get_user_model(user_id)) or "gpt-5-mini"
             except Exception:
-                user_model = "gpt-5"
+                user_model = "gpt-5-mini"
 
             # Hosted web_search should use tool_choice="auto" per API guidance
             forced_tool_choice = "auto"
