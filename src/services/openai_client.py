@@ -225,6 +225,9 @@ HARD CONSTRAINTS:
 - Do NOT append any user's location echoes or extra messages outside <answer>.
 - Provide exactly one 'Sources/Источники' list inside <answer> (2–4 items) and no duplicates.
 
+If and only if you cannot find any real place (building/POI) within 800 m that yields a verifiable fact with proper sources, output exactly this token on a single line and nothing else:
+[[NO_POI_FOUND]]
+
 Format the answer strictly as:
 <answer>
 Location: [Exact place name; not "near"/generic area]
@@ -863,25 +866,50 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             # Try convenience accessor first
             content = getattr(response, "output_text", None)
-            if content:
-                logger.info("GPT-5 Responses: output_text received")
-                return content
-
             # Fallback: try to extract from output structure
-            try:
-                # Some SDKs return a top-level array in response.output or response.output[0].content
-                outputs = getattr(response, "output", None)
-                if isinstance(outputs, list):
-                    for item in outputs:
-                        parts = item.get("content") if isinstance(item, dict) else None
-                        if isinstance(parts, list):
-                            for part in parts:
-                                if part.get("type") == "output_text" and part.get("text"):
-                                    logger.info("GPT-5 Responses: output_text extracted from structured output")
-                                    return part["text"]
-            except Exception:
-                pass
-            return None
+            if not content:
+                try:
+                    outputs = getattr(response, "output", None)
+                    if isinstance(outputs, list):
+                        for item in outputs:
+                            parts = item.get("content") if isinstance(item, dict) else None
+                            if isinstance(parts, list):
+                                for part in parts:
+                                    if part.get("type") == "output_text" and part.get("text"):
+                                        content = part["text"]
+                                        break
+                            if content:
+                                break
+                except Exception:
+                    content = None
+
+            # If the model explicitly signals no POI found → escalate to gpt-5 (medium)
+            if content and "[[NO_POI_FOUND]]" in content:
+                try:
+                    logger.info("NO_POI_FOUND token detected → retrying with gpt-5 (medium)")
+                    async with self._api_semaphore:
+                        retry = await self.client.responses.create(
+                            model="gpt-5",
+                            input=messages,
+                            tools=tools,
+                            tool_choice="auto",
+                            reasoning={"effort": "medium"},
+                        )
+                    retry_text = getattr(retry, "output_text", None)
+                    if retry_text:
+                        return retry_text
+                    outputs = getattr(retry, "output", None)
+                    if isinstance(outputs, list):
+                        for item in outputs:
+                            parts = item.get("content") if isinstance(item, dict) else None
+                            if isinstance(parts, list):
+                                for part in parts:
+                                    if part.get("type") == "output_text" and part.get("text"):
+                                        return part["text"]
+                except Exception as e2:
+                    logger.warning(f"Retry after NO_POI_FOUND failed: {e2}")
+
+            return content
         except Exception as e:
             # If mini fails, auto-upgrade to gpt-5 and retry once
             try:
