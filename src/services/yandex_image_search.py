@@ -172,6 +172,12 @@ class YandexImageSearch:
                             logger.warning("YandexImageSearch: non-JSON response: %s", content_type)
                             data = None
                     if data is not None:
+                        # High-level diagnostics to adjust parsing in production
+                        try:
+                            top_keys = list(data.keys())[:10] if isinstance(data, dict) else type(data).__name__
+                            logger.info(f"Yandex response OK; top-level keys: {top_keys}")
+                        except Exception:
+                            pass
                         break
             except aiohttp.ClientError as e:
                 logger.warning("YandexImageSearch request failed: %s", e)
@@ -229,6 +235,34 @@ class YandexImageSearch:
                 if len(images) >= max_images:
                     break
 
+        # 3) Try other commonly seen containers
+        if len(images) < max_images:
+            for key in ("documents", "blocks", "groups", "images", "data"):
+                seq = data.get(key)
+                if isinstance(seq, list):
+                    for item in seq:
+                        if not isinstance(item, dict):
+                            continue
+                        url = item.get("url") or item.get("imageUrl") or item.get("previewUrl")
+                        if not url:
+                            img = item.get("image") or {}
+                            if isinstance(img, dict):
+                                url = img.get("url") or img.get("previewUrl")
+                        if url and self._passes_basic_filters(item):
+                            images.append(url)
+                            if len(images) >= max_images:
+                                break
+                if len(images) >= max_images:
+                    break
+
+        # 4) Last resort: traverse structure and pick plausible image URLs
+        if len(images) < max_images:
+            try:
+                fallback = self._find_image_urls_anywhere(data, need=max_images - len(images))
+                images.extend(fallback)
+            except Exception:
+                pass
+
         # Deduplicate while preserving order
         deduped: List[str] = []
         seen = set()
@@ -267,6 +301,41 @@ class YandexImageSearch:
         if width and height and (width < 400 or height < 300):
             return False
         return True
+
+    def _find_image_urls_anywhere(self, node, need: int = 3, depth: int = 0, max_depth: int = 5) -> List[str]:
+        urls: List[str] = []
+        if depth > max_depth or need <= 0:
+            return urls
+        try:
+            if isinstance(node, dict):
+                # Prefer direct image-looking URLs
+                for k, v in node.items():
+                    if isinstance(v, str) and k.lower() in ("url", "imageurl", "previewurl"):
+                        if self._looks_like_image_url(v):
+                            urls.append(v)
+                            if len(urls) >= need:
+                                return urls
+                # Recurse into children
+                for v in node.values():
+                    urls.extend(self._find_image_urls_anywhere(v, need - len(urls), depth + 1, max_depth))
+                    if len(urls) >= need:
+                        return urls
+            elif isinstance(node, list):
+                for it in node:
+                    urls.extend(self._find_image_urls_anywhere(it, need - len(urls), depth + 1, max_depth))
+                    if len(urls) >= need:
+                        return urls
+        except Exception:
+            return urls
+        return urls
+
+    @staticmethod
+    def _looks_like_image_url(url: str) -> bool:
+        try:
+            lower = url.lower()
+            return lower.startswith("http") and any(lower.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp"))
+        except Exception:
+            return False
 
     @staticmethod
     def detect_region(lat: Optional[float], lon: Optional[float]) -> Optional[int]:
