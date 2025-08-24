@@ -1484,8 +1484,11 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         try:
             yandex_api_key = os.getenv("YANDEX_API_KEY")
             yandex_folder_id = os.getenv("YANDEX_FOLDER_ID")
+            logger.info(f"Yandex env check: API_KEY={'set' if yandex_api_key else 'not set'}, FOLDER_ID={'set' if yandex_folder_id else 'not set'}")
             if yandex_api_key and yandex_folder_id:
+                logger.info(f"Attempting Yandex image search for: {place_hint or search_keywords}")
                 from .yandex_image_search import YandexImageSearch
+                logger.info("YandexImageSearch imported successfully")
                 async with YandexImageSearch(yandex_api_key, yandex_folder_id) as yandex:
                     # Prefer building a richer query when we have hints
                     query = (place_hint or search_keywords or "").strip()
@@ -1500,6 +1503,8 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         return images
         except Exception as e:
             logger.warning(f"Yandex image search failed, will try Wikimedia fallback: {e}")
+            import traceback
+            logger.info(f"Yandex error traceback: {traceback.format_exc()}")
 
         # Secondary: existing Wikimedia Commons-based engine if we have context
         if (place_hint or fact_text) and lat is not None and lon is not None:
