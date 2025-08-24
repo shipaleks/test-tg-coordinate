@@ -1490,17 +1490,28 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 from .yandex_image_search import YandexImageSearch
                 logger.info("YandexImageSearch imported successfully")
                 async with YandexImageSearch(yandex_api_key, yandex_folder_id) as yandex:
-                    # Prefer building a richer query when we have hints
-                    query = (place_hint or search_keywords or "").strip()
-                    if not query:
-                        query = search_keywords or ""
-                    # Region detection for better locality
+                    # Prefer building multiple variants for diversity
+                    base_query = (place_hint or search_keywords or "").strip() or (search_keywords or "")
+                    variants = yandex.build_query_variants(
+                        base_query=base_query,
+                        fact_text=fact_text,
+                        place_name=place_hint,
+                    ) or [base_query]
                     from .yandex_image_search import YandexImageSearch as _YIS
                     region = _YIS.detect_region(lat, lon)
-                    images = await yandex.search_images(query=query, max_images=max_images, region=region)
-                    if images:
-                        logger.info(f"Yandex image search returned {len(images)} images for '{query}'")
-                        return images
+                    # Try variants sequentially until enough images collected
+                    collected: list[str] = []
+                    for q in variants:
+                        images = await yandex.search_images(query=q, max_images=max(2, max_images), region=region)
+                        if images:
+                            for u in images:
+                                if u not in collected:
+                                    collected.append(u)
+                        if len(collected) >= max_images:
+                            break
+                    if collected:
+                        logger.info(f"Yandex image search returned {len(collected)} images for variants: {variants}")
+                        return collected[:max_images]
         except Exception as e:
             logger.warning(f"Yandex image search failed, will try Wikimedia fallback: {e}")
             import traceback

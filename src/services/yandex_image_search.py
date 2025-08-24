@@ -379,6 +379,69 @@ class YandexImageSearch:
                 break
         return selected
 
+    def build_query_variants(
+        self,
+        base_query: str,
+        *,
+        fact_text: Optional[str] = None,
+        place_name: Optional[str] = None,
+    ) -> List[str]:
+        """Build multiple query variants to increase diversity of results.
+
+        Strategy:
+          - Start with place_name or base_query
+          - Add detected place type (e.g., музей/museum, парк/park, мост/bridge)
+          - Add area token from comma-separated place (e.g., district/city)
+        """
+        variants: List[str] = []
+
+        seed = (place_name or base_query or "").strip()
+        if seed:
+            variants.append(seed)
+
+        # Heuristic place type extraction from fact_text
+        place_types = [
+            ("музей", ["музей", "museum"]),
+            ("парк", ["парк", "park"]),
+            ("мост", ["мост", "bridge"]),
+            ("церковь", ["церковь", "храм", "church"]),
+            ("собор", ["собор", "cathedral"]),
+            ("дворец", ["дворец", "palace"]),
+            ("театр", ["театр", "theater"]),
+            ("университет", ["университет", "university"]),
+        ]
+        type_token: Optional[str] = None
+        if fact_text:
+            low = fact_text.lower()
+            for ru, keys in place_types:
+                if any(k in low for k in keys):
+                    type_token = ru
+                    break
+        if type_token and seed:
+            variants.append(f"{seed} {type_token}")
+
+        # Area/city token from comma-separated place
+        if place_name and "," in place_name:
+            try:
+                parts = [p.strip() for p in place_name.split(",") if p.strip()]
+                # add last part (often city/country)
+                if len(parts) >= 2:
+                    tail = parts[-1]
+                    variants.append(f"{parts[0]} {tail}")
+            except Exception:
+                pass
+
+        # De-duplicate while preserving order and cap to 3 variants
+        out: List[str] = []
+        seen = set()
+        for v in variants:
+            if v and v not in seen:
+                seen.add(v)
+                out.append(v)
+            if len(out) >= 3:
+                break
+        return out
+
     def _passes_basic_filters(self, item: Dict) -> bool:
         """Filter out non-photo content heuristically."""
         snippet = item.get("snippet") or {}
