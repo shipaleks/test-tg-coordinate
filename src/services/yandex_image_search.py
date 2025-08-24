@@ -108,44 +108,79 @@ class YandexImageSearch:
 
         # The public docs indicate folderId + query settings in JSON body.
         # We keep the payload lean and schema-tolerant.
-        # Minimal schema matching server validation: use snake_case fields expected by API
-        payload: Dict = {
+        # Prepare multiple payload variants to handle API enum/casing differences
+        base_snake = {
             "folderId": self.folder_id,
             "query": {
                 "query_text": query,
-                "search_type": "IMAGE",
+                "search_type": "SEARCH_TYPE_IMAGE",  # enum style
                 "page": 0,
             },
         }
+        alt_camel = {
+            "folderId": self.folder_id,
+            "query": {
+                "queryText": query,
+                "searchType": "SEARCH_TYPE_IMAGE",
+                "page": 0,
+            },
+        }
+        alt_numeric = {
+            "folderId": self.folder_id,
+            "query": {
+                "query_text": query,
+                "search_type": 2,  # assume IMAGE=2; harmless if wrong as we fallback
+                "page": 0,
+            },
+        }
+        payload_variants: List[Dict] = [base_snake, alt_camel, alt_numeric]
         if region is not None:
-            payload["query"]["region"] = region
+            for p in payload_variants:
+                try:
+                    if "query" in p:
+                        p["query"]["region"] = region
+                except Exception:
+                    pass
 
         timeout = aiohttp.ClientTimeout(total=10)
-        try:
-            async with self.session.post(self.BASE_URL, headers=headers, json=payload, timeout=timeout) as resp:
-                # Accept JSON primarily; some deployments may return XML/HTML on error
-                content_type = resp.headers.get("Content-Type", "")
-                if resp.status != 200:
-                    text = await resp.text()
-                    raise aiohttp.ClientResponseError(
-                        resp.request_info,
-                        resp.history,
-                        status=resp.status,
-                        message=f"Unexpected status {resp.status}; body: {text[:200]}",
-                        headers=resp.headers,
-                    )
-                if "application/json" in content_type:
-                    data = await resp.json()
-                else:
-                    # Best-effort: try JSON first anyway
-                    try:
+        last_error_text = None
+        data = None
+        for variant in payload_variants:
+            try:
+                async with self.session.post(self.BASE_URL, headers=headers, json=variant, timeout=timeout) as resp:
+                    content_type = resp.headers.get("Content-Type", "")
+                    if resp.status != 200:
+                        # Keep body for diagnostics and to decide retry
+                        text = await resp.text()
+                        last_error_text = text
+                        # Retry only on 400 (validation) to try next variant
+                        if resp.status == 400:
+                            continue
+                        raise aiohttp.ClientResponseError(
+                            resp.request_info,
+                            resp.history,
+                            status=resp.status,
+                            message=f"Unexpected status {resp.status}; body: {text[:200]}",
+                            headers=resp.headers,
+                        )
+                    if "application/json" in content_type:
                         data = await resp.json()
-                    except Exception:
-                        # Fallback to text, return no images
-                        logger.warning("YandexImageSearch: non-JSON response: %s", content_type)
-                        return []
-        except aiohttp.ClientError as e:
-            logger.warning("YandexImageSearch request failed: %s", e)
+                    else:
+                        try:
+                            data = await resp.json()
+                        except Exception:
+                            logger.warning("YandexImageSearch: non-JSON response: %s", content_type)
+                            data = None
+                    if data is not None:
+                        break
+            except aiohttp.ClientError as e:
+                logger.warning("YandexImageSearch request failed: %s", e)
+                # Try next variant on client error
+                continue
+
+        if data is None:
+            if last_error_text:
+                logger.warning("YandexImageSearch exhausted payload variants; last error: %s", str(last_error_text)[:200])
             return []
 
         images = self._extract_images(data, max_images)
