@@ -339,16 +339,21 @@ class YandexImageSearch:
     def _deduplicate_and_select(self, urls: List[str], need: int) -> List[str]:
         # Group by base filename
         def extract_base(u: str) -> tuple[str, int]:
-            from urllib.parse import unquote
-            name = unquote(u.split('/')[-1])
-            # Remove size patterns like 120px-, 1600px-, etc
+            from urllib.parse import urlparse, parse_qs
             import re as _re
-            base = _re.sub(r"(^|[/_-])\d+px[-_/]", r"\\1", name)
-            base = base.lower()
+            # Try to extract canonical commons filename (without 'File:')
+            filename = self._extract_commons_filename(u)
+            if not filename:
+                # Fallback: last segment
+                from urllib.parse import unquote
+                filename = unquote(u.split('/')[-1])
+            # Strip query string remnants
+            filename = filename.split('?')[0]
+            # Remove size patterns like 120px-, 1600px-, etc from filename
+            base = _re.sub(r"(^|[/_-])\d+px[-_/]", r"\\1", filename).lower()
             # Heuristic width from query param or filename
             width = 0
             try:
-                from urllib.parse import urlparse, parse_qs
                 q = parse_qs(urlparse(u).query)
                 if 'width' in q:
                     width = int(q['width'][0])
@@ -566,9 +571,59 @@ class YandexImageSearch:
                     return f"https://commons.wikimedia.org/wiki/Special:FilePath/{encoded}?width=1200"
                 except Exception:
                     return url
+            # Normalize upload.wikimedia originals (non-thumb) to Special:FilePath
+            if "upload.wikimedia.org" in url and "/wikipedia/commons/" in url and "/thumb/" not in url:
+                try:
+                    # Path like: /wikipedia/commons/a/ab/Filename.jpg
+                    path = url.split("/wikipedia/commons/", 1)[1]
+                    segs = path.split("/")
+                    if len(segs) >= 3:
+                        filename = segs[2]
+                        if filename:
+                            encoded = quote(f"File:{filename}")
+                            return f"https://commons.wikimedia.org/wiki/Special:FilePath/{encoded}?width=1200"
+                except Exception:
+                    return url
             return url
         except Exception:
             return url
+
+    @staticmethod
+    def _extract_commons_filename(url: str) -> Optional[str]:
+        """Extract canonical Wikimedia filename from various URL forms.
+
+        Returns filename with extension, without 'File:' prefix, lowercased if possible.
+        """
+        try:
+            from urllib.parse import unquote
+            u = url
+            if "Special:FilePath/" in u:
+                part = u.split("Special:FilePath/", 1)[1]
+                part = part.split("?", 1)[0]
+                name = unquote(part)
+                if name.lower().startswith("file:"):
+                    name = name.split(":", 1)[1]
+                return name
+            if "/wiki/File:" in u:
+                part = u.split("/wiki/File:", 1)[1]
+                part = part.split("?", 1)[0]
+                name = unquote(part)
+                return name
+            if "upload.wikimedia.org" in u and "/wikipedia/commons/" in u:
+                # thumb or original
+                if "/thumb/" in u:
+                    rest = u.split("/thumb/", 1)[1]
+                    segs = rest.split("/")
+                    if len(segs) >= 3:
+                        return segs[2]
+                else:
+                    rest = u.split("/wikipedia/commons/", 1)[1]
+                    segs = rest.split("/")
+                    if len(segs) >= 3:
+                        return segs[2]
+            return None
+        except Exception:
+            return None
 
     @staticmethod
     def detect_region(lat: Optional[float], lon: Optional[float]) -> Optional[int]:
