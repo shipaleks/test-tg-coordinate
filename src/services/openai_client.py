@@ -1455,22 +1455,40 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             return None
 
     async def get_wikipedia_images(self, search_keywords: str, max_images: int = 5, *, lat: float | None = None, lon: float | None = None, place_hint: str | None = None, sources: list[tuple[str, str]] | None = None, fact_text: str | None = None) -> list[str]:
-        """Get images relevant to the fact using the new search engine.
+        """Get images relevant to the fact using Yandex Search API, with Wikimedia fallback.
         
         Maintains backward compatibility while providing better relevance.
         """
-        # Use new image search engine if we have enough context
+        # Primary: Yandex Search API if credentials are configured
+        try:
+            yandex_api_key = os.getenv("YANDEX_API_KEY")
+            yandex_folder_id = os.getenv("YANDEX_FOLDER_ID")
+            if yandex_api_key and yandex_folder_id:
+                from .yandex_image_search import YandexImageSearch
+                async with YandexImageSearch(yandex_api_key, yandex_folder_id) as yandex:
+                    # Prefer building a richer query when we have hints
+                    query = (place_hint or search_keywords or "").strip()
+                    if not query:
+                        query = search_keywords or ""
+                    # Region detection for better locality
+                    from .yandex_image_search import YandexImageSearch as _YIS
+                    region = _YIS.detect_region(lat, lon)
+                    images = await yandex.search_images(query=query, max_images=max_images, region=region)
+                    if images:
+                        logger.info(f"Yandex image search returned {len(images)} images for '{query}'")
+                        return images
+        except Exception as e:
+            logger.warning(f"Yandex image search failed, will try Wikimedia fallback: {e}")
+
+        # Secondary: existing Wikimedia Commons-based engine if we have context
         if (place_hint or fact_text) and lat is not None and lon is not None:
             from .image_search import ImageSearchEngine
-            
             try:
                 async with ImageSearchEngine() as engine:
-                    # Use fact_text if provided, otherwise use search_keywords as fallback
                     fact_content = fact_text or search_keywords
                     place_name = place_hint or search_keywords
                     coordinates = (lat, lon)
                     sources_list = sources or []
-                    
                     images = await engine.search_images(
                         fact_text=fact_content,
                         place_name=place_name,
@@ -1478,21 +1496,29 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         sources=sources_list,
                         max_images=max_images
                     )
-                    
                     if images:
-                        logger.info(f"New image search found {len(images)} images for '{place_name}'")
+                        logger.info(f"Wikimedia image search found {len(images)} images for '{place_name}'")
                         return images
-                        
             except Exception as e:
-                logger.warning(f"New image search failed, falling back to legacy: {e}")
-        
-        # Fallback to legacy search
+                logger.warning(f"Wikimedia image search failed: {e}")
+
+        # Legacy fallback continues below
         sources_hint = sources
 
 
 
         # Normalize keywords
         clean_keywords = (search_keywords or '').replace(' + ', ' ').replace('+', ' ').strip()
+
+        # Fast path: if we only have plain keywords (no coords/place hint), use
+        # the lightweight legacy search that unit tests rely on.
+        if clean_keywords and lat is None and lon is None and not place_hint:
+            try:
+                quick = await self._search_wikipedia_images(clean_keywords, 'en', max_images)
+                if quick:
+                    return quick
+            except Exception:
+                pass
 
         async def _fetch_json(session, url, params):
             headers = {"User-Agent": "BotVoyage/1.0 (contact: botvoyage@example.com)"}
