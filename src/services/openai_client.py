@@ -136,7 +136,9 @@ class OpenAIClient:
 
         Keeps rich guidance, removes repetition, and enforces link formatting.
         """
-        core_rules = f"""Atlas Obscura–style facts in {user_language}. Goal: the most surprising, specific, verifiable detail about a REAL PLACE near this spot.
+        core_rules = f"""YOU ARE A FACT WRITER, NOT A SEARCH ASSISTANT. Never apologize, never ask permission, never explain difficulties. Either write a complete fact or return [[NO_POI_FOUND]].
+
+Atlas Obscura–style facts in {user_language}. Goal: the most surprising, specific, verifiable detail about a REAL PLACE near this spot.
 
 Verification:
 - Use web_search at least twice (coordinates + facts); cross‑check dates/names/numbers; prefer reliable sources.
@@ -155,9 +157,24 @@ Writing:
 
 STRICTLY FORBIDDEN:
 - Meta-facts about coordinates being "unnamed"/"empty"/"безымянный"/"нет имени"
-- Mentioning technical tools (Nominatim, Overpass, reverse geocoding, панорамы)
+- Mentioning technical tools (Nominatim, Overpass, reverse geocoding, панорамы, API, геопоиск)
 - Facts about the search process itself or coordinate analysis
 - Wrong dates, false attributions, invented details, rounded numbers, over‑drama, made‑up features.
+- ANY form of apologies, permissions, or meta-commentary ("Извините", "могу проверить", "нужна проверка")
+- Temporary placeholders like "рядом с вами" without specific address
+- Mentioning unavailable services or failed searches
+
+FORBIDDEN PHRASES (NEVER USE):
+- "Извините — не удалось..."
+- "Временно недоступен..."
+- "Могу повторить проверку..."
+- "Нужна быстрая проверка..."
+- "чтобы дать точный..."
+- "мне нужно проверить..."
+- "вернусь с проверенной информацией"
+- "служба геопоиска недоступна"
+
+IF YOU CANNOT FIND A FACT: Return ONLY "[[NO_POI_FOUND]]" - nothing else. Do NOT apologize or explain.
 
 Output:
 - No URLs in main text. End with ONE 'Источники'/'Sources' section: 2–4 bullets "Title — URL" (clickable, real links). Do not add any extra link lists (no second "🔗 Источники").
@@ -171,7 +188,8 @@ Strict formatting and verification:
 - Keep 'Location/Coordinates/Search' only in their own lines; do not repeat them inside the fact paragraph.
 - Always verify facts with multiple sources. If any detail is uncertain, either omit it or generalize without inventing specifics. Only include information you can support with your Sources.
 - NO META / NO PERMISSION-ASKING: never ask the user to allow searches; never write requests like "нужна проверка", "можно/разрешите проверить", "могу ли я". If web search is needed, just do it and output the final result.
-- LOCATION MUST BE CONCRETE: 'Location:' must be a specific address/place/intersection, never a question or a meta sentence. Forbidden in 'Location:': "Нужна проверка", "Можно...", "?".
+- LOCATION MUST BE CONCRETE: 'Location:' must be a specific address/place/intersection, never a question or a meta sentence. Forbidden in 'Location:': "Нужна проверка", "Можно...", "?", "рядом с вами", "Временно не могу вернуть адрес".
+- If you truly cannot find any POI or verifiable fact within 600m, return ONLY the token "[[NO_POI_FOUND]]" on a single line. Do NOT write apologies, explanations, or meta-text.
 - SOURCES QUALITY: do not cite generic API/documentation homepages (e.g., GeoNames docs, API Adresse docs). Cite pages directly about the POI or authoritative coverage (official site page, museum/municipal archives, reputable media, Wikipedia article of the POI). Links must be clickable.
 """
 
@@ -835,6 +853,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 + "- NEVER write about the coordinate itself being unnamed/empty - always find a real place/building/monument\n"
                 + "- NEVER mention technical tools like Nominatim, Overpass, reverse geocoding in your response\n"
                 + "- If the exact coordinates have no POI, immediately expand search to find the nearest interesting location\n"
+                + "- NEVER apologize or explain difficulties. You are a fact writer, not a search assistant.\n"
+                + "- FORBIDDEN: 'Извините', 'не удалось', 'временно недоступен', 'могу проверить', 'нужна проверка'\n"
+                + "- If you cannot produce a fact, return ONLY '[[NO_POI_FOUND]]' - no explanations.\n"
             )
             messages = [
                 {"role": "system", "content": [{"type": "input_text", "text": gpt5_system_prompt}]},
