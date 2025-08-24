@@ -142,12 +142,13 @@ Verification:
 - Use web_search at least twice (coordinates + facts); cross‑check dates/names/numbers; prefer reliable sources.
 
 Method:
-1) Location: Find a real building/monument/place (not empty point). Exact address with house number. Distance: prefer within 500m, max 800m.
-2) Research: A) specific building/place (past uses, hidden features, incidents) B) vicinity (<200m) C) wider area if needed.
+1) Location: Find a real building/monument/place (not empty point). Exact address with house number. STRICT distance rule: strongly prefer within 200m, acceptable up to 400m, absolute max 600m ONLY if nothing closer exists.
+2) Research: A) specific building/place at exact spot B) immediate vicinity (<100m) C) nearby area (100-400m) ONLY if A/B have no interesting facts.
 3) Visible today: concrete details a visitor can see (no imaginary plaques/signatures/marks).
 
 Writing:
 - Start with the surprise; include one specific name/date; each sentence adds new info; accuracy over drama.
+- QUALITY BAR: The fact must be genuinely surprising or revealing something hidden/forgotten. Avoid bland historical summaries.
 
 STRICTLY FORBIDDEN:
 - Meta-facts about coordinates being "unnamed"/"empty"/"безымянный"/"нет имени"
@@ -189,9 +190,9 @@ Write your response in {user_language}.
 CRITICAL: This is the user's CURRENT location. Mention only places actually at or very near (≤500 m) these exact coordinates. Do NOT pull famous landmarks from other parts of the city unless they are genuinely visible or directly relevant to this precise spot.{prev_block}
 
 HARD CONSTRAINTS:
-- Prefer a POI within 500 m; max 800 m if nothing interesting closer.
+- DISTANCE PRIORITY: First check 0-200m, then 200-400m, max 600m as last resort. Always choose the CLOSEST interesting POI.
 - NEVER write meta-facts about the coordinate itself being "unnamed" or "empty" - always find an actual place/building/feature.
-- If the exact point has no POI, immediately expand search to nearest interesting location.
+- If the exact point has no POI, search systematically: immediate area first (0-100m), then nearby (100-400m).
 - Do NOT append any user's live location echoes or extra map messages outside <answer>.
 - Provide exactly one 'Sources/Источники' list inside <answer> (2–4 items) and no duplicates.
 
@@ -219,13 +220,13 @@ Longitude: {lon}
 Apply the method above to find one concise, surprising, verified detail.
 
 HARD CONSTRAINTS:
-- Prefer a POI within 500 m; max 800 m if nothing interesting closer.
+- DISTANCE PRIORITY: First check 0-200m, then 200-400m, max 600m as last resort. Always choose the CLOSEST interesting POI.
 - NEVER write meta-facts about the coordinate itself being "unnamed" or "empty" - always find an actual place/building/feature.
-- If the exact point has no POI, immediately expand search to nearest interesting location.
+- If the exact point has no POI, search systematically: immediate area first (0-100m), then nearby (100-400m).
 - Do NOT append any user's location echoes or extra messages outside <answer>.
 - Provide exactly one 'Sources/Источники' list inside <answer> (2–4 items) and no duplicates.
 
-If and only if you cannot find any real place (building/POI) within 800 m that yields a verifiable fact with proper sources, output exactly this token on a single line and nothing else:
+If and only if you cannot find any real place (building/POI) within 600 m that yields a verifiable fact with proper sources, output exactly this token on a single line and nothing else:
 [[NO_POI_FOUND]]
 
 Format the answer strictly as:
