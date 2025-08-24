@@ -202,7 +202,7 @@ def _escape_markdown(text: str) -> str:
     asterisk, underscore, backtick, and square brackets/parentheses used in links.
     Do NOT escape dots or punctuation to avoid visible backslashes in output.
     """
-    chars_to_escape = ['*', '_', '`', '[', ']', '(', ')']
+    chars_to_escape = ['*', '_', '`', '[', ']']
     for char in chars_to_escape:
         text = text.replace(char, '\\' + char)
     return text
