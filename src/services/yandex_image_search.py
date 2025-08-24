@@ -212,13 +212,46 @@ class YandexImageSearch:
                         pass
                     images.extend(self._find_image_urls_anywhere(raw_obj, need=max_images))
             except Exception:
-                # Not JSON; try to regex image URLs from text
+                # Not JSON; try base64-decode -> XML, then regex fallback
                 try:
-                    snippet = raw[:300].replace("\n", " ")
+                    snippet = raw[:120].replace("\n", " ")
                     logger.info(f"Yandex rawData text; len={len(raw)}; head= {snippet}")
                 except Exception:
                     pass
-                found = self._extract_image_urls_from_text(raw, need=max_images)
+                # Attempt base64 decode → XML parse
+                found: List[str] = []
+                try:
+                    import base64 as _b64
+                    decoded = _b64.b64decode(raw, validate=False)
+                    text = decoded.decode("utf-8", errors="ignore").strip()
+                    if text.startswith("<?xml") or text.startswith("<"):
+                        try:
+                            import xml.etree.ElementTree as ET
+                            root = ET.fromstring(text)
+                            # Collect URLs from common tags/attributes
+                            for elem in root.iter():
+                                # Tag text content
+                                if elem.text and self._looks_like_image_url(elem.text.strip()):
+                                    found.append(elem.text.strip())
+                                    if len(found) >= max_images:
+                                        break
+                                # Attributes that may hold URLs
+                                for attr_name, attr_val in (elem.attrib or {}).items():
+                                    if isinstance(attr_val, str) and self._looks_like_image_url(attr_val):
+                                        found.append(attr_val)
+                                        if len(found) >= max_images:
+                                            break
+                                if len(found) >= max_images:
+                                    break
+                        except Exception:
+                            # Ignore XML parse errors
+                            pass
+                except Exception:
+                    # Ignore base64 errors
+                    pass
+                # Fallback to regex over raw text if XML/base64 yielded nothing
+                if len(found) < max_images:
+                    found.extend(self._extract_image_urls_from_text(raw, need=max_images - len(found)))
                 try:
                     logger.info(f"Yandex rawData text: regex found {len(found)} image URLs")
                 except Exception:
