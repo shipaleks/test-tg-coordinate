@@ -198,6 +198,21 @@ class YandexImageSearch:
         """Extract image URLs from API response with defensive parsing."""
         images: List[str] = []
 
+        # 0) Some deployments return a single "rawData" field with JSON or HTML/text
+        raw = data.get("rawData")
+        if isinstance(raw, str):
+            # Try JSON first
+            try:
+                import json as _json
+                raw_obj = _json.loads(raw)
+                if isinstance(raw_obj, dict):
+                    images.extend(self._find_image_urls_anywhere(raw_obj, need=max_images))
+            except Exception:
+                # Not JSON; try to regex image URLs from text
+                images.extend(self._extract_image_urls_from_text(raw, need=max_images))
+            if len(images) >= max_images:
+                return images[:max_images]
+
         # Try common shapes observed in docs/snippets
         # 1) { "items": [ { "type": "IMAGE", "url": "...", "image": {"width":..} } ] }
         items = data.get("items")
@@ -336,6 +351,26 @@ class YandexImageSearch:
             return lower.startswith("http") and any(lower.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp"))
         except Exception:
             return False
+
+    @staticmethod
+    def _extract_image_urls_from_text(text: str, need: int = 5) -> List[str]:
+        try:
+            import re as _re
+            # Find http(s) URLs ending with image extensions (basic heuristic)
+            pattern = r"https?://[^\s'\"]+\.(?:jpg|jpeg|png|webp)"
+            matches = _re.findall(pattern, text, flags=_re.IGNORECASE)
+            # Preserve order and unique
+            seen = set()
+            out: List[str] = []
+            for m in matches:
+                if m not in seen:
+                    seen.add(m)
+                    out.append(m)
+                if len(out) >= need:
+                    break
+            return out
+        except Exception:
+            return []
 
     @staticmethod
     def detect_region(lat: Optional[float], lon: Optional[float]) -> Optional[int]:
