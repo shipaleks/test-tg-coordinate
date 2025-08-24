@@ -189,7 +189,9 @@ class YandexImageSearch:
                 logger.warning("YandexImageSearch exhausted payload variants; last error: %s", str(last_error_text)[:200])
             return []
 
-        images = self._extract_images(data, max_images)
+        images = self._extract_images(data, max_images * 3)
+        # Stronger dedup: collapse by base filename and prefer larger widths
+        images = self._deduplicate_and_select(images, need=max_images)
         if images:
             self._cache_set(cache_key, images)
         return images[:max_images]
@@ -333,6 +335,49 @@ class YandexImageSearch:
                 seen.add(u)
                 deduped.append(u)
         return deduped
+
+    def _deduplicate_and_select(self, urls: List[str], need: int) -> List[str]:
+        # Group by base filename
+        def extract_base(u: str) -> tuple[str, int]:
+            from urllib.parse import unquote
+            name = unquote(u.split('/')[-1])
+            # Remove size patterns like 120px-, 1600px-, etc
+            import re as _re
+            base = _re.sub(r"(^|[/_-])\d+px[-_/]", r"\\1", name)
+            base = base.lower()
+            # Heuristic width from query param or filename
+            width = 0
+            try:
+                from urllib.parse import urlparse, parse_qs
+                q = parse_qs(urlparse(u).query)
+                if 'width' in q:
+                    width = int(q['width'][0])
+            except Exception:
+                pass
+            if width == 0:
+                m = _re.search(r"(\d{3,4})px", u)
+                if m:
+                    try:
+                        width = int(m.group(1))
+                    except Exception:
+                        width = 0
+            return base, width
+
+        groups: dict[str, list[tuple[int, str]]] = {}
+        for u in urls:
+            base, width = extract_base(u)
+            groups.setdefault(base, []).append((width, u))
+
+        selected: List[str] = []
+        # Sort each group by width desc, take first; then take groups in insertion order
+        for base, items in groups.items():
+            items.sort(key=lambda x: x[0], reverse=True)
+            best = items[0][1]
+            if best not in selected:
+                selected.append(best)
+            if len(selected) >= need:
+                break
+        return selected
 
     def _passes_basic_filters(self, item: Dict) -> bool:
         """Filter out non-photo content heuristically."""
