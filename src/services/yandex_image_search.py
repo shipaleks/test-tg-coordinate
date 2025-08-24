@@ -108,14 +108,12 @@ class YandexImageSearch:
 
         # The public docs indicate folderId + query settings in JSON body.
         # We keep the payload lean and schema-tolerant.
+        # Minimal schema matching server validation: use snake_case fields expected by API
         payload: Dict = {
             "folderId": self.folder_id,
-            # Some public examples use "text"; others nest under "query".
-            # Send both for compatibility; the backend ignores unknown fields.
-            "text": query,
             "query": {
-                "text": query,
-                # Do not send familyMode; API rejects string enum values here in prod
+                "query_text": query,
+                "search_type": "IMAGE",
                 "page": 0,
             },
         }
