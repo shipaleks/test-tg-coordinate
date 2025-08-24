@@ -144,8 +144,8 @@ Verification:
 - Use web_search at least twice (coordinates + facts); cross‑check dates/names/numbers; prefer reliable sources.
 
 Method:
-1) Location: Find a real building/monument/place (not empty point). Exact address with house number. STRICT distance rule: strongly prefer within 200m, acceptable up to 400m, absolute max 600m ONLY if nothing closer exists.
-2) Research: A) specific building/place at exact spot B) immediate vicinity (<100m) C) nearby area (100-400m) ONLY if A/B have no interesting facts.
+1) Location: Find a real building/monument/place (not empty point). Exact address with house number. Distance: prefer within 300m, acceptable up to 600m, absolute max 900m ONLY if nothing closer exists.
+2) Research: A) specific building/place at exact spot B) immediate vicinity (<150m) C) nearby area (150-600m) ONLY if A/B have no interesting facts.
 3) Visible today: concrete details a visitor can see (no imaginary plaques/signatures/marks).
 
 Writing:
@@ -211,7 +211,7 @@ Write your response in {user_language}.
 CRITICAL: This is the user's CURRENT location. Mention only places actually at or very near (≤500 m) these exact coordinates. Do NOT pull famous landmarks from other parts of the city unless they are genuinely visible or directly relevant to this precise spot.{prev_block}
 
 HARD CONSTRAINTS:
-- DISTANCE PRIORITY: First check 0-200m, then 200-400m, max 600m as last resort. Always choose the CLOSEST interesting POI.
+- DISTANCE PRIORITY: First check 0-300m, then 300-600m, max 900m as last resort. Always choose the CLOSEST interesting POI.
 - NEVER write meta-facts about the coordinate itself being "unnamed" or "empty" - always find an actual place/building/feature.
 - If the exact point has no POI, search systematically: immediate area first (0-100m), then nearby (100-400m).
 - Do NOT append any user's live location echoes or extra map messages outside <answer>.
@@ -241,13 +241,13 @@ Longitude: {lon}
 Apply the method above to find one concise, surprising, verified detail.
 
 HARD CONSTRAINTS:
-- DISTANCE PRIORITY: First check 0-200m, then 200-400m, max 600m as last resort. Always choose the CLOSEST interesting POI.
+- DISTANCE PRIORITY: First check 0-300m, then 300-600m, max 900m as last resort. Always choose the CLOSEST interesting POI.
 - NEVER write meta-facts about the coordinate itself being "unnamed" or "empty" - always find an actual place/building/feature.
 - If the exact point has no POI, search systematically: immediate area first (0-100m), then nearby (100-400m).
 - Do NOT append any user's location echoes or extra messages outside <answer>.
 - Provide exactly one 'Sources/Источники' list inside <answer> (2–4 items) and no duplicates.
 
-If and only if you cannot find any real place (building/POI) within 600 m that yields a verifiable fact with proper sources, output exactly this token on a single line and nothing else:
+If and only if you cannot find any real place (building/POI) within 900 m that yields a verifiable fact with proper sources, output exactly this token on a single line and nothing else:
 [[NO_POI_FOUND]]
 
 Format the answer strictly as:
@@ -928,14 +928,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # If the model explicitly signals no POI found → escalate to gpt-5 (medium)
             if content and "[[NO_POI_FOUND]]" in content:
                 try:
-                    logger.info("NO_POI_FOUND token detected → retrying with gpt-5 (medium)")
+                    logger.info("NO_POI_FOUND token detected → retrying with gpt-5 (low)")
                     async with self._api_semaphore:
                         retry = await self.client.responses.create(
                             model="gpt-5",
                             input=messages,
                             tools=tools,
                             tool_choice="auto",
-                            reasoning={"effort": "medium"},
+                            reasoning={"effort": "low"},
                         )
                     retry_text = getattr(retry, "output_text", None)
                     if retry_text:
