@@ -206,10 +206,24 @@ class YandexImageSearch:
                 import json as _json
                 raw_obj = _json.loads(raw)
                 if isinstance(raw_obj, dict):
+                    try:
+                        logger.info(f"Yandex rawData JSON object; keys: {list(raw_obj.keys())[:10]}")
+                    except Exception:
+                        pass
                     images.extend(self._find_image_urls_anywhere(raw_obj, need=max_images))
             except Exception:
                 # Not JSON; try to regex image URLs from text
-                images.extend(self._extract_image_urls_from_text(raw, need=max_images))
+                try:
+                    snippet = raw[:300].replace("\n", " ")
+                    logger.info(f"Yandex rawData text; len={len(raw)}; head= {snippet}")
+                except Exception:
+                    pass
+                found = self._extract_image_urls_from_text(raw, need=max_images)
+                try:
+                    logger.info(f"Yandex rawData text: regex found {len(found)} image URLs")
+                except Exception:
+                    pass
+                images.extend(found)
             if len(images) >= max_images:
                 return images[:max_images]
 

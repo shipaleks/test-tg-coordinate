@@ -196,9 +196,13 @@ def _escape_html(text: str) -> str:
 
 
 def _escape_markdown(text: str) -> str:
-    """Escape Markdown special characters to prevent formatting issues."""
-    # Escape special Markdown characters
-    chars_to_escape = ['*', '_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    """Escape minimal Markdown characters for Telegram 'Markdown' mode.
+
+    We only escape characters that commonly break formatting in legacy Markdown:
+    asterisk, underscore, backtick, and square brackets/parentheses used in links.
+    Do NOT escape dots or punctuation to avoid visible backslashes in output.
+    """
+    chars_to_escape = ['*', '_', '`', '[', ']', '(', ')']
     for char in chars_to_escape:
         text = text.replace(char, '\\' + char)
     return text
