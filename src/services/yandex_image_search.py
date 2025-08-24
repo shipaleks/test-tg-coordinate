@@ -115,8 +115,7 @@ class YandexImageSearch:
             "text": query,
             "query": {
                 "text": query,
-                # Family mode setting may vary; keep conservative default.
-                "familyMode": "MODERATE" if safe_mode else "NONE",
+                # Do not send familyMode; API rejects string enum values here in prod
                 "page": 0,
             },
         }
