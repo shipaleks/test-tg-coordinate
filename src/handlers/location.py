@@ -195,6 +195,15 @@ def _escape_html(text: str) -> str:
     )
 
 
+def _escape_markdown(text: str) -> str:
+    """Escape Markdown special characters to prevent formatting issues."""
+    # Escape special Markdown characters
+    chars_to_escape = ['*', '_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    for char in chars_to_escape:
+        text = text.replace(char, '\\' + char)
+    return text
+
+
 def _label_to_html(label: str) -> str:
     # Convert patterns like "🔗 *Источники:*" to "🔗 <b>Источники:</b>"
     return re.sub(r"\*(.+?)\*", r"<b>\\1</b>", label)
@@ -654,7 +663,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             extracted_sources = sources
 
         # Format the response for static location (Markdown primary, HTML fallback)
-        formatted_response = await get_localized_message(user_id, 'static_fact_format', place=place, fact=fact)
+        # Escape Markdown characters in place and fact to prevent formatting issues
+        escaped_place = _escape_markdown(place)
+        escaped_fact = _escape_markdown(fact)
+        formatted_response = await get_localized_message(user_id, 'static_fact_format', place=escaped_place, fact=escaped_fact)
         if sources_block:
             formatted_response = f"{formatted_response}{sources_block}"
         # Build HTML variant to preserve bold if Markdown breaks

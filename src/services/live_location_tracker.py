@@ -504,8 +504,11 @@ class LiveLocationTracker:
 
                     # Format the response with live location indicator and fact number
                     # Import get_localized_message at top of function to avoid circular imports
-                    from ..handlers.location import get_localized_message
-                    formatted_response = await get_localized_message(session_data.user_id, 'live_fact_format', number=session_data.fact_count, place=place, fact=fact)
+                    from ..handlers.location import get_localized_message, _escape_markdown
+                    # Escape Markdown characters in place and fact to prevent formatting issues
+                    escaped_place = _escape_markdown(place)
+                    escaped_fact = _escape_markdown(fact)
+                    formatted_response = await get_localized_message(session_data.user_id, 'live_fact_format', number=session_data.fact_count, place=escaped_place, fact=escaped_fact)
                     
                     # Add sources to the main message if available
                     if 'sources_block' in locals() and sources_block:
