@@ -63,13 +63,13 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                     for i, image_url in enumerate(image_urls):
                         if i == 0:
                             # First image gets the full fact as caption with Markdown
-                            media_list.append(InputMediaPhoto(media=image_url, caption=caption_text, parse_mode="Markdown"))
+                            media_list.append(InputMediaPhoto(media=image_url, caption=caption_text))
                         else:
                             # Other images get no caption
                             media_list.append(InputMediaPhoto(media=image_url))
 
                     if len(media_list) == 1:
-                        await bot.send_photo(chat_id=chat_id, photo=image_urls[0], caption=caption_text, parse_mode="Markdown")
+                        await bot.send_photo(chat_id=chat_id, photo=image_urls[0], caption=caption_text)
                     else:
                         await bot.send_media_group(chat_id=chat_id, media=media_list)
                     logger.info(f"Successfully sent {len(image_urls)} live images with caption in media group for {place}")
@@ -90,7 +90,7 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                     media_list = []
                     for i, image_url in enumerate(image_urls):
                         if i == 0:
-                            media_list.append(InputMediaPhoto(media=image_url, caption=short_caption, parse_mode="Markdown"))
+                            media_list.append(InputMediaPhoto(media=image_url, caption=short_caption))
                         else:
                             media_list.append(InputMediaPhoto(media=image_url))
                     await bot.send_media_group(chat_id=chat_id, media=media_list)
@@ -113,7 +113,7 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                         retry_media_list = []
                         for i, image_url in enumerate(image_urls[:2]):
                             if i == 0:
-                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=caption_text, parse_mode="Markdown"))
+                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=caption_text))
                             else:
                                 retry_media_list.append(InputMediaPhoto(media=image_url))
                         
