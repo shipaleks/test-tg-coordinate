@@ -373,8 +373,9 @@ class YandexImageSearch:
                 # Prefer direct image-looking URLs
                 for k, v in node.items():
                     if isinstance(v, str) and k.lower() in ("url", "imageurl", "previewurl"):
-                        if self._looks_like_image_url(v):
-                            urls.append(v)
+                        norm = self._normalize_wikimedia_url(v)
+                        if self._looks_like_image_url(v) or norm != v:
+                            urls.append(norm)
                             if len(urls) >= need:
                                 return urls
                 # Recurse into children
@@ -399,8 +400,7 @@ class YandexImageSearch:
         except Exception:
             return False
 
-    @staticmethod
-    def _extract_image_urls_from_text(text: str, need: int = 5) -> List[str]:
+    def _extract_image_urls_from_text(self, text: str, need: int = 5) -> List[str]:
         try:
             import re as _re
             # Find http(s) URLs ending with image extensions (basic heuristic)
@@ -410,14 +410,51 @@ class YandexImageSearch:
             seen = set()
             out: List[str] = []
             for m in matches:
-                if m not in seen:
-                    seen.add(m)
-                    out.append(m)
+                norm = self._normalize_wikimedia_url(m)
+                if norm not in seen:
+                    seen.add(norm)
+                    out.append(norm)
                 if len(out) >= need:
                     break
             return out
         except Exception:
             return []
+
+    @staticmethod
+    def _normalize_wikimedia_url(url: str) -> str:
+        """Normalize Wikimedia thumbnail URLs to Special:FilePath for consistent delivery.
+
+        Example input:
+          https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Filename.jpg/120px-Filename.jpg
+        Output:
+          https://commons.wikimedia.org/wiki/Special:FilePath/File%3AFilename.jpg?width=1200
+        """
+        try:
+            from urllib.parse import quote
+            if "upload.wikimedia.org" not in url:
+                return url
+            if "/thumb/" not in url:
+                return url
+            # Extract filename between .../thumb/<dir1>/<dir2>/ and the next '/'
+            parts = url.split("/thumb/")
+            if len(parts) < 2:
+                return url
+            rest = parts[1]
+            # rest like: a/ab/Filename.jpg/120px-Filename.jpg
+            try:
+                # filename is segment after two path components
+                segs = rest.split("/")
+                if len(segs) < 3:
+                    return url
+                filename = segs[2]
+                if not filename:
+                    return url
+                encoded = quote(f"File:{filename}")
+                return f"https://commons.wikimedia.org/wiki/Special:FilePath/{encoded}?width=1200"
+            except Exception:
+                return url
+        except Exception:
+            return url
 
     @staticmethod
     def detect_region(lat: Optional[float], lon: Optional[float]) -> Optional[int]:
