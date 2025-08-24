@@ -287,7 +287,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                     for i, image_url in enumerate(image_urls):
                         if i == 0:
                             # First image gets the full fact as caption
-                            media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response))
+                            media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
                         else:
                             # Other images get no caption
                             media_list.append(InputMediaPhoto(media=image_url))
@@ -337,7 +337,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                     media_list = []
                     for i, image_url in enumerate(image_urls):
                         if i == 0:
-                            media_list.append(InputMediaPhoto(media=image_url, caption=short_caption))
+                            media_list.append(InputMediaPhoto(media=image_url, caption=short_caption, parse_mode="Markdown"))
                         else:
                             media_list.append(InputMediaPhoto(media=image_url))
                     await bot.send_media_group(chat_id=chat_id, media=media_list, reply_to_message_id=reply_to_message_id)
@@ -360,7 +360,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                         retry_media_list = []
                         for i, image_url in enumerate(image_urls[:2]):
                             if i == 0:
-                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response))
+                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
                             else:
                                 retry_media_list.append(InputMediaPhoto(media=image_url))
                         
