@@ -539,28 +539,34 @@ class YandexImageSearch:
         """
         try:
             from urllib.parse import quote
-            if "upload.wikimedia.org" not in url:
-                return url
-            if "/thumb/" not in url:
-                return url
-            # Extract filename between .../thumb/<dir1>/<dir2>/ and the next '/'
-            parts = url.split("/thumb/")
-            if len(parts) < 2:
-                return url
-            rest = parts[1]
-            # rest like: a/ab/Filename.jpg/120px-Filename.jpg
-            try:
-                # filename is segment after two path components
-                segs = rest.split("/")
-                if len(segs) < 3:
+            # Convert commons file pages to direct Special:FilePath
+            if "commons.wikimedia.org/wiki/File:" in url or "commons.m.wikimedia.org/wiki/File:" in url:
+                try:
+                    filename = url.split("/wiki/File:", 1)[1]
+                    filename = filename.split("?", 1)[0]
+                    encoded = quote(f"File:{filename}")
+                    return f"https://commons.wikimedia.org/wiki/Special:FilePath/{encoded}?width=1200"
+                except Exception:
                     return url
-                filename = segs[2]
-                if not filename:
+            # Normalize upload.wikimedia thumbs to Special:FilePath
+            if "upload.wikimedia.org" in url and "/thumb/" in url:
+                parts = url.split("/thumb/")
+                if len(parts) < 2:
                     return url
-                encoded = quote(f"File:{filename}")
-                return f"https://commons.wikimedia.org/wiki/Special:FilePath/{encoded}?width=1200"
-            except Exception:
-                return url
+                rest = parts[1]
+                # rest like: a/ab/Filename.jpg/120px-Filename.jpg
+                try:
+                    segs = rest.split("/")
+                    if len(segs) < 3:
+                        return url
+                    filename = segs[2]
+                    if not filename:
+                        return url
+                    encoded = quote(f"File:{filename}")
+                    return f"https://commons.wikimedia.org/wiki/Special:FilePath/{encoded}?width=1200"
+                except Exception:
+                    return url
+            return url
         except Exception:
             return url
 
