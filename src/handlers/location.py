@@ -557,6 +557,9 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             # Fallback to legacy method on any error
             response = await openai_client.get_nearby_fact(lat, lon)
         
+        # NO_POI_FOUND should be handled internally by openai_client with retry
+        # If we still get it here, it means even the retry failed
+        
         # Parse the response to extract place and fact
         logger.info(f"Final response for static location: {response[:100]}...")
         place = await get_localized_message(user_id, 'near_you')  # Default location

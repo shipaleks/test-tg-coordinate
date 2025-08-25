@@ -144,16 +144,16 @@ Verification:
 - Use web_search at least twice (coordinates + facts); cross‑check dates/names/numbers; prefer reliable sources.
 
 Method:
-1) Location: Find a real building/monument/place (not empty point). Exact address with house number. Distance: prefer within 300m, acceptable up to 600m, absolute max 900m ONLY if nothing closer exists.
-2) Research: A) specific building/place at exact spot B) immediate vicinity (<150m) C) nearby area (150-600m) ONLY if A/B have no interesting facts.
+1) Location: Find a real building/monument/place (not empty point). Exact address with house number. Distance: prefer within 400m, good up to 800m, max 1200m if needed.
+2) Research: A) specific building/place at exact spot B) immediate vicinity (<200m) C) nearby area (200-800m).
 3) Visible today: concrete details a visitor can see (no imaginary plaques/signatures/marks).
 
 Writing:
 - Start with the most surprising detail immediately - no generic introductions.
 - Include at least one specific name and exact date/year.
 - Each sentence must add NEW concrete information (no repetition in different words).
-- Focus on hidden, forgotten, or counterintuitive details that locals don't know.
-- QUALITY BAR: Would this fact make someone stop walking and look closer? If not, dig deeper.
+- Focus on interesting, unusual, or historical details about the place.
+- QUALITY BAR: Is this fact specific and verifiable? Good enough!
 
 STRICTLY FORBIDDEN:
 - Meta-facts about coordinates being "unnamed"/"empty"/"безымянный"/"нет имени"
@@ -211,7 +211,7 @@ Write your response in {user_language}.
 CRITICAL: This is the user's CURRENT location. Mention only places actually at or very near (≤500 m) these exact coordinates. Do NOT pull famous landmarks from other parts of the city unless they are genuinely visible or directly relevant to this precise spot.{prev_block}
 
 HARD CONSTRAINTS:
-- DISTANCE PRIORITY: First check 0-300m, then 300-600m, max 900m as last resort. Always choose the CLOSEST interesting POI.
+- DISTANCE PRIORITY: First check 0-400m, then 400-800m, max 1200m if needed. Always choose the CLOSEST interesting POI.
 - NEVER write meta-facts about the coordinate itself being "unnamed" or "empty" - always find an actual place/building/feature.
 - If the exact point has no POI, search systematically: immediate area first (0-100m), then nearby (100-400m).
 - Do NOT append any user's live location echoes or extra map messages outside <answer>.
@@ -241,13 +241,13 @@ Longitude: {lon}
 Apply the method above to find one concise, surprising, verified detail.
 
 HARD CONSTRAINTS:
-- DISTANCE PRIORITY: First check 0-300m, then 300-600m, max 900m as last resort. Always choose the CLOSEST interesting POI.
+- DISTANCE PRIORITY: First check 0-400m, then 400-800m, max 1200m if needed. Always choose the CLOSEST interesting POI.
 - NEVER write meta-facts about the coordinate itself being "unnamed" or "empty" - always find an actual place/building/feature.
 - If the exact point has no POI, search systematically: immediate area first (0-100m), then nearby (100-400m).
 - Do NOT append any user's location echoes or extra messages outside <answer>.
 - Provide exactly one 'Sources/Источники' list inside <answer> (2–4 items) and no duplicates.
 
-If and only if you cannot find any real place (building/POI) within 900 m that yields a verifiable fact with proper sources, output exactly this token on a single line and nothing else:
+If and only if you cannot find any real place (building/POI) within 1200 m that yields a verifiable fact with proper sources, output exactly this token on a single line and nothing else:
 [[NO_POI_FOUND]]
 
 Format the answer strictly as:
@@ -714,16 +714,16 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             try:
                 logger.info("Attempting GPT-5 Responses with web_search... (forced)")
                 content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location, user_id=user_id)
-                if content:
-                    logger.info("GPT-5 Responses: success (web_search enabled)")
-                    return content.strip()
+                    if content:
+                        logger.info("GPT-5 Responses: success (web_search enabled)")
+                        return content.strip()
             except Exception as e:
                 logger.warning(f"GPT-5 Responses path failed: {e}. Falling back to standard models.")
 
             # Default fallback models (only if GPT-5 path fails)
             if is_live_location:
-                model_to_use = "o4-mini"
-                max_tokens_limit = 10000
+                    model_to_use = "o4-mini"
+                    max_tokens_limit = 10000
             else:
                 model_to_use = "gpt-4.1"
                 max_tokens_limit = 400
@@ -734,25 +734,25 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 try:
                     if model_to_use in ["o3", "o4-mini"]:
                         async with self._api_semaphore:
-                            response = await self.client.chat.completions.create(
-                                model=model_to_use,
-                                messages=[
-                                    {"role": "system", "content": system_prompt},
-                                    {"role": "user", "content": user_prompt},
-                                ],
-                                max_completion_tokens=max_tokens_limit,
-                            )
+                        response = await self.client.chat.completions.create(
+                            model=model_to_use,
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            max_completion_tokens=max_tokens_limit,
+                        )
                     else:
                         async with self._api_semaphore:
-                            response = await self.client.chat.completions.create(
-                                model=model_to_use,
-                                messages=[
-                                    {"role": "system", "content": system_prompt},
-                                    {"role": "user", "content": user_prompt},
-                                ],
-                                max_completion_tokens=max_tokens_limit,
-                                temperature=0.6,
-                            )
+                        response = await self.client.chat.completions.create(
+                            model=model_to_use,
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            max_completion_tokens=max_tokens_limit,
+                            temperature=0.6,
+                        )
                     logger.info(f"{model_to_use} (live) response: {response}")
                     content = (
                         response.choices[0].message.content
@@ -771,15 +771,15 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         f"{model_to_use} failed ({e}), falling back to gpt-4.1"
                     )
                     async with self._api_semaphore:
-                        response = await self.client.chat.completions.create(
-                            model="gpt-4.1",
-                            messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_prompt},
-                            ],
-                            max_tokens=800,
-                            temperature=0.6,
-                        )
+                    response = await self.client.chat.completions.create(
+                        model="gpt-4.1",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        max_tokens=800,
+                        temperature=0.6,
+                    )
                     logger.info(f"gpt-4.1 fallback response: {response}")
                     content = (
                         response.choices[0].message.content
@@ -794,15 +794,15 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         logger.debug(f"User prompt preview: {user_prompt[:200]}...")
 
                     async with self._api_semaphore:
-                        response = await self.client.chat.completions.create(
-                            model="gpt-4.1",
-                            messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_prompt},
-                            ],
-                            max_tokens=400,
-                            temperature=0.7,
-                        )
+                    response = await self.client.chat.completions.create(
+                        model="gpt-4.1",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        max_tokens=400,
+                        temperature=0.7,
+                    )
                     logger.info(f"gpt-4.1 (static location) response: {response}")
                     content = (
                         response.choices[0].message.content
@@ -898,31 +898,31 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             logger.info(f"GPT-5 Responses: sending request (model={user_model}, reasoning={api_effort}, tool_choice=auto)")
             async with self._api_semaphore:
-                response = await self.client.responses.create(
+            response = await self.client.responses.create(
                     model=user_model,
-                    input=messages,
-                    tools=tools,
+                input=messages,
+                tools=tools,
                     tool_choice=forced_tool_choice,
-                    reasoning=reasoning,
-                )
+                reasoning=reasoning,
+            )
 
             # Try convenience accessor first
             content = getattr(response, "output_text", None)
             # Fallback: try to extract from output structure
             if not content:
-                try:
-                    outputs = getattr(response, "output", None)
-                    if isinstance(outputs, list):
-                        for item in outputs:
-                            parts = item.get("content") if isinstance(item, dict) else None
-                            if isinstance(parts, list):
-                                for part in parts:
-                                    if part.get("type") == "output_text" and part.get("text"):
+            try:
+                outputs = getattr(response, "output", None)
+                if isinstance(outputs, list):
+                    for item in outputs:
+                        parts = item.get("content") if isinstance(item, dict) else None
+                        if isinstance(parts, list):
+                            for part in parts:
+                                if part.get("type") == "output_text" and part.get("text"):
                                         content = part["text"]
                                         break
                             if content:
                                 break
-                except Exception:
+            except Exception:
                     content = None
 
             # If the model explicitly signals no POI found → escalate to gpt-5 (medium)
@@ -1586,7 +1586,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Prefer title/keyword resolution FIRST (so image matches POI from the fact)
             titles_to_try: list[tuple[str, str]] = []  # (lang, title)
             if place_text:
-                for lang in languages:
+        for lang in languages:
                     titles_to_try.append((lang, place_text))
             if keywords:
                 # Try exact title path via keywords
@@ -1708,7 +1708,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 for hit in data.get('query', {}).get('search', []):
                     title = hit.get('title')  # "File:..."
                     if not title:
-                        continue
+                    continue
                     filename = title.split(':', 1)[-1]
                     ii = await _imageinfo_for_filename(session, filename)
                     if ii:
@@ -1744,7 +1744,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         if 'dist' in item:
                             ii['distance'] = item['dist']
                         items.append(ii)
-            except Exception as e:
+                except Exception as e:
                 logger.debug(f"Commons geosearch error: {e}")
             return items
 
