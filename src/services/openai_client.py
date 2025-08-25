@@ -714,16 +714,16 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             try:
                 logger.info("Attempting GPT-5 Responses with web_search... (forced)")
                 content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location, user_id=user_id)
-                    if content:
-                        logger.info("GPT-5 Responses: success (web_search enabled)")
-                        return content.strip()
+                if content:
+                    logger.info("GPT-5 Responses: success (web_search enabled)")
+                    return content.strip()
             except Exception as e:
                 logger.warning(f"GPT-5 Responses path failed: {e}. Falling back to standard models.")
 
             # Default fallback models (only if GPT-5 path fails)
             if is_live_location:
-                    model_to_use = "o4-mini"
-                    max_tokens_limit = 10000
+                model_to_use = "o4-mini"
+                max_tokens_limit = 10000
             else:
                 model_to_use = "gpt-4.1"
                 max_tokens_limit = 400
@@ -734,7 +734,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 try:
                     if model_to_use in ["o3", "o4-mini"]:
                         async with self._api_semaphore:
-                        response = await self.client.chat.completions.create(
+                            response = await self.client.chat.completions.create(
                             model=model_to_use,
                             messages=[
                                 {"role": "system", "content": system_prompt},
@@ -744,7 +744,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         )
                     else:
                         async with self._api_semaphore:
-                        response = await self.client.chat.completions.create(
+                            response = await self.client.chat.completions.create(
                             model=model_to_use,
                             messages=[
                                 {"role": "system", "content": system_prompt},
@@ -771,7 +771,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         f"{model_to_use} failed ({e}), falling back to gpt-4.1"
                     )
                     async with self._api_semaphore:
-                    response = await self.client.chat.completions.create(
+                        response = await self.client.chat.completions.create(
                         model="gpt-4.1",
                         messages=[
                             {"role": "system", "content": system_prompt},
@@ -794,7 +794,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         logger.debug(f"User prompt preview: {user_prompt[:200]}...")
 
                     async with self._api_semaphore:
-                    response = await self.client.chat.completions.create(
+                        response = await self.client.chat.completions.create(
                         model="gpt-4.1",
                         messages=[
                             {"role": "system", "content": system_prompt},
@@ -898,31 +898,31 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             logger.info(f"GPT-5 Responses: sending request (model={user_model}, reasoning={api_effort}, tool_choice=auto)")
             async with self._api_semaphore:
-            response = await self.client.responses.create(
+                response = await self.client.responses.create(
                     model=user_model,
-                input=messages,
-                tools=tools,
+                    input=messages,
+                    tools=tools,
                     tool_choice=forced_tool_choice,
-                reasoning=reasoning,
-            )
+                    reasoning=reasoning,
+                )
 
             # Try convenience accessor first
             content = getattr(response, "output_text", None)
             # Fallback: try to extract from output structure
             if not content:
-            try:
-                outputs = getattr(response, "output", None)
-                if isinstance(outputs, list):
-                    for item in outputs:
-                        parts = item.get("content") if isinstance(item, dict) else None
-                        if isinstance(parts, list):
-                            for part in parts:
-                                if part.get("type") == "output_text" and part.get("text"):
+                try:
+                    outputs = getattr(response, "output", None)
+                    if isinstance(outputs, list):
+                        for item in outputs:
+                            parts = item.get("content") if isinstance(item, dict) else None
+                            if isinstance(parts, list):
+                                for part in parts:
+                                    if part.get("type") == "output_text" and part.get("text"):
                                         content = part["text"]
                                         break
                             if content:
                                 break
-            except Exception:
+                except Exception:
                     content = None
 
             # If the model explicitly signals no POI found → escalate to gpt-5 (medium)
@@ -1586,7 +1586,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Prefer title/keyword resolution FIRST (so image matches POI from the fact)
             titles_to_try: list[tuple[str, str]] = []  # (lang, title)
             if place_text:
-        for lang in languages:
+                for lang in languages:
                     titles_to_try.append((lang, place_text))
             if keywords:
                 # Try exact title path via keywords
@@ -1708,7 +1708,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 for hit in data.get('query', {}).get('search', []):
                     title = hit.get('title')  # "File:..."
                     if not title:
-                    continue
+                        continue
                     filename = title.split(':', 1)[-1]
                     ii = await _imageinfo_for_filename(session, filename)
                     if ii:
@@ -1744,7 +1744,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         if 'dist' in item:
                             ii['distance'] = item['dist']
                         items.append(ii)
-                except Exception as e:
+            except Exception as e:
                 logger.debug(f"Commons geosearch error: {e}")
             return items
 
