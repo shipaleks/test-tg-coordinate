@@ -153,7 +153,7 @@ Writing:
 - Include at least one specific name and exact date/year.
 - Each sentence must add NEW concrete information (no repetition in different words).
 - Focus on interesting, unusual, or historical details about the place.
-- QUALITY BAR: Is this fact specific and verifiable? Good enough!
+- QUALITY BAR: Would this fact make someone stop walking and look closer? If not, dig deeper.
 
 STRICTLY FORBIDDEN:
 - Meta-facts about coordinates being "unnamed"/"empty"/"безымянный"/"нет имени"
