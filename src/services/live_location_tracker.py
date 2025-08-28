@@ -49,73 +49,83 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
 
 
         if image_urls:
-            # Try sending all images with text as media group
+            # Download images and attach as files to avoid Telegram fetching failures
             try:
-                logger.info(f"Attempting to send live fact with {len(image_urls)} images for {place}")
-                logger.debug(f"Live formatted response length: {len(formatted_response)} chars")
+                from .media_utils import download_images_for_telegram
+                downloaded = await download_images_for_telegram(image_urls, max_images=4)
+            except Exception as dl_err:
+                logger.error(f"Failed to download live images: {dl_err}")
+                downloaded = []
 
-                # Use full response as caption but ensure Markdown is safe
-                caption_text = formatted_response
-                
-                if len(caption_text) <= 1024:
-                    # Caption fits in Telegram limit, send as media group with caption
-                    media_list = []
-                    for i, image_url in enumerate(image_urls):
-                        if i == 0:
-                            # First image gets the full fact as caption with Markdown
-                            media_list.append(InputMediaPhoto(media=image_url, caption=caption_text, parse_mode="Markdown"))
-                        else:
-                            # Other images get no caption
-                            media_list.append(InputMediaPhoto(media=image_url))
-
-                    if len(media_list) == 1:
-                        await bot.send_photo(chat_id=chat_id, photo=image_urls[0], caption=caption_text)
-                    else:
-                        await bot.send_media_group(chat_id=chat_id, media=media_list)
-                    logger.info(f"Successfully sent {len(image_urls)} live images with caption in media group for {place}")
-                else:
-                    # Caption too long → first photo with shortened caption + rest without captions
-                    # Safely truncate without breaking words
-                    max_len = 1020
-                    if len(caption_text) > max_len:
-                        # Find a good breaking point (space, newline) before max_len
-                        break_point = max_len
-                        for i in range(max_len-1, max_len-200, -1):
-                            if caption_text[i] in ' \n':
-                                break_point = i
-                                break
-                        short_caption = caption_text[:break_point].rstrip() + "..."
-                    else:
-                        short_caption = caption_text
-                    media_list = []
-                    for i, image_url in enumerate(image_urls):
-                        if i == 0:
-                            media_list.append(InputMediaPhoto(media=image_url, caption=short_caption, parse_mode="Markdown"))
-                        else:
-                            media_list.append(InputMediaPhoto(media=image_url))
-                    await bot.send_media_group(chat_id=chat_id, media=media_list)
-                    logger.info(f"Successfully sent long live text + {len(image_urls)} images as media group for {place}")
-                return
-                
-            except Exception as media_group_error:
-                logger.error(f"Failed to send live fact text + media group: {media_group_error}")
-                logger.error(f"Live fact error type: {type(media_group_error)}")
+            if downloaded:
+                # Try sending all images with text as media group
                 try:
-                    logger.error(f"Live image URLs that failed: {[img.media for img in media_list]}")
+                    logger.info(f"Attempting to send live fact with {len(image_urls)} images for {place}")
+                    logger.debug(f"Live formatted response length: {len(formatted_response)} chars")
+
+                    # Use full response as caption but ensure Markdown is safe
+                    caption_text = formatted_response
+                    
+                    if len(caption_text) <= 1024:
+                        # Caption fits in Telegram limit, send as media group with caption
+                        media_list = []
+                        for i, (input_file, _src) in enumerate(downloaded):
+                            if i == 0:
+                                # First image gets the full fact as caption with Markdown
+                                media_list.append(InputMediaPhoto(media=input_file, caption=caption_text, parse_mode="Markdown"))
+                            else:
+                                # Other images get no caption
+                                media_list.append(InputMediaPhoto(media=input_file))
+
+                        if len(media_list) == 1:
+                            await bot.send_photo(chat_id=chat_id, photo=downloaded[0][0], caption=caption_text)
+                        else:
+                            await bot.send_media_group(chat_id=chat_id, media=media_list)
+                        logger.info(f"Successfully sent {len(image_urls)} live images with caption in media group for {place}")
+                    else:
+                        # Caption too long → first photo with shortened caption + rest without captions
+                        # Safely truncate without breaking words
+                        max_len = 1020
+                        if len(caption_text) > max_len:
+                            # Find a good breaking point (space, newline) before max_len
+                            break_point = max_len
+                            for i in range(max_len-1, max_len-200, -1):
+                                if caption_text[i] in ' \n':
+                                    break_point = i
+                                    break
+                            short_caption = caption_text[:break_point].rstrip() + "..."
+                        else:
+                            short_caption = caption_text
+                        media_list = []
+                        for i, (input_file, _src) in enumerate(downloaded):
+                            if i == 0:
+                                media_list.append(InputMediaPhoto(media=input_file, caption=short_caption, parse_mode="Markdown"))
+                            else:
+                                media_list.append(InputMediaPhoto(media=input_file))
+                        await bot.send_media_group(chat_id=chat_id, media=media_list)
+                        logger.info(f"Successfully sent long live text + {len(image_urls)} images as media group for {place}")
+                    return
+                
+                except Exception as media_group_error:
+                    logger.error(f"Failed to send live fact text + media group: {media_group_error}")
+                    logger.error(f"Live fact error type: {type(media_group_error)}")
+                try:
+                    logger.error(f"Live image media that failed: {[getattr(img, 'media', 'n/a') for img in media_list]}")
                 except Exception:
                     logger.error("Live image URLs that failed: unavailable")
                 
                 # Try with fewer images if we had multiple images
-                if len(image_urls) > 2:
+                if len(downloaded) > 2:
                     logger.info(f"Retrying live fact with fewer images (2 instead of {len(image_urls)})")
                     try:
                         # Retry with only first 2 images
                         retry_media_list = []
-                        for i, image_url in enumerate(image_urls[:2]):
+                        retry_caption = caption_text if len(caption_text) <= 1024 else (short_caption if 'short_caption' in locals() else caption_text[:1020] + '...')
+                        for i, (input_file, _src) in enumerate(downloaded[:2]):
                             if i == 0:
-                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=caption_text, parse_mode="Markdown"))
+                                retry_media_list.append(InputMediaPhoto(media=input_file, caption=retry_caption, parse_mode="Markdown"))
                             else:
-                                retry_media_list.append(InputMediaPhoto(media=image_url))
+                                retry_media_list.append(InputMediaPhoto(media=input_file))
                         
                         await bot.send_media_group(
                             chat_id=chat_id,
@@ -128,17 +138,14 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                 
                 # Check if text was sent successfully by trying to send it again
                 try:
-                    # Import localization function to avoid circular imports
-                    from ..handlers.location import get_localized_message
-                    fallback_message = await get_localized_message(0, 'image_fallback')  # Use user_id=0 for generic message
                     try:
                         await bot.send_message(
                             chat_id=chat_id,
-                            text=f"{fallback_message}{formatted_response}",
+                            text=formatted_response,
                             parse_mode="Markdown"
                         )
                     except Exception:
-                        await bot.send_message(chat_id=chat_id, text=f"{fallback_message}{formatted_response}")
+                        await bot.send_message(chat_id=chat_id, text=formatted_response)
                     logger.info(f"Sent fallback live text-only message for {place}")
                     return
                 except Exception as text_fallback_error:
@@ -148,11 +155,11 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                 try:
                     # Try to send individual images (up to 2 to avoid spam)
                     successful_images = 0
-                    for image_url in image_urls[:2]:  # Limit to 2 images
+                    for input_file, _src in downloaded[:2]:  # Limit to 2 images
                         try:
                             await bot.send_photo(
                                 chat_id=chat_id,
-                                photo=image_url,
+                                photo=input_file,
                                 caption=f"📸 {place}"
                             )
                             successful_images += 1
