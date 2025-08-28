@@ -113,9 +113,7 @@ class OpenAIClient:
         Args:
             api_key: OpenAI API key. If None, will use OPENAI_API_KEY env var.
         """
-        # Lazy init: allow constructing without OPENAI_API_KEY for tests
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self.client = AsyncOpenAI(api_key=self.api_key) if self.api_key else None
+        self.client = AsyncOpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.static_history = StaticLocationHistory()
         # Lightweight caches for Wikimedia pipeline
         self._qid_cache: dict[str, tuple[str, float]] = {}           # key -> (qid, ts)
@@ -124,251 +122,6 @@ class OpenAIClient:
         self._image_cache_ttl_seconds = 24 * 3600
         # Семафор для ограничения одновременных запросов к OpenAI API
         self._api_semaphore = asyncio.Semaphore(3)  # Максимум 3 параллельных запроса
-
-    def _build_language_instructions(self, user_language: str) -> str:
-        """Return language-specific instructions block for prompts."""
-        language_instructions = ""
-        if user_language == "ru":
-            language_instructions = """
-SPECIAL REQUIREMENTS FOR RUSSIAN (Atlas Obscura style):
-
-СТИЛЬ ИЗЛОЖЕНИЯ:
-- Пишите живым, образным языком — как будто рассказываете друзьям потрясающую историю за чашкой кофе
-- Начинайте с самого удивительного факта, а не с общих слов о здании или районе
-- Используйте конкретные детали: не "старинное здание", а "дом с горгульями 1902 года"
-- Добавляйте сенсорные детали: что можно увидеть, потрогать, заметить именно сегодня
-
-СТРУКТУРА ФАКТА:
-1. Захватывающее начало — сразу удивительная деталь ("В подвале этого дома до сих пор видны кольца...")
-2. Краткий исторический контекст — кто, когда, зачем (одно предложение с именем и датой)
-3. Почему это важно/удивительно — связь с большой историей или неожиданный поворот
-4. Что можно увидеть сегодня — конкретные детали для посетителя
-
-ЯЗЫК И ГРАММАТИКА:
-- Активный залог: "Здесь расстреляли...", а не "Здесь был расстрелян..."
-- Тире для драматических пауз: "В этом доме — настоящая тайна"
-- Избегайте канцелярита: никаких "является", "представляет собой", "находится"
-- Точные даты и имена: "в 1924 году Маяковский", а не "в 20-х годах поэт"
-
-ПРИМЕРЫ ХОРОШЕГО СТИЛЯ:
-✓ "Под штукатуркой этого дома до сих пор скрыты пулевые отверстия — в октябре 1941 года здесь три дня держали оборону курсанты военного училища."
-✓ "За невзрачной железной дверью в арке сохранился вход в систему подземных ходов Китай-города — их использовали купцы для тайной переправки контрабанды."
-✗ "Это здание является памятником архитектуры и представляет собой образец неоклассицизма."
-✗ "В данном месте находился известный ресторан."
-
-ЗОЛОТОЕ ПРАВИЛО: Каждое предложение должно добавлять новую конкретную информацию, а не повторять уже сказанное другими словами."""
-            # Дополнительные краткие правила качества
-            language_instructions += """
- - Каждое предложение добавляет новую конкретную информацию; избегайте воды
- - Точность важнее драматизма; явно отличайте документированные факты от легенд
-"""
-            # Специальный блок для тестов на точность формулировок на русском
-            language_instructions += """
-
-ОСОБЫЕ ТРЕБОВАНИЯ К ТОЧНОСТИ НА РУССКОМ:
-- Проверяйте склонения исторических названий и имён
-- При неуверенности в дате используйте "в начале XX века", "в советские годы", "в 1920-х"
-- Топонимы должны быть точными: «на Арбате», «у Патриарших прудов», а не расплывчатые «около»
-- Исторические термины должны соответствовать эпохе: «гимназия» для дореволюционного периода и т.п.
-"""
-        return language_instructions
-
-    def _build_live_location_system_prompt(self, user_language: str, language_instructions: str) -> str:
-        return f"""You are writing location facts for Atlas Obscura. Your mission: find the most surprising, specific detail about places that would make even locals say "I never knew that!"
-
-IMPORTANT: You must respond entirely in {user_language}. All your analysis, reasoning, and final answer must be in {user_language}.
-
-MANDATORY ONLINE VERIFICATION (WITH web_search WHEN AVAILABLE):
-- You MUST verify the exact coordinates, names, dates and other factual details using reliable web sources.
-- When the web_search tool is available, you MUST call web_search (at least two distinct queries) to gather sources for coordinates and facts, then synthesize a verified answer.
-- Cross-check at least two independent sources before stating specific names/dates/numbers.
-- If sources disagree, prefer institutionally reliable sources and indicate uncertainty by using ranges or roles instead of invented specifics.
-
-THE ATLAS OBSCURA METHOD - Follow these steps precisely:
-
-Step 1: PRECISE LOCATION ANALYSIS
-- Identify exact coordinates: what building, street corner, or specific spot is here?
-- CRITICAL: Verify you're in the correct city based on coordinates:
-  * ~48.8°N, 2.3°E = Paris
-  * ~55.7°N, 37.6°E = Moscow
-  * ~59.9°N, 30.3°E = St. Petersburg
-  * ~51.5°N, -0.1°E = London
-  * ~40.7°N, -74.0°E = New York
-- Note the immediate surroundings: what's visible within 50-100 meters?
-- Identify the neighborhood and its historical character
-- NEVER mention places from a different city than where the coordinates are
-- FACT-CHECK: Verify this location exists at these coordinates before proceeding
-
-Step 2: DEEP RESEARCH FOR THE UNEXPECTED (WITH FACT VERIFICATION)
-Search for facts in this priority order:
-   A) The specific building/location at these coordinates:
-      - Former unexpected uses (morgue→nightclub, palace→parking lot)
-      - Hidden architectural features (secret rooms, disguised elements)  
-      - Specific incidents that happened here (crimes, meetings, discoveries)
-      - Famous residents/visitors and what they did here specifically
-
-   B) If nothing at exact spot, expand to immediate vicinity:
-      - Underground features (tunnels, rivers, old foundations)
-      - Lost buildings that once stood here and why they matter
-      - Street name origins that reveal forgotten history
-      - Architectural details visible from this spot with stories
-
-   C) If still nothing specific, the broader area's secrets:
-      - Neighborhood transformation stories
-      - Local legends tied to specific features
-      - Hidden infrastructure or urban planning secrets
-
-CRITICAL FACT-CHECKING REQUIREMENTS:
-□ VERIFY DATES: Every date must be historically accurate. If uncertain about exact year, use "early 20th century" rather than guessing "1923"
-□ VERIFY NAMES: Use real historical figures and businesses. If unsure of a specific name, describe the role instead ("a local architect" not "architect Smith")
-□ VERIFY DETAILS: Building features, historical events, and transformations must be documented facts
-□ CROSS-CHECK GEOGRAPHY: Ensure the location you're describing is actually at these coordinates
-□ NO EMBELLISHMENT: If a detail sounds too perfect or dramatic, verify it exists
-□ UNCERTAIN = OMIT: When in doubt about a specific detail, focus on what you know is true
-□ If you can't verify a specific detail (name/date/feature), describe the general truth instead
-  → Better to say "a local merchant" than invent "merchant Ivanov"
-
-FACT VERIFICATION CHECKLIST:
-□ Is this building/location really at these exact coordinates?
-□ Did this event actually happen on this date? (Not confusing years/expos/eras?)
-□ Is this person's name and role correct? (Not falsely attributing to famous figures?)
-□ Are the architectural/physical details accurate? (Not inventing marks/plaques/features?)
-□ Can visitors really see what I'm describing today? (Is it actually visible, not imagined?)
-□ Are my numbers precise? (Exact count, not rounded?)
-□ Is this documented history or urban legend? (Label legends as such)
-
-ACCURACY OVER DRAMA: A true but less dramatic fact is always better than an exciting but uncertain detail
-
-LANGUAGE REQUIREMENTS:
-Write your response in {user_language}.
-{language_instructions}
-
-Example approach (showing fact-checking notes):
-"The elegant apartment building at [verify exact address] hides metal rings embedded in its basement walls - remnants from its decade as the city's exotic animal quarantine station [verify this historical use]. In [verify exact year, or use 'early 20th century'], smuggler [use documented name or 'a local smuggler'] was arrested here when his 'crate of textiles' turned out to contain three tiger cubs destined for private collections. The building's unusually thick walls and ventilation system [verify these features exist], designed for containing animal sounds and smells, now provide its residents with excellent sound insulation. Look for [describe only verifiable physical features] - [ensure visitors can actually see this].""" 
-
-    def _build_static_location_system_prompt(self, user_language: str, language_instructions: str) -> str:
-        return f"""You are writing a quick location fact for Atlas Obscura. Find the single most surprising detail about this exact location.
-
-IMPORTANT: You must respond entirely in {user_language}. All your analysis and final answer must be in {user_language}.
-
-MANDATORY ONLINE VERIFICATION:
-- You MUST verify exact coordinates and factual details (names, dates, numbers) using reliable web sources.
-- Cross-check at least two sources. If uncertain, generalize instead of inventing specifics.
-
-RAPID ATLAS OBSCURA SEARCH (for quick facts):
-
-1. IMMEDIATE SCAN - What's here?
-   - Exact building or location at coordinates
-   - Most unexpected historical use or transformation
-   - Specific incident that would surprise people
-   - Hidden feature still visible today
-
-2. FIND THE SURPRISE - Priority order:
-   A) Unexpected transformation (church→factory→nightclub)
-   B) Specific historical incident (the duel, the escape, the discovery)
-   C) Hidden architectural feature (the sealed door, the false window)
-   D) Connection to unexpected person/event
-   E) Local legend with factual basis
-
-3. ESSENTIAL ELEMENTS for Atlas Obscura:
-   - One specific surprising detail (not general history) - MUST BE VERIFIED
-   - At least one date or person's name - EXACT IF CERTAIN, APPROXIMATE IF NOT
-   - The "I never knew that!" factor - BASED ON TRUE FACTS
-   - Something visitors can see or find today - PHYSICALLY VERIFIABLE
-
-QUICK FACT VERIFICATION:
-- Double-check: Is this place really at these coordinates?
-- Verify: Are names, dates, and details documented?
-- Confirm: Can visitors actually see what you describe?
-
-LANGUAGE REQUIREMENTS:
-Write your response in {user_language}.
-{language_instructions}"""
-
-    def _build_live_location_user_prompt(self, lat: float, lon: float, previous_facts: list | None) -> str:
-        previous_facts_text = "\n".join([f"- {f}" for f in (previous_facts or [])[-5:]]) if previous_facts else ""
-        previous_facts_instruction = (
-            "CRITICAL: Find a DIFFERENT place near these coordinates. Do NOT repeat any of the already mentioned locations or facts above."
-            if previous_facts else ""
-        )
-        return f"""Analyze these coordinates: {lat}, {lon}
-
-CRITICAL: These coordinates are the USER'S CURRENT LOCATION. Only mention places that are actually at or very near (within 500m) these exact coordinates. Do NOT mention famous landmarks from other parts of the city unless they are genuinely visible or directly relevant to this specific spot.
-
-{f'''PREVIOUS FACTS ALREADY MENTIONED:
-{previous_facts_text}
-
-{previous_facts_instruction}''' if previous_facts else ''}
-
-Follow the Atlas Obscura method above to find the most surprising fact about this exact location. If you have previous facts to avoid, dig deeper to find more obscure or specific information about different nearby places.
-
-Present your final answer in this format:
-<answer>
-Location: [Specific name of the place - street address, building name, or precise intersection]
-Search: [OPTIMIZED FOR NOMINATIM GEOCODING - Follow these rules:
-  - For specific buildings: "[Building Name], [Street Number] [Street Name], [City]"
-    Example: "Cité Fleurie, 65 Boulevard Arago, Paris"
-  - For landmarks: "[Landmark Name], [District/Area], [City]"
-    Example: "Prison de la Santé, 14th arrondissement, Paris"
-  - For metro stations: "[Station Name] metro station, [City]"
-    Example: "Denfert-Rochereau metro station, Paris"
-  - ALWAYS include the city name at the end
-  - Use commas to separate location components
-  - Avoid descriptive words like "former", "old", "historical" that Nominatim ignores
-  - For addresses, use format: "[Number] [Street Name], [City]"
-  - Never truncate to just 2-3 words - include full location context]
-Interesting fact: [Your Atlas Obscura-style fact about THIS EXACT LOCATION. Follow the structure: Surprising opening → Human story → Why it matters → What to look for today. Must be 100-120 words, include specific names and dates, and focus on the unexpected.]
-</answer>
-
-Remember: Start with the surprise, not the context. Include specific details. Tell visitors what they can find. Write only the content within <answer> tags.
-
-FINAL FACT-CHECK BEFORE SUBMITTING:
-□ Have I verified this location exists at these coordinates?
-□ Are all dates either exact (if certain) or approximate (if uncertain)?
-□ Are all names real people/places or described by role if uncertain?
-□ Can visitors actually see/find what I describe?
-□ Have I avoided inventing dramatic details for effect?
-□ Is every fact in my response verifiable?
-
-If any answer is "no", revise to include only verified information."""
-
-    def _build_static_location_user_prompt(self, lat: float, lon: float, previous_facts: list | None) -> str:
-        previous_facts_text = "\n".join([f"- {f}" for f in (previous_facts or [])[-5:]]) if previous_facts else ""
-        previous_facts_instruction = (
-            "CRITICAL: Find a DIFFERENT place near these coordinates. Do NOT repeat any of the already mentioned locations or facts above."
-            if previous_facts else ""
-        )
-        return f"""Here are the coordinates to analyze:
-<coordinates>
-Latitude: {lat}
-Longitude: {lon}
-</coordinates>
-
-{f'''PREVIOUS FACTS ALREADY MENTIONED:
-{previous_facts_text}
-
-{previous_facts_instruction}''' if previous_facts else ''}
-
-Apply the rapid Atlas Obscura search method above to find a surprising fact. If you have previous facts to avoid, choose a completely different nearby location or dig deeper for more obscure details.
-
-Format your answer:
-<answer>
-Location: [Exact place name - specific building or location, not "area near" or "district of"]
-Search: [NOMINATIM-OPTIMIZED: Use format "[Place Name], [Street/District], [City]" with commas. Examples: "Tour Eiffel, Champ de Mars, Paris" or "Эрмитаж, Дворцовая площадь, Санкт-Петербург". Avoid adjectives, use official names, always include city]
-Interesting fact: [Your 60-80 word Atlas Obscura fact with this structure: Surprising detail → Quick context with specific date/name → What visitors can see today. Must surprise locals.]
-</answer>
-
-Critical: Lead with the surprise. Include one specific date or name. Tell what's visible today. Only content within <answer> tags.
-
-QUICK FACT-CHECK:
-□ Is this location verified at these coordinates?
-□ Are dates/names real or appropriately generalized? (Not confusing expos/eras?)
-□ Can visitors see what I describe? (Not inventing marks/features?)
-□ Have I avoided fictional embellishments? (No dramatic barricades/rooftop vigils?)
-□ Are my numbers exact from sources? (Not rounded?)
-□ Have I distinguished documented facts from legends?
-
-Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel attributions, invented plaques/marks, dramatized protests, oversimplified decisions."""
 
     def _build_location_fact_prompt(
         self,
@@ -512,24 +265,6 @@ Sources/Источники:
 
         return system_prompt, user_prompt
 
-    def _build_prompts(
-        self,
-        lat: float,
-        lon: float,
-        is_live_location: bool = False,
-        user_language: str = "en",
-        previous_facts: list | None = None,
-    ) -> dict:
-        """Compatibility helper for tests: return {'system','user'} prompts."""
-        language_instructions = self._build_language_instructions(user_language)
-        if is_live_location:
-            system_prompt = self._build_live_location_system_prompt(user_language, language_instructions)
-            user_prompt = self._build_live_location_user_prompt(lat, lon, previous_facts)
-        else:
-            system_prompt = self._build_static_location_system_prompt(user_language, language_instructions)
-            user_prompt = self._build_static_location_user_prompt(lat, lon, previous_facts)
-        return {"system": system_prompt, "user": user_prompt}
-
     async def get_nearby_fact(
         self,
         lat: float,
@@ -576,8 +311,42 @@ Sources/Источники:
                 except Exception as e:
                     logger.warning(f"Failed to check user preferences for user {user_id}: {e}")
 
-            # Special instructions per language
-            language_instructions = self._build_language_instructions(user_language)
+            # Special instructions for Russian language quality
+            language_instructions = ""
+            if user_language == "ru":
+                language_instructions = """
+SPECIAL REQUIREMENTS FOR RUSSIAN (Atlas Obscura style):
+
+СТИЛЬ ИЗЛОЖЕНИЯ:
+- Пишите живым, образным языком — как будто рассказываете друзьям потрясающую историю за чашкой кофе
+- Начинайте с самого удивительного факта, а не с общих слов о здании или районе
+- Используйте конкретные детали: не "старинное здание", а "дом с горгульями 1902 года"
+- Добавляйте сенсорные детали: что можно увидеть, потрогать, заметить именно сегодня
+
+СТРУКТУРА ФАКТА:
+1. Захватывающее начало — сразу удивительная деталь ("В подвале этого дома до сих пор видны кольца...")
+2. Краткий исторический контекст — кто, когда, зачем (одно предложение с именем и датой)
+3. Почему это важно/удивительно — связь с большой историей или неожиданный поворот
+4. Что можно увидеть сегодня — конкретные детали для посетителя
+
+ЯЗЫК И ГРАММАТИКА:
+- Активный залог: "Здесь расстреляли...", а не "Здесь был расстрелян..."
+- Тире для драматических пауз: "В этом доме — настоящая тайна"
+- Избегайте канцелярита: никаких "является", "представляет собой", "находится"
+- Точные даты и имена: "в 1924 году Маяковский", а не "в 20-х годах поэт"
+
+ПРИМЕРЫ ХОРОШЕГО СТИЛЯ:
+✓ "Под штукатуркой этого дома до сих пор скрыты пулевые отверстия — в октябре 1941 года здесь три дня держали оборону курсанты военного училища."
+✓ "За невзрачной железной дверью в арке сохранился вход в систему подземных ходов Китай-города — их использовали купцы для тайной переправки контрабанды."
+✗ "Это здание является памятником архитектуры и представляет собой образец неоклассицизма."
+✗ "В данном месте находился известный ресторан."
+
+ЗОЛОТОЕ ПРАВИЛО: Каждое предложение должно добавлять новую конкретную информацию, а не повторять уже сказанное другими словами."""
+                # Дополнительно закрепим краткие правила качества, как раньше:
+                language_instructions += """
+ - Каждое предложение добавляет новую конкретную информацию; избегайте воды
+ - Точность важнее драматизма; явно отличайте документированные факты от легенд
+"""
 
             # Choose appropriate system prompt based on location type
             if is_live_location:
@@ -965,8 +734,6 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 try:
                     if model_to_use in ["o3", "o4-mini"]:
                         async with self._api_semaphore:
-                            if not self.client:
-                                raise RuntimeError("OpenAI client is not initialized (no API key)")
                             response = await self.client.chat.completions.create(
                             model=model_to_use,
                             messages=[
@@ -977,8 +744,6 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         )
                     else:
                         async with self._api_semaphore:
-                            if not self.client:
-                                raise RuntimeError("OpenAI client is not initialized (no API key)")
                             response = await self.client.chat.completions.create(
                             model=model_to_use,
                             messages=[
@@ -1006,8 +771,6 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         f"{model_to_use} failed ({e}), falling back to gpt-4.1"
                     )
                     async with self._api_semaphore:
-                        if not self.client:
-                            raise RuntimeError("OpenAI client is not initialized (no API key)")
                         response = await self.client.chat.completions.create(
                         model="gpt-4.1",
                         messages=[
@@ -1031,8 +794,6 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         logger.debug(f"User prompt preview: {user_prompt[:200]}...")
 
                     async with self._api_semaphore:
-                        if not self.client:
-                            raise RuntimeError("OpenAI client is not initialized (no API key)")
                         response = await self.client.chat.completions.create(
                         model="gpt-4.1",
                         messages=[

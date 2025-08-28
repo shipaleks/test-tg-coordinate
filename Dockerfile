@@ -26,8 +26,8 @@ RUN mkdir -p /data && chown app:app /data && chmod 755 /data
 
 USER app
 
-# Expose port (Cloud Run expects 8080 by default, but we honor $PORT)
-EXPOSE 8080
+# Expose port
+EXPOSE 8000
 
 # Run the application
 CMD ["python", "-m", "src.main"] 

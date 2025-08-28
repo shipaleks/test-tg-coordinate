@@ -1,4 +1,4 @@
-# Финальный деплой NearbyFactBot v1.3 в Railway и Cloud Run
+# Финальный деплой NearbyFactBot v1.3 в Railway
 
 ## ✅ Исправления применены
 
@@ -6,7 +6,7 @@
 - **Live Location v1.1**: Полностью реализован и протестирован  
 - **GPT-5 + web_search**: Принудительное онлайн‑верифицирование фактов и координат
 
-## 🚀 Шаги для деплоя (Railway)
+## 🚀 Шаги для деплоя
 
 ### 1. Railway Project Setup
 ```bash
@@ -96,68 +96,4 @@ INFO - Live location expired for user X
 ✅ CI/CD Pipeline - ACTIVE
 ```
 
-**Статус**: NearbyFactBot v1.1 готов к реальному использованию в production! 🚀
-
----
-
-## 🚀 Деплой в Google Cloud Run (новый вариант)
-
-### 1) Подготовка окружения
-```bash
-gcloud auth login
-gcloud config set project <PROJECT_ID>
-gcloud auth configure-docker
-```
-
-### 2) Переменные окружения
-Обязательно:
-```
-TELEGRAM_BOT_TOKEN=... 
-OPENAI_API_KEY=...
-WEBHOOK_URL=https://<SERVICE>-<HASH>-<REGION>.a.run.app
-PORT=8080
-```
-Опционально:
-```
-TELEGRAM_WEBHOOK_SECRET_TOKEN=<рандомный_секрет>
-FIREBASE_CREDENTIALS_B64=<base64 JSON>  # или переменные для service account
-DATABASE_URL=postgresql+asyncpg://...    # если используется Postgres
-```
-
-### 3) Сборка и публикация контейнера
-```bash
-gcloud builds submit --tag gcr.io/$GOOGLE_CLOUD_PROJECT/nearby-fact-bot:latest
-```
-
-### 4) Развёртывание в Cloud Run
-```bash
-gcloud run deploy nearby-fact-bot \
-  --image gcr.io/$GOOGLE_CLOUD_PROJECT/nearby-fact-bot:latest \
-  --platform managed \
-  --region europe-west1 \
-  --allow-unauthenticated \
-  --min-instances 1 \
-  --memory 1Gi \
-  --cpu 1 \
-  --set-env-vars=PORT=8080 \
-  --set-env-vars=WEBHOOK_URL=https://<SERVICE>-<HASH>-<REGION>.a.run.app
-```
-
-Добавьте остальные переменные окружения через `--set-env-vars` или в консоли Cloud Run.
-
-### 5) Установка вебхука (если нужно вручную)
-Обычно `python-telegram-bot` выставит webhook автоматически при старте. Если нужно вручную:
-```bash
-curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
-  -d url="https://<SERVICE>-<HASH>-<REGION>.a.run.app" \
-  -d secret_token="$TELEGRAM_WEBHOOK_SECRET_TOKEN"
-```
-
-### 6) Проверка
-Логи должны содержать:
-```
-Starting webhook on port 8080
-Application started
-```
-
-Если вы развёртываете в polling-режиме (для отладки), контейнер поднимет лёгкий health‑сервер на `$PORT`, чтобы пройти readiness Cloud Run.
+**Статус**: NearbyFactBot v1.1 готов к реальному использованию в production! 🚀 

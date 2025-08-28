@@ -100,16 +100,6 @@ python -m pytest tests/test_location_handler.py -v
 git push origin main  # → автоматический деплой
 ```
 
-### Google Cloud Run
-См. `docs/CLOUD_RUN.md` для пошагового гайда. Коротко:
-```bash
-gcloud builds submit --tag gcr.io/$GOOGLE_CLOUD_PROJECT/nearby-fact-bot:latest
-gcloud run deploy nearby-fact-bot \
-  --image gcr.io/$GOOGLE_CLOUD_PROJECT/nearby-fact-bot:latest \
-  --region europe-west1 --platform managed --allow-unauthenticated \
-  --set-env-vars=PORT=8080,WEBHOOK_URL=https://<SERVICE>-<HASH>-<REGION>.a.run.app
-```
-
 ### Local development
 ```bash
 cp .env.example .env
@@ -127,8 +117,6 @@ python -m src.main
 - **[LOCATION_KEYBOARD_V1.2.md](docs/LOCATION_KEYBOARD_V1.2.md)** — Клавиатура v1.2
 - **[DEPLOYMENT_FIXES.md](docs/DEPLOYMENT_FIXES.md)** — Решение проблем деплоя
 - **[FINAL_DEPLOYMENT.md](docs/FINAL_DEPLOYMENT.md)** — Production guide
- - **[CLOUD_RUN.md](docs/CLOUD_RUN.md)** — Деплой в Google Cloud Run
- - **[ENV_VARS.md](docs/ENV_VARS.md)** — Где хранить переменные (API/Firebase)
 
 ## 🔄 История версий
 

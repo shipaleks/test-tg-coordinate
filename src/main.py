@@ -2,7 +2,6 @@
 
 import logging
 import os
-import threading
 
 from dotenv import load_dotenv
 from telegram import KeyboardButton, ReplyKeyboardMarkup, Update
@@ -123,35 +122,6 @@ LOCALIZED_MESSAGES = {
     }
     # Add more languages as needed
 }
-
-
-def start_health_server(port: int) -> None:
-    """Start a minimal HTTP server for health checks on Cloud Run when using polling.
-
-    Cloud Run requires the container to listen on $PORT. In polling mode the bot
-    would not start an HTTP server, so we spawn a tiny health server to satisfy
-    readiness checks on the platform. This server is not started in webhook mode.
-    """
-    try:
-        from http.server import BaseHTTPRequestHandler, HTTPServer
-
-        class HealthHandler(BaseHTTPRequestHandler):
-            def do_GET(self):  # noqa: N802 (method name is from BaseHTTPRequestHandler)
-                self.send_response(200)
-                self.send_header("Content-Type", "text/plain; charset=utf-8")
-                self.end_headers()
-                self.wfile.write(b"ok")
-
-            def log_message(self, format, *args):  # noqa: A003 (shadow builtin), D401
-                # Silence default request logging
-                return
-
-        server = HTTPServer(("0.0.0.0", int(port)), HealthHandler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        logger.info(f"Started health server on port {port}")
-    except Exception as e:
-        logger.warning(f"Failed to start health server on port {port}: {e}")
 
 
 async def send_welcome_message(user_id: int, chat_id: int, bot, language: str = None) -> None:
@@ -415,19 +385,14 @@ def main() -> None:
         # Use webhook for production
         logger.info(f"Starting webhook on port {port}")
         # Use synchronous run_webhook which handles event loop internally
-        secret_token = os.getenv("TELEGRAM_WEBHOOK_SECRET_TOKEN")
         application.run_webhook(
             listen="0.0.0.0",
             port=port,
             webhook_url=webhook_url,
-            secret_token=secret_token if secret_token else None,
         )
     else:
         # Use polling for local development
         logger.info("Starting polling mode")
-        # Cloud Run requires a listener on $PORT. Start a tiny health server
-        # so that readiness checks pass even in polling mode.
-        start_health_server(port)
         # Use synchronous run_polling which handles event loop internally
         application.run_polling()
 

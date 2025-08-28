@@ -368,43 +368,6 @@ class LiveLocationTracker:
             # Desired interval between facts
             desired_interval_seconds = session_data.fact_interval_minutes * 60
 
-            # Before any waiting, handle already expired or stale sessions (useful for tests and restarts)
-            current_time = datetime.now()
-            if current_time >= session_end_time:
-                logger.info(
-                    f"Live location session expired for user {session_data.user_id} "
-                    f"(started: {session_data.session_start}, live_period: {session_data.live_period}s)"
-                )
-                try:
-                    from ..handlers.location import get_localized_message
-                    stop_message = await get_localized_message(session_data.user_id, 'live_expired')
-                    await bot.send_message(
-                        chat_id=session_data.chat_id,
-                        text=stop_message,
-                        parse_mode="Markdown",
-                    )
-                except Exception:
-                    pass
-                return
-
-            # If no update for 3 minutes before starting, treat as manually stopped
-            if (current_time - session_data.last_update) > timedelta(minutes=3):
-                logger.info(
-                    f"Live location stopped updating for user {session_data.user_id} "
-                    f"(last update: {session_data.last_update})"
-                )
-                try:
-                    from ..handlers.location import get_localized_message
-                    stop_message = await get_localized_message(session_data.user_id, 'live_manual_stop')
-                    await bot.send_message(
-                        chat_id=session_data.chat_id,
-                        text=stop_message,
-                        parse_mode="Markdown",
-                    )
-                except Exception:
-                    pass
-                return
-
             # Initial wait: 30 seconds to give user time to start walking
             initial_sleep = 30
             await asyncio.sleep(initial_sleep)
