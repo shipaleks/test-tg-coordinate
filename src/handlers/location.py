@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 # Localized messages for location handler
 LOCATION_MESSAGES = {
     'ru': {
+        'image_fallback': "⚠️ Изображения не загрузились, но вот факт:\n\n",
         'live_location_received': "🔴 *Живая локация получена!*\n\n📍 Отслеживание на {minutes} минут\n\nКак часто присылать интересные факты?",
         'interval_5min': "Каждые 5 минут",
         'interval_10min': "Каждые 10 минут", 
@@ -56,6 +57,7 @@ LOCATION_MESSAGES = {
         'live_manual_stop': "✅ *Трансляция остановлена*\n\nВы прекратили делиться геопозицией.\nСпасибо за прогулку с нами! 🚶‍♂️🗺️"
     },
     'en': {
+        'image_fallback': "⚠️ Images failed to load, but here's the fact:\n\n",
         'live_location_received': "🔴 *Live location received!*\n\n📍 Tracking for {minutes} minutes\n\nHow often should I send interesting facts?",
         'interval_5min': "Every 5 minutes",
         'interval_10min': "Every 10 minutes",
@@ -76,6 +78,7 @@ LOCATION_MESSAGES = {
         'live_manual_stop': "✅ *Broadcast stopped*\n\nYou stopped sharing your location.\nThank you for walking with us! 🚶‍♂️🗺️"
     },
     'fr': {
+        'image_fallback': "⚠️ Les images n'ont pas pu se charger, mais voici le fait :\n\n",
         'live_location_received': "🔴 *Position en direct reçue !*\n\n📍 Suivi pendant {minutes} minutes\n\nÀ quelle fréquence souhaitez-vous recevoir des faits intéressants ?",
         'interval_5min': "Toutes les 5 minutes",
         'interval_10min': "Toutes les 10 minutes",
@@ -277,148 +280,139 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
         )
         
         if image_urls:
-            # Download images and attach as files to avoid Telegram fetching failures
+            # Try sending all images with text as media group
             try:
-                from ..services.media_utils import download_images_for_telegram
-                downloaded = await download_images_for_telegram(image_urls, max_images=4)
-            except Exception as dl_err:
-                logger.error(f"Failed to download images: {dl_err}")
-                downloaded = []
-
-            if downloaded:
-                # Try sending all images with text as media group
-                try:
-                    logger.info(f"Attempting to send fact with {len(image_urls)} images for {place}")
-                    logger.debug(f"Formatted response length: {len(formatted_response)} chars")
+                logger.info(f"Attempting to send fact with {len(image_urls)} images for {place}")
+                logger.debug(f"Formatted response length: {len(formatted_response)} chars")
+                
+                if len(formatted_response) <= 1024:
+                    # Caption fits in Telegram limit, send as media group with caption
+                    media_list = []
+                    for i, image_url in enumerate(image_urls):
+                        if i == 0:
+                            # First image gets the full fact as caption
+                            media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
+                        else:
+                            # Other images get no caption
+                            media_list.append(InputMediaPhoto(media=image_url))
                     
-                    # Build safe caption within Telegram limit
-                    if len(formatted_response) <= 1024:
-                        # Caption fits in Telegram limit, send as media group with caption
-                        media_list = []
-                        for i, (input_file, _src) in enumerate(downloaded):
+                    # Prefer single post: if more than one image, still send as media group; if exactly one, send as single photo
+                    if len(media_list) == 1:
+                        await bot.send_photo(
+                            chat_id=chat_id,
+                            photo=image_urls[0],
+                            caption=formatted_response,
+                            parse_mode="Markdown",
+                            reply_to_message_id=reply_to_message_id
+                        )
+                    else:
+                        await bot.send_media_group(
+                            chat_id=chat_id,
+                            media=media_list,
+                            reply_to_message_id=reply_to_message_id
+                        )
+                    logger.info(f"Successfully sent {len(image_urls)} images with caption in media group for {place}")
+                else:
+                    # Caption too long, send text first then all images as media group
+                    # When caption too long, prefer: first photo with shortened caption + rest without captions
+                    # Safely truncate without breaking markdown entities
+                    max_len = 1020
+                    if len(formatted_response) > max_len:
+                        # Find a good breaking point (space, newline) before max_len
+                        break_point = max_len
+                        for i in range(max_len-1, max_len-200, -1):
+                            if formatted_response[i] in ' \n':
+                                break_point = i
+                                break
+                        short_caption = formatted_response[:break_point].rstrip() + "..."
+                        # Ensure markdown is balanced by counting asterisks and brackets
+                        asterisk_count = short_caption.count('*') 
+                        bracket_count = short_caption.count('[') - short_caption.count(']')
+                        paren_count = short_caption.count('(') - short_caption.count(')')
+                        # Add missing closing markers
+                        if asterisk_count % 2 == 1:
+                            short_caption += '*'
+                        if bracket_count > 0:
+                            short_caption = short_caption.replace('[', '', bracket_count)  # Remove unmatched [
+                        if paren_count > 0:
+                            short_caption = short_caption.replace('(', '', paren_count)  # Remove unmatched (
+                    else:
+                        short_caption = formatted_response
+                    media_list = []
+                    for i, image_url in enumerate(image_urls):
+                        if i == 0:
+                            media_list.append(InputMediaPhoto(media=image_url, caption=short_caption, parse_mode="Markdown"))
+                        else:
+                            media_list.append(InputMediaPhoto(media=image_url))
+                    await bot.send_media_group(chat_id=chat_id, media=media_list, reply_to_message_id=reply_to_message_id)
+                    logger.info(f"Successfully sent long text + {len(image_urls)} images as media group for {place}")
+                return
+                
+            except Exception as media_group_error:
+                logger.error(f"Failed to send text + media group: {media_group_error}")
+                logger.error(f"Error type: {type(media_group_error)}")
+                try:
+                    logger.error(f"Image URLs that failed: {[img.media for img in media_list]}")
+                except Exception:
+                    logger.error("Image URLs that failed: unavailable")
+                
+                # Try with fewer images if we had multiple images
+                if len(image_urls) > 2:
+                    logger.info(f"Retrying with fewer images (2 instead of {len(image_urls)})")
+                    try:
+                        # Retry with only first 2 images
+                        retry_media_list = []
+                        for i, image_url in enumerate(image_urls[:2]):
                             if i == 0:
-                                media_list.append(InputMediaPhoto(media=input_file, caption=formatted_response, parse_mode="Markdown"))
+                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
                             else:
-                                media_list.append(InputMediaPhoto(media=input_file))
+                                retry_media_list.append(InputMediaPhoto(media=image_url))
                         
-                        # Prefer single post: if more than one image, still send as media group; if exactly one, send as single photo
-                        if len(media_list) == 1:
+                        await bot.send_media_group(
+                            chat_id=chat_id,
+                            media=retry_media_list,
+                            reply_to_message_id=reply_to_message_id
+                        )
+                        logger.info(f"Successfully sent {len(retry_media_list)} images on retry for {place}")
+                        return
+                    except Exception as retry_error:
+                        logger.error(f"Retry with fewer images also failed: {retry_error}")
+                
+                # Check if text was sent successfully by trying to send it again
+                # (This is a fallback in case the text sending also failed)
+                try:
+                    fallback_message = await get_localized_message(user_id or 0, 'image_fallback') if user_id else "⚠️ Изображения не загрузились, но вот факт:\n\n"
+                    await _send_text_resilient(bot, chat_id, f"{fallback_message}{formatted_response}", reply_to_message_id, html_text=html_text)
+                    logger.info(f"Sent fallback text-only message for {place}")
+                    return
+                except Exception as text_fallback_error:
+                    logger.error(f"Failed to send fallback text: {text_fallback_error}")
+                
+                # Last resort: try sending individual images
+                try:
+                    # Try to send individual images (up to 2 to avoid spam)
+                    successful_images = 0
+                    for image_url in image_urls[:2]:  # Limit to 2 images
+                        try:
                             await bot.send_photo(
                                 chat_id=chat_id,
-                                photo=downloaded[0][0],
-                                caption=formatted_response,
-                                parse_mode="Markdown",
+                                photo=image_url,
+                                caption=f"📸 {place}",
                                 reply_to_message_id=reply_to_message_id
                             )
-                        else:
-                            await bot.send_media_group(
-                                chat_id=chat_id,
-                                media=media_list,
-                                reply_to_message_id=reply_to_message_id
-                            )
-                        logger.info(f"Successfully sent {len(image_urls)} images with caption in media group for {place}")
+                            successful_images += 1
+                        except Exception as individual_error:
+                            logger.debug(f"Failed to send individual image: {individual_error}")
+                            continue
+                    
+                    if successful_images > 0:
+                        logger.info(f"Sent {successful_images} individual images (no text) for {place}")
                     else:
-                        # Caption too long, send text first then all images as media group
-                        # When caption too long, prefer: first photo with shortened caption + rest without captions
-                        # Safely truncate without breaking markdown entities
-                        max_len = 1020
-                        if len(formatted_response) > max_len:
-                            # Find a good breaking point (space, newline) before max_len
-                            break_point = max_len
-                            for i in range(max_len-1, max_len-200, -1):
-                                if formatted_response[i] in ' \n':
-                                    break_point = i
-                                    break
-                            short_caption = formatted_response[:break_point].rstrip() + "..."
-                            # Ensure markdown is balanced by counting asterisks and brackets
-                            asterisk_count = short_caption.count('*') 
-                            bracket_count = short_caption.count('[') - short_caption.count(']')
-                            paren_count = short_caption.count('(') - short_caption.count(')')
-                            # Add missing closing markers
-                            if asterisk_count % 2 == 1:
-                                short_caption += '*'
-                            if bracket_count > 0:
-                                short_caption = short_caption.replace('[', '', bracket_count)  # Remove unmatched [
-                            if paren_count > 0:
-                                short_caption = short_caption.replace('(', '', paren_count)  # Remove unmatched (
-                        else:
-                            short_caption = formatted_response
-                        media_list = []
-                        for i, (input_file, _src) in enumerate(downloaded):
-                            if i == 0:
-                                media_list.append(InputMediaPhoto(media=input_file, caption=short_caption, parse_mode="Markdown"))
-                            else:
-                                media_list.append(InputMediaPhoto(media=input_file))
-                        await bot.send_media_group(chat_id=chat_id, media=media_list, reply_to_message_id=reply_to_message_id)
-                        logger.info(f"Successfully sent long text + {len(image_urls)} images as media group for {place}")
+                        logger.warning(f"All image sending methods failed for {place}")
                     return
                     
-                except Exception as media_group_error:
-                    logger.error(f"Failed to send text + media group: {media_group_error}")
-                    logger.error(f"Error type: {type(media_group_error)}")
-                    try:
-                        logger.error(f"Image media that failed: {[getattr(img, 'media', 'n/a') for img in media_list]}")
-                    except Exception:
-                        logger.error("Image URLs that failed: unavailable")
-                    
-                    # Try with fewer images if we had multiple images
-                    if len(downloaded) > 2:
-                        logger.info(f"Retrying with fewer images (2 instead of {len(image_urls)})")
-                        try:
-                            # Retry with only first 2 images
-                            retry_media_list = []
-                            # Reuse safe short caption if needed
-                            retry_caption = formatted_response if len(formatted_response) <= 1024 else (short_caption if 'short_caption' in locals() else formatted_response[:1020] + '...')
-                            for i, (input_file, _src) in enumerate(downloaded[:2]):
-                                if i == 0:
-                                    retry_media_list.append(InputMediaPhoto(media=input_file, caption=retry_caption, parse_mode="Markdown"))
-                                else:
-                                    retry_media_list.append(InputMediaPhoto(media=input_file))
-                            
-                            await bot.send_media_group(
-                                chat_id=chat_id,
-                                media=retry_media_list,
-                                reply_to_message_id=reply_to_message_id
-                            )
-                            logger.info(f"Successfully sent {len(retry_media_list)} images on retry for {place}")
-                            return
-                        except Exception as retry_error:
-                            logger.error(f"Retry with fewer images also failed: {retry_error}")
-                    
-                    # Check if text was sent successfully by trying to send it again
-                    # (This is a fallback in case the text sending also failed)
-                    try:
-                        await _send_text_resilient(bot, chat_id, formatted_response, reply_to_message_id, html_text=html_text)
-                        logger.info(f"Sent fallback text-only message for {place}")
-                        return
-                    except Exception as text_fallback_error:
-                        logger.error(f"Failed to send fallback text: {text_fallback_error}")
-                    
-                    # Last resort: try sending individual images
-                    try:
-                        # Try to send individual images (up to 2 to avoid spam)
-                        successful_images = 0
-                        for input_file, _src in downloaded[:2]:  # Limit to 2 images
-                            try:
-                                await bot.send_photo(
-                                    chat_id=chat_id,
-                                    photo=input_file,
-                                    caption=f"📸 {place}",
-                                    reply_to_message_id=reply_to_message_id
-                                )
-                                successful_images += 1
-                            except Exception as individual_error:
-                                logger.debug(f"Failed to send individual image: {individual_error}")
-                                continue
-                        
-                        if successful_images > 0:
-                            logger.info(f"Sent {successful_images} individual images (no text) for {place}")
-                        else:
-                            logger.warning(f"All image sending methods failed for {place}")
-                        return
-                        
-                    except Exception as individual_fallback_error:
-                        logger.error(f"Failed to send individual images fallback: {individual_fallback_error}")
+                except Exception as individual_fallback_error:
+                    logger.error(f"Failed to send individual images fallback: {individual_fallback_error}")
         
         # No images found or all fallbacks failed, send just the text
         await _send_text_resilient(bot, chat_id, formatted_response, reply_to_message_id, html_text=html_text)
