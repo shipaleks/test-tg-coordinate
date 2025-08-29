@@ -33,7 +33,7 @@ class FirestoreDatabase:
         self.reset_all_languages = self._reset_all_languages
 
     # ----- Donations / Donors -----
-    async def add_donation(
+    def add_donation(
         self,
         user_id: int,
         payment_id: str,
@@ -103,7 +103,7 @@ class FirestoreDatabase:
             logger.error(f"Firestore add_donation failed: {e}")
             return False
 
-    async def is_premium_user(self, user_id: int) -> bool:
+    def is_premium_user(self, user_id: int) -> bool:
         try:
             now = int(time.time())
             snap = self.db.collection("users").document(str(user_id)).get()
@@ -115,7 +115,7 @@ class FirestoreDatabase:
             logger.error(f"Firestore is_premium_user failed: {e}")
             return False
 
-    async def get_donor_info(self, user_id: int) -> Optional[Dict[str, Any]]:
+    def get_donor_info(self, user_id: int) -> Optional[Dict[str, Any]]:
         try:
             snap = self.db.collection("users").document(str(user_id)).get()
             return snap.to_dict() if snap.exists else None
@@ -123,7 +123,7 @@ class FirestoreDatabase:
             logger.error(f"Firestore get_donor_info failed: {e}")
             return None
 
-    async def get_donation_history(self, user_id: int) -> List[Dict[str, Any]]:
+    def get_donation_history(self, user_id: int) -> List[Dict[str, Any]]:
         try:
             q = (
                 self.db.collection("donations")
@@ -137,7 +137,7 @@ class FirestoreDatabase:
             logger.error(f"Firestore get_donation_history failed: {e}")
             return []
 
-    async def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> Dict[str, Any]:
         try:
             # Best-effort light stats
             total_donations = (
@@ -156,7 +156,7 @@ class FirestoreDatabase:
             return {}
 
     # ----- User preferences -----
-    async def get_user_language(self, user_id: int) -> str:
+    def get_user_language(self, user_id: int) -> str:
         try:
             snap = self.db.collection("users").document(str(user_id)).get()
             if snap.exists:
@@ -166,7 +166,7 @@ class FirestoreDatabase:
             pass
         return "ru"
 
-    async def set_user_language(self, user_id: int, language: str) -> bool:
+    def set_user_language(self, user_id: int, language: str) -> bool:
         try:
             ref = self.db.collection("users").document(str(user_id))
             ref.set({"language": language, "updated_at": time.time()}, merge=True)
@@ -175,14 +175,14 @@ class FirestoreDatabase:
             logger.error(f"Firestore set_user_language failed: {e}")
             return False
 
-    async def has_language_set(self, user_id: int) -> bool:
+    def has_language_set(self, user_id: int) -> bool:
         try:
             snap = self.db.collection("users").document(str(user_id)).get()
             return snap.exists and (snap.to_dict() or {}).get("language") is not None
         except Exception:
             return False
 
-    async def reset_user_language(self, user_id: int) -> bool:
+    def reset_user_language(self, user_id: int) -> bool:
         try:
             ref = self.db.collection("users").document(str(user_id))
             ref.set({"language": None, "updated_at": time.time()}, merge=True)
@@ -191,7 +191,7 @@ class FirestoreDatabase:
             logger.error(f"Firestore reset_user_language failed: {e}")
             return False
 
-    async def get_user_reasoning(self, user_id: int) -> str:
+    def get_user_reasoning(self, user_id: int) -> str:
         try:
             snap = self.db.collection("users").document(str(user_id)).get()
             if snap.exists:
@@ -201,7 +201,7 @@ class FirestoreDatabase:
             pass
         return "minimal"
 
-    async def set_user_reasoning(self, user_id: int, level: str) -> bool:
+    def set_user_reasoning(self, user_id: int, level: str) -> bool:
         try:
             ref = self.db.collection("users").document(str(user_id))
             ref.set({"reasoning": level, "updated_at": time.time()}, merge=True)
@@ -210,7 +210,7 @@ class FirestoreDatabase:
             logger.error(f"Firestore set_user_reasoning failed: {e}")
             return False
 
-    async def get_user_model(self, user_id: int) -> str:
+    def get_user_model(self, user_id: int) -> str:
         try:
             snap = self.db.collection("users").document(str(user_id)).get()
             if snap.exists:
@@ -220,7 +220,7 @@ class FirestoreDatabase:
             pass
         return "gpt-5-mini"
 
-    async def set_user_model(self, user_id: int, model: str) -> bool:
+    def set_user_model(self, user_id: int, model: str) -> bool:
         try:
             ref = self.db.collection("users").document(str(user_id))
             ref.set({"model": model, "updated_at": time.time()}, merge=True)
@@ -230,7 +230,7 @@ class FirestoreDatabase:
             return False
 
     # ----- Maintenance helpers -----
-    async def _reset_all_languages(self) -> None:
+    def _reset_all_languages(self) -> None:
         try:
             # Best-effort: iterate limited batch
             users = self.db.collection("users").limit(2000).stream()

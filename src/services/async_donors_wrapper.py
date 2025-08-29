@@ -17,7 +17,7 @@ class AsyncDonorsWrapper:
         self._db: Optional[Union[DonorsDatabase, PostgresDatabase, Any]] = None
         self._is_postgres = bool(os.environ.get("DATABASE_URL"))
         self._use_firestore = os.environ.get("USE_FIRESTORE_DB", "").lower() == "true"
-        self._is_async_backend = False  # postgres and firestore are async
+
         self._initialized = False
     
     async def _ensure_initialized(self):
@@ -27,11 +27,9 @@ class AsyncDonorsWrapper:
                 from .firebase_db import FirestoreDatabase
                 self._db = FirestoreDatabase()
                 self.db_path = self._db.db_path
-                self._is_async_backend = True
             elif self._is_postgres:
                 self._db = await get_postgres_db()
                 self.db_path = self._db.db_path
-                self._is_async_backend = True
             else:
                 # Use regular SQLite database
                 from .donors_db import DonorsDatabase
@@ -51,7 +49,7 @@ class AsyncDonorsWrapper:
         """Add donation (async)."""
         await self._ensure_initialized()
         
-        if self._is_async_backend:
+        if self._use_firestore or self._is_postgres:
             return await self._db.add_donation(
                 user_id, payment_id, stars_amount,
                 telegram_username, first_name, invoice_payload
@@ -66,7 +64,7 @@ class AsyncDonorsWrapper:
         """Check premium status (async)."""
         await self._ensure_initialized()
         
-        if self._is_async_backend:
+        if self._is_postgres:
             return await self._db.is_premium_user(user_id)
         else:
             return self._db.is_premium_user(user_id)
@@ -75,7 +73,7 @@ class AsyncDonorsWrapper:
         """Get donor info (async)."""
         await self._ensure_initialized()
         
-        if self._is_async_backend:
+        if self._is_postgres:
             return await self._db.get_donor_info(user_id)
         else:
             return self._db.get_donor_info(user_id)
@@ -84,7 +82,7 @@ class AsyncDonorsWrapper:
         """Get donation history (async)."""
         await self._ensure_initialized()
         
-        if self._is_async_backend:
+        if self._is_postgres:
             return await self._db.get_donation_history(user_id)
         else:
             return self._db.get_donation_history(user_id)
@@ -93,7 +91,7 @@ class AsyncDonorsWrapper:
         """Get statistics (async)."""
         await self._ensure_initialized()
         
-        if self._is_async_backend:
+        if self._is_postgres:
             return await self._db.get_stats()
         else:
             return self._db.get_stats()
@@ -102,7 +100,7 @@ class AsyncDonorsWrapper:
         """Get user language (async)."""
         await self._ensure_initialized()
         
-        if self._is_async_backend:
+        if self._is_postgres:
             return await self._db.get_user_language(user_id)
         else:
             return self._db.get_user_language(user_id)
@@ -111,7 +109,7 @@ class AsyncDonorsWrapper:
         """Set user language (async)."""
         await self._ensure_initialized()
         
-        if self._is_async_backend:
+        if self._is_postgres:
             return await self._db.set_user_language(user_id, language)
         else:
             return self._db.set_user_language(user_id, language)
@@ -119,7 +117,7 @@ class AsyncDonorsWrapper:
     async def has_language_set(self, user_id: int) -> bool:
         """Check if language is set (async)."""
         await self._ensure_initialized()
-        if self._is_async_backend:
+        if self._is_postgres:
             try:
                 return await self._db.has_language_set(user_id)  # type: ignore[attr-defined]
             except Exception as e:
@@ -132,7 +130,7 @@ class AsyncDonorsWrapper:
     async def reset_user_language(self, user_id: int) -> bool:
         """Reset language (async)."""
         await self._ensure_initialized()
-        if self._is_async_backend:
+        if self._is_postgres:
             try:
                 return await self._db.reset_user_language(user_id)  # type: ignore[attr-defined]
             except Exception:
@@ -143,7 +141,7 @@ class AsyncDonorsWrapper:
     async def get_user_reasoning(self, user_id: int) -> str:
         """Get user's preferred reasoning level (async)."""
         await self._ensure_initialized()
-        if self._is_async_backend:
+        if self._is_postgres:
             return await self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
         else:
             return self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
@@ -151,21 +149,21 @@ class AsyncDonorsWrapper:
     async def set_user_reasoning(self, user_id: int, level: str) -> bool:
         """Set user's preferred reasoning level (async)."""
         await self._ensure_initialized()
-        if self._is_async_backend:
+        if self._is_postgres:
             return await self._db.set_user_reasoning(user_id, level)  # type: ignore[attr-defined]
         else:
             return self._db.set_user_reasoning(user_id, level)  # type: ignore[attr-defined]
 
     async def get_user_model(self, user_id: int) -> str:
         await self._ensure_initialized()
-        if self._is_async_backend:
+        if self._is_postgres:
             return await self._db.get_user_model(user_id)  # type: ignore[attr-defined]
         else:
             return self._db.get_user_model(user_id)  # type: ignore[attr-defined]
 
     async def set_user_model(self, user_id: int, model: str) -> bool:
         await self._ensure_initialized()
-        if self._is_async_backend:
+        if self._is_postgres:
             return await self._db.set_user_model(user_id, model)  # type: ignore[attr-defined]
         else:
             return self._db.set_user_model(user_id, model)  # type: ignore[attr-defined]
