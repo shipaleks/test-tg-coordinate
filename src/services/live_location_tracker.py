@@ -473,11 +473,13 @@ class LiveLocationTracker:
                         sources_block = ""
                         if sources:
                             from ..handlers.location import get_localized_message as _get_msg
+                            from ..utils.formatting_utils import sanitize_url as _sanitize_url
                             src_label = await _get_msg(session_data.user_id, 'sources_label')
                             bullets = []
                             for title, url in sources[:4]:
                                 safe_title = re.sub(r"[\[\]]", "", title)[:80]
-                                bullets.append(f"- [{safe_title}]({url})")
+                                safe_url = _sanitize_url(url)
+                                bullets.append(f"- [{safe_title}]({safe_url})")
                             sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
                     
                     # Legacy fallback for old format responses

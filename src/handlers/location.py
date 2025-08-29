@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # Localized messages for location handler
 LOCATION_MESSAGES = {
     'ru': {
-        'image_fallback': "⚠️ Изображения не загрузились, но вот факт:\n\n",
+        'image_fallback': "",
         'live_location_received': "🔴 *Живая локация получена!*\n\n📍 Отслеживание на {minutes} минут\n\nКак часто присылать интересные факты?",
         'interval_5min': "Каждые 5 минут",
         'interval_10min': "Каждые 10 минут", 
@@ -57,7 +57,7 @@ LOCATION_MESSAGES = {
         'live_manual_stop': "✅ *Трансляция остановлена*\n\nВы прекратили делиться геопозицией.\nСпасибо за прогулку с нами! 🚶‍♂️🗺️"
     },
     'en': {
-        'image_fallback': "⚠️ Images failed to load, but here's the fact:\n\n",
+        'image_fallback': "",
         'live_location_received': "🔴 *Live location received!*\n\n📍 Tracking for {minutes} minutes\n\nHow often should I send interesting facts?",
         'interval_5min': "Every 5 minutes",
         'interval_10min': "Every 10 minutes",
@@ -78,7 +78,7 @@ LOCATION_MESSAGES = {
         'live_manual_stop': "✅ *Broadcast stopped*\n\nYou stopped sharing your location.\nThank you for walking with us! 🚶‍♂️🗺️"
     },
     'fr': {
-        'image_fallback': "⚠️ Les images n'ont pas pu se charger, mais voici le fait :\n\n",
+        'image_fallback': "",
         'live_location_received': "🔴 *Position en direct reçue !*\n\n📍 Suivi pendant {minutes} minutes\n\nÀ quelle fréquence souhaitez-vous recevoir des faits intéressants ?",
         'interval_5min': "Toutes les 5 minutes",
         'interval_10min': "Toutes les 10 minutes",
