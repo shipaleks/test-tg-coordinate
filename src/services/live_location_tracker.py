@@ -219,6 +219,7 @@ class LiveLocationData:
     task: asyncio.Task | None = None
     monitor_task: asyncio.Task | None = None  # Health monitoring task
     session_start: datetime = None  # Track when session started
+    stop_requested: bool = False  # Flag to signal stop request
 
     def __post_init__(self):
         if self.fact_history is None:
@@ -331,6 +332,31 @@ class LiveLocationTracker:
         Args:
             user_id: Telegram user ID
         """
+        # First, mark session for stopping without waiting for lock
+        if user_id in self._active_sessions:
+            session = self._active_sessions[user_id]
+            session.stop_requested = True  # Signal to stop
+            
+        # Try to acquire lock with timeout to avoid hanging
+        try:
+            # Use wait_for for Python 3.9+ compatibility
+            await asyncio.wait_for(
+                self._stop_with_lock(user_id),
+                timeout=1.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout stopping session for user {user_id}, forcing stop")
+            # Force stop without lock
+            if user_id in self._active_sessions:
+                session = self._active_sessions.pop(user_id)
+                if session.task and not session.task.done():
+                    session.task.cancel()
+                if hasattr(session, 'monitor_task') and session.monitor_task and not session.monitor_task.done():
+                    session.monitor_task.cancel()
+                logger.info(f"Force-stopped live location for user {user_id}")
+    
+    async def _stop_with_lock(self, user_id: int) -> None:
+        """Stop session with lock acquired."""
         async with self._lock:
             await self._stop_session(user_id)
 
@@ -376,9 +402,18 @@ class LiveLocationTracker:
 
             # Initial wait: 30 seconds to give user time to start walking
             initial_sleep = 30
-            await asyncio.sleep(initial_sleep)
+            for _ in range(initial_sleep):
+                if session_data.stop_requested:
+                    logger.info(f"Stop requested during initial wait for user {session_data.user_id}")
+                    return
+                await asyncio.sleep(1)
 
             while True:
+                # Check if stop was requested
+                if session_data.stop_requested:
+                    logger.info(f"Stop requested for user {session_data.user_id}, exiting fact loop")
+                    break
+                    
                 current_time = datetime.now()
                 
                 # Check if session has exceeded its live_period
@@ -656,7 +691,13 @@ class LiveLocationTracker:
                 # Wait for the next interval, compensating for generation time
                 elapsed = (datetime.now() - send_start_time).total_seconds()
                 sleep_time = max(desired_interval_seconds - elapsed, 15)
-                await asyncio.sleep(sleep_time)
+                
+                # Sleep in 1-second intervals to check for stop request
+                for _ in range(int(sleep_time)):
+                    if session_data.stop_requested:
+                        logger.info(f"Stop requested during sleep for user {session_data.user_id}")
+                        return
+                    await asyncio.sleep(1)
 
         except asyncio.CancelledError:
             logger.info(f"Live location task cancelled for user {session_data.user_id}")

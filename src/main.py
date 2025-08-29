@@ -158,14 +158,21 @@ async def send_welcome_message(user_id: int, chat_id: int, bot, language: str = 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command."""
     user = update.effective_user
-    donors_db = await get_async_donors_db()
+    chat_id = update.effective_chat.id
     logger.info(f"/start received from user {user.id}")
+    
+    # FIRST: Always respond immediately to avoid hanging
+    try:
+        await update.message.reply_text("⏳ Обрабатываю...")
+    except Exception as e:
+        logger.error(f"Failed to send initial response: {e}")
     
     # Safety: cancel any existing live session for this user
     try:
         from src.services.live_location_tracker import get_live_location_tracker
         tracker = get_live_location_tracker()
         if tracker.is_user_tracking(user.id):
+            logger.info(f"Stopping live location for user {user.id}")
             await tracker.stop_live_location(user.id)
             # Inform user that we reset the session
             try:
@@ -173,15 +180,24 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 reset_text = await _msg(user.id, 'live_manual_stop')
             except Exception:
                 reset_text = "✅ Сессия сброшена. Начнём заново."
-            await update.message.reply_text(text=reset_text, parse_mode="Markdown")
+            await context.bot.send_message(chat_id=chat_id, text=reset_text, parse_mode="Markdown")
             logger.info(f"/start: stopped existing live session for user {user.id}")
     except Exception as e:
         logger.warning(f"/start: failed to stop existing session for user {user.id}: {e}")
+    
     # Best-effort: register user in Firestore (non-blocking failure)
     try:
         await fb_ensure_user(user.id, user.username, user.first_name)
     except Exception:
         pass
+    
+    # Get donors_db AFTER stopping sessions
+    try:
+        donors_db = await get_async_donors_db()
+    except Exception as e:
+        logger.error(f"Failed to get donors_db: {e}")
+        await context.bot.send_message(chat_id=chat_id, text="❌ Ошибка инициализации. Попробуйте ещё раз.")
+        return
     
     try:
         # Check if user has language set
@@ -191,12 +207,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             return
         
         # User has language set, send welcome message in their language
-        await send_welcome_message(user.id, update.message.chat_id, context.bot)
+        await send_welcome_message(user.id, chat_id, context.bot)
     except Exception as e:
         logger.error(f"/start flow error for user {user.id}: {e}")
         # Fallback minimal message so user always sees a response
         try:
-            await update.message.reply_text("👋 Я готов. Отправь локацию (или Live Location) — начнём сначала.")
+            await context.bot.send_message(chat_id=chat_id, text="👋 Я готов. Отправь локацию (или Live Location) — начнём сначала.")
         except Exception:
             pass
 
