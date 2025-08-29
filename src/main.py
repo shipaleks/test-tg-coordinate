@@ -15,12 +15,12 @@ from telegram.ext import (
     filters,
 )
 
-from .handlers.location import (
+from src.handlers.location import (
     handle_edited_location,
     handle_interval_callback,
     handle_location,
 )
-from .handlers.donations import (
+from src.handlers.donations import (
     donate_command,
     handle_donation_callback,
     handle_pre_checkout_query,
@@ -28,7 +28,7 @@ from .handlers.donations import (
     stats_command,
     dbtest_command,
 )
-from .handlers.language_selection import (
+from src.handlers.language_selection import (
     show_language_selection,
     handle_language_selection,
     handle_custom_language_input,
@@ -36,8 +36,8 @@ from .handlers.language_selection import (
     reason_command,
     handle_reason_model_callback,
 )
-from .services.firebase_stats import ensure_user as fb_ensure_user
-from .services.async_donors_wrapper import get_async_donors_db
+from src.services.firebase_stats import ensure_user as fb_ensure_user
+from src.services.async_donors_wrapper import get_async_donors_db
 from pathlib import Path
 
 # Load environment variables from .env file
@@ -163,13 +163,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     # Safety: cancel any existing live session for this user
     try:
-        from .services.live_location_tracker import get_live_location_tracker
+        from src.services.live_location_tracker import get_live_location_tracker
         tracker = get_live_location_tracker()
         if tracker.is_user_tracking(user.id):
             await tracker.stop_live_location(user.id)
             # Inform user that we reset the session
             try:
-                from .handlers.location import get_localized_message as _msg
+                from src.handlers.location import get_localized_message as _msg
                 reset_text = await _msg(user.id, 'live_manual_stop')
             except Exception:
                 reset_text = "✅ Сессия сброшена. Начнём заново."
