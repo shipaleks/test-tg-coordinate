@@ -292,6 +292,21 @@ def main() -> None:
             logger.error(f"Migration check failed: {e}")
             # Continue anyway - database will be created empty
 
+    # Optional: reset languages on fresh deploy if requested
+    if os.environ.get("RESET_LANG_ON_DEPLOY", "").lower() == "true":
+        try:
+            import asyncio
+            async def _reset_all_languages():
+                db = await get_async_donors_db()
+                # best-effort: if backend supports bulk reset; otherwise skip
+                reset_supported = hasattr(db._db, "reset_all_languages")  # type: ignore[attr-defined]
+                if reset_supported:
+                    await db._db.reset_all_languages()  # type: ignore[attr-defined]
+            asyncio.get_event_loop_policy().get_event_loop().run_until_complete(_reset_all_languages())
+            logger.info("RESET_LANG_ON_DEPLOY executed")
+        except Exception as e:
+            logger.warning(f"RESET_LANG_ON_DEPLOY failed or unsupported: {e}")
+
     # Get bot token from environment
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not bot_token:

@@ -29,6 +29,8 @@ class FirestoreDatabase:
     def __init__(self) -> None:
         self.db = get_firestore()
         self.db_path = "firestore://users,donations"
+        # Expose a convenience for bulk reset (best-effort, optional)
+        self.reset_all_languages = self._reset_all_languages
 
     # ----- Donations / Donors -----
     async def add_donation(
@@ -226,5 +228,23 @@ class FirestoreDatabase:
         except Exception as e:
             logger.error(f"Firestore set_user_model failed: {e}")
             return False
+
+    # ----- Maintenance helpers -----
+    async def _reset_all_languages(self) -> None:
+        try:
+            # Best-effort: iterate limited batch
+            users = self.db.collection("users").limit(2000).stream()
+            batch = self.db.batch()
+            count = 0
+            for doc in users:
+                batch.update(doc.reference, {"language": None})
+                count += 1
+                if count % 400 == 0:
+                    batch.commit()
+                    batch = self.db.batch()
+            batch.commit()
+            logger.info(f"Reset language for ~{count} users in Firestore")
+        except Exception as e:
+            logger.warning(f"Bulk language reset failed: {e}")
 
 
