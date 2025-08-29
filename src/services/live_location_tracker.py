@@ -109,18 +109,25 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                 if len(image_urls) > 2:
                     logger.info(f"Retrying live fact with fewer images (2 instead of {len(image_urls)})")
                     try:
-                        # Retry with only first 2 images
+                        # Retry with only first 2 images, ensure caption fits limit
+                        short_caption = caption_text
+                        if len(short_caption) > 1024:
+                            max_len = 1020
+                            break_point = max_len
+                            for i in range(max_len-1, max_len-200, -1):
+                                if short_caption[i] in ' \n':
+                                    break_point = i
+                                    break
+                            short_caption = short_caption[:break_point].rstrip() + "..."
+
                         retry_media_list = []
                         for i, image_url in enumerate(image_urls[:2]):
                             if i == 0:
-                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=caption_text, parse_mode="Markdown"))
+                                retry_media_list.append(InputMediaPhoto(media=image_url, caption=short_caption, parse_mode="Markdown"))
                             else:
                                 retry_media_list.append(InputMediaPhoto(media=image_url))
-                        
-                        await bot.send_media_group(
-                            chat_id=chat_id,
-                            media=retry_media_list
-                        )
+
+                        await bot.send_media_group(chat_id=chat_id, media=retry_media_list)
                         logger.info(f"Successfully sent {len(retry_media_list)} live images on retry for {place}")
                         return
                     except Exception as retry_error:
