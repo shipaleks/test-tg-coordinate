@@ -271,22 +271,23 @@ class LiveLocationTracker:
 
             # Start the fact sending task
             try:
+                # Eagerly store session before tasks so we can cancel on slow startups
+                self._active_sessions[user_id] = session_data
+                
                 task = asyncio.create_task(self._fact_sending_loop(session_data, bot))
                 session_data.task = task
                 
                 # Start health monitor task
                 monitor_task = asyncio.create_task(self._monitor_session_health(session_data, bot))
-                # Store monitor task reference (we'll add this field)
                 session_data.monitor_task = monitor_task
-                
-                # Store the session
-                self._active_sessions[user_id] = session_data
                 
                 logger.info(
                     f"Started live location tracking for user {user_id} for {live_period}s, facts every {fact_interval_minutes} min"
                 )
             except Exception as e:
                 logger.error(f"Failed to start live location task for user {user_id}: {e}")
+                # Ensure cleanup on failure
+                await self._stop_session(user_id)
                 raise
 
     async def update_live_location(

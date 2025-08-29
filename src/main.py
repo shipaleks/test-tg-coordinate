@@ -159,6 +159,16 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Handle /start command."""
     user = update.effective_user
     donors_db = await get_async_donors_db()
+    
+    # Safety: cancel any existing live session for this user
+    try:
+        from .services.live_location_tracker import get_live_location_tracker
+        tracker = get_live_location_tracker()
+        if tracker.is_user_tracking(user.id):
+            await tracker.stop_live_location(user.id)
+            logger.info(f"/start: stopped existing live session for user {user.id}")
+    except Exception as e:
+        logger.warning(f"/start: failed to stop existing session for user {user.id}: {e}")
     # Best-effort: register user in Firestore (non-blocking failure)
     try:
         await fb_ensure_user(user.id, user.username, user.first_name)

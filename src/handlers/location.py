@@ -819,15 +819,28 @@ async def handle_interval_callback(
         # Add small delay to ensure any previous session cleanup is complete
         await asyncio.sleep(0.1)
         
-        await tracker.start_live_location(
-            user_id=user_id,
-            chat_id=chat_id,
-            latitude=lat,
-            longitude=lon,
-            live_period=live_period,
-            bot=context.bot,
-            fact_interval_minutes=interval_minutes,
-        )
+        # Start session with a safety timeout so handler never hangs
+        import asyncio as _asyncio
+        try:
+            await _asyncio.wait_for(
+                tracker.start_live_location(
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    latitude=lat,
+                    longitude=lon,
+                    live_period=live_period,
+                    bot=context.bot,
+                    fact_interval_minutes=interval_minutes,
+                ),
+                timeout=3.0,
+            )
+        except _asyncio.TimeoutError:
+            logger.error(f"Timeout starting live location for user {user_id}")
+            await query.edit_message_text(
+                text="😔 Timeout setting up live location. Please resend live location and pick an interval again.",
+                parse_mode="Markdown",
+            )
+            return
 
         # Update the message to show confirmation
         confirmation_text = await get_localized_message(user_id, 'live_activated', 
@@ -836,9 +849,7 @@ async def handle_interval_callback(
 
         await query.edit_message_text(text=confirmation_text, parse_mode="Markdown")
 
-        logger.info(
-            f"Started live location tracking for user {user_id} with {interval_minutes} min interval"
-        )
+        logger.info(f"Interval callback completed for user {user_id}: {interval_minutes} min interval")
 
     except Exception as e:
         logger.error(f"Error handling interval callback: {e}")
