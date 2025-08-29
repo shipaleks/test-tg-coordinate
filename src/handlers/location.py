@@ -530,6 +530,14 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             logger.info(
                 f"Sent interval selection for live location from user {user_id}"
             )
+            # Defensive: clear any previous session to avoid duplicates/zombie tasks
+            try:
+                tracker = get_live_location_tracker()
+                if tracker.is_user_tracking(user_id):
+                    await tracker.stop_live_location(user_id)
+                    logger.info(f"Cleared previous session on new live location from user {user_id}")
+            except Exception:
+                pass
             return  # Don't send initial fact yet, wait for interval selection
 
         # For static locations, send immediate fact with history tracking
