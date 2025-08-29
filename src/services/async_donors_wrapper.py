@@ -14,14 +14,19 @@ class AsyncDonorsWrapper:
     """Unified async interface for both PostgreSQL and SQLite databases."""
     
     def __init__(self):
-        self._db: Optional[Union[DonorsDatabase, PostgresDatabase]] = None
+        self._db: Optional[Union[DonorsDatabase, PostgresDatabase, Any]] = None
         self._is_postgres = bool(os.environ.get("DATABASE_URL"))
+        self._use_firestore = os.environ.get("USE_FIRESTORE_DB", "").lower() == "true"
         self._initialized = False
     
     async def _ensure_initialized(self):
         """Ensure database is initialized."""
         if not self._initialized:
-            if self._is_postgres:
+            if self._use_firestore:
+                from .firebase_db import FirestoreDatabase
+                self._db = FirestoreDatabase()
+                self.db_path = self._db.db_path
+            elif self._is_postgres:
                 self._db = await get_postgres_db()
                 self.db_path = self._db.db_path
             else:
