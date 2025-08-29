@@ -159,6 +159,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Handle /start command."""
     user = update.effective_user
     donors_db = await get_async_donors_db()
+    logger.info(f"/start received from user {user.id}")
     
     # Safety: cancel any existing live session for this user
     try:
@@ -166,6 +167,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         tracker = get_live_location_tracker()
         if tracker.is_user_tracking(user.id):
             await tracker.stop_live_location(user.id)
+            # Inform user that we reset the session
+            try:
+                from .handlers.location import get_localized_message as _msg
+                reset_text = await _msg(user.id, 'live_manual_stop')
+            except Exception:
+                reset_text = "✅ Сессия сброшена. Начнём заново."
+            await update.message.reply_text(text=reset_text, parse_mode="Markdown")
             logger.info(f"/start: stopped existing live session for user {user.id}")
     except Exception as e:
         logger.warning(f"/start: failed to stop existing session for user {user.id}: {e}")
@@ -175,14 +183,22 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception:
         pass
     
-    # Check if user has language set
-    if not await donors_db.has_language_set(user.id):
-        # Show language selection for new users
-        await show_language_selection(update, context)
-        return
-    
-    # User has language set, send welcome message in their language
-    await send_welcome_message(user.id, update.message.chat_id, context.bot)
+    try:
+        # Check if user has language set
+        if not await donors_db.has_language_set(user.id):
+            # Show language selection for new users
+            await show_language_selection(update, context)
+            return
+        
+        # User has language set, send welcome message in their language
+        await send_welcome_message(user.id, update.message.chat_id, context.bot)
+    except Exception as e:
+        logger.error(f"/start flow error for user {user.id}: {e}")
+        # Fallback minimal message so user always sees a response
+        try:
+            await update.message.reply_text("👋 Я готов. Отправь локацию (или Live Location) — начнём сначала.")
+        except Exception:
+            pass
 
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

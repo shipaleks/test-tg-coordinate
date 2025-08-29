@@ -349,6 +349,17 @@ class LiveLocationTracker:
                     pass
 
             del self._active_sessions[user_id]
+            # Let Telegram know we stopped if called from a reset context
+            try:
+                from ..handlers.location import get_localized_message as _msg
+                stop_msg = await _msg(session.user_id, 'live_manual_stop')
+                await session.task.get_coro().cr_frame.f_locals.get('bot').send_message(  # type: ignore[attr-defined]
+                    chat_id=session.chat_id,
+                    text=stop_msg,
+                    parse_mode="Markdown",
+                )
+            except Exception:
+                pass
             logger.info(f"Stopped live location tracking for user {user_id}")
 
     async def _fact_sending_loop(
