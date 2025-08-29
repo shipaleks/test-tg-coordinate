@@ -302,11 +302,9 @@ class LiveLocationTracker:
             latitude: New latitude
             longitude: New longitude
         """
-        # Best-effort: record movement point for this live update
-        try:
-            await fb_record_movement(user_id, latitude, longitude)
-        except Exception:
-            pass
+        # Do not write every update to Firestore to reduce noise and costs.
+        # We record movement only at the moment we actually attempt to send a fact
+        # inside the fact-sending loop.
 
         async with self._lock:
             if user_id in self._active_sessions:

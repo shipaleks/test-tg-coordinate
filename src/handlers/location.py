@@ -534,7 +534,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         # For static locations, send immediate fact with history tracking
         openai_client = get_openai_client()
-        # Record a movement point for static location as well (best-effort)
+        # Record movement only when we are about to attempt a fact (static case)
         try:
             await fb_record_movement(user_id, lat, lon)
         except Exception:
