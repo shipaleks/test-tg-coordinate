@@ -201,11 +201,30 @@ def _escape_markdown(text: str) -> str:
     We only escape characters that commonly break formatting in legacy Markdown:
     asterisk, underscore, backtick, and square brackets/parentheses used in links.
     Do NOT escape dots or punctuation to avoid visible backslashes in output.
+    
+    Special handling: preserve service tags like [[NO_POI_FOUND]] without escaping.
     """
+    # First, protect service tags by temporarily replacing them
+    service_tags = ['[[NO_POI_FOUND]]']
+    protected_text = text
+    replacements = {}
+    
+    for i, tag in enumerate(service_tags):
+        if tag in protected_text:
+            placeholder = f"__SERVICE_TAG_{i}__"
+            replacements[placeholder] = tag
+            protected_text = protected_text.replace(tag, placeholder)
+    
+    # Now escape markdown characters
     chars_to_escape = ['*', '_', '`', '[', ']']
     for char in chars_to_escape:
-        text = text.replace(char, '\\' + char)
-    return text
+        protected_text = protected_text.replace(char, '\\' + char)
+    
+    # Restore service tags
+    for placeholder, original_tag in replacements.items():
+        protected_text = protected_text.replace(placeholder, original_tag)
+    
+    return protected_text
 
 
 def _label_to_html(label: str) -> str:

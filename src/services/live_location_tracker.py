@@ -472,6 +472,11 @@ class LiveLocationTracker:
                         user_id=session_data.user_id,
                     )
 
+                    # Check if no POI was found - skip this iteration
+                    if response and "[[NO_POI_FOUND]]" in response:
+                        logger.info(f"No POI found for live location fact #{session_data.fact_count} for user {session_data.user_id}")
+                        continue  # Skip to next interval
+
                     # Parse the response to extract place and fact
                     from ..handlers.location import get_localized_message
                     place = await get_localized_message(session_data.user_id, 'near_you')  # Default location
