@@ -57,6 +57,10 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                 # Use full response as caption but ensure Markdown is safe
                 caption_text = formatted_response
                 
+                # Debug logging for Markdown issues
+                logger.debug(f"Caption text for debugging (first 200 chars): {caption_text[:200]}")
+                logger.debug(f"Caption length: {len(caption_text)}")
+                
                 if len(caption_text) <= 1024:
                     # Caption fits in Telegram limit, send as media group with caption
                     media_list = []
@@ -75,16 +79,35 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                     logger.info(f"Successfully sent {len(image_urls)} live images with caption in media group for {place}")
                 else:
                     # Caption too long → first photo with shortened caption + rest without captions
-                    # Safely truncate without breaking words
-                    max_len = 1020
+                    # Safely truncate without breaking Markdown entities
+                    max_len = 900  # Leave more room for safety
                     if len(caption_text) > max_len:
-                        # Find a good breaking point (space, newline) before max_len
-                        break_point = max_len
-                        for i in range(max_len-1, max_len-200, -1):
-                            if caption_text[i] in ' \n':
-                                break_point = i
-                                break
-                        short_caption = caption_text[:break_point].rstrip() + "..."
+                        # First, try to find a safe breaking point before any sources section
+                        sources_start = caption_text.find("\n\n🔗")
+                        if sources_start > 0 and sources_start < max_len:
+                            # Cut before sources section
+                            short_caption = caption_text[:sources_start].rstrip() + "..."
+                        else:
+                            # Find a good breaking point (paragraph or sentence) before max_len
+                            break_point = max_len
+                            # Look for paragraph break first
+                            for i in range(max_len-1, max(0, max_len-300), -1):
+                                if caption_text[i:i+2] == '\n\n':
+                                    break_point = i
+                                    break
+                            # If no paragraph break, look for sentence end
+                            if break_point == max_len:
+                                for i in range(max_len-1, max(0, max_len-200), -1):
+                                    if caption_text[i] in '.!?' and i+1 < len(caption_text) and caption_text[i+1] in ' \n':
+                                        break_point = i + 1
+                                        break
+                            # Last resort: break at space
+                            if break_point == max_len:
+                                for i in range(max_len-1, max(0, max_len-100), -1):
+                                    if caption_text[i] in ' \n':
+                                        break_point = i
+                                        break
+                            short_caption = caption_text[:break_point].rstrip() + "..."
                     else:
                         short_caption = caption_text
                     media_list = []
@@ -523,7 +546,10 @@ class LiveLocationTracker:
                             src_label = await _get_msg(session_data.user_id, 'sources_label')
                             bullets = []
                             for title, url in sources[:4]:
+                                # Remove square brackets and escape other Markdown characters in title
                                 safe_title = re.sub(r"[\[\]]", "", title)[:80]
+                                # Escape Markdown special chars in title to prevent parsing errors
+                                safe_title = safe_title.replace("*", "\\*").replace("_", "\\_").replace("`", "\\`").replace("(", "\\(").replace(")", "\\)")
                                 safe_url = _sanitize_url(url)
                                 bullets.append(f"- [{safe_title}]({safe_url})")
                             sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
