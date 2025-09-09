@@ -80,7 +80,7 @@ async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     donor_info = await donors_db.get_donor_info(user.id)
     
     # Create status text
-    if donor_info:
+    if donor_info and 'total_stars' in donor_info:
         status_text = messages['donor_status'].format(total_stars=donor_info['total_stars']) + "\n\n"
     else:
         status_text = ""
@@ -170,7 +170,7 @@ async def handle_donation_callback(update: Update, context: ContextTypes.DEFAULT
             donor_info = await donors_db.get_donor_info(user.id)
             
             # Create status text
-            if donor_info:
+            if donor_info and 'total_stars' in donor_info:
                 status_text = messages['donor_status'].format(total_stars=donor_info['total_stars']) + "\n\n"
             else:
                 status_text = ""
@@ -344,7 +344,7 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
         if success:
             # Get updated donor info
             donor_info = await donors_db.get_donor_info(user.id)
-            total_stars = donor_info['total_stars'] if donor_info else stars_amount
+            total_stars = donor_info.get('total_stars', stars_amount) if donor_info else stars_amount
             
             # Check if this is first donation (show bonus message)
             is_first_donation = total_stars == stars_amount
@@ -438,7 +438,7 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             # Get user info (should work even for non-donors)
             donor_info = await donors_db.get_donor_info(user_id)
             if donor_info:
-                test_results.append(f"👤 *Your donor status:* Found (⭐{donor_info['total_stars']})")
+                test_results.append(f"👤 *Your donor status:* Found (⭐{donor_info.get('total_stars', 0)})")
                 
                 # Check premium status with detailed timestamp info
                 is_premium = await donors_db.is_premium_user(user_id)
