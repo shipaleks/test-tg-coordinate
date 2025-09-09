@@ -201,12 +201,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     try:
         # Check if user has language set
-        if not await donors_db.has_language_set(user.id):
+        has_lang = await donors_db.has_language_set(user.id)
+        logger.info(f"User {user.id} has_language_set: {has_lang}")
+        
+        if not has_lang:
             # Show language selection for new users
+            logger.info(f"Showing language selection for user {user.id}")
             await show_language_selection(update, context)
             return
         
         # User has language set, send welcome message in their language
+        logger.info(f"User {user.id} has language, showing welcome")
         await send_welcome_message(user.id, chat_id, context.bot)
     except Exception as e:
         logger.error(f"/start flow error for user {user.id}: {e}")

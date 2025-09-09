@@ -178,8 +178,16 @@ class FirestoreDatabase:
     def has_language_set(self, user_id: int) -> bool:
         try:
             snap = self.db.collection("users").document(str(user_id)).get()
-            return snap.exists and (snap.to_dict() or {}).get("language") is not None
-        except Exception:
+            if not snap.exists:
+                logger.info(f"has_language_set: user {user_id} document does not exist")
+                return False
+            
+            user_data = snap.to_dict() or {}
+            has_lang = user_data.get("language") is not None
+            logger.info(f"has_language_set: user {user_id} has language={user_data.get('language')}, result={has_lang}")
+            return has_lang
+        except Exception as e:
+            logger.error(f"has_language_set error for user {user_id}: {e}")
             return False
 
     def reset_user_language(self, user_id: int) -> bool:
