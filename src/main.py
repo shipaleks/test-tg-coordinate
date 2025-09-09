@@ -369,6 +369,47 @@ def main() -> None:
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("dbtest", dbtest_command))
     application.add_handler(CommandHandler("reset", reset_language_command))
+    
+    # Debug command
+    async def debuguser_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Debug user state in Firestore."""
+        user = update.effective_user
+        
+        try:
+            donors_db = await get_async_donors_db()
+            
+            # Check if using Firestore
+            if hasattr(donors_db, '_use_firestore') and donors_db._use_firestore:
+                from src.services.firebase_client import get_firestore
+                db = get_firestore()
+                
+                # Get user document
+                user_doc = db.collection("users").document(str(user.id)).get()
+                
+                if user_doc.exists:
+                    user_data = user_doc.to_dict()
+                    debug_text = f"🔍 User {user.id} Debug Info\n\n"
+                    debug_text += "Firestore Document:\n"
+                    for key, value in user_data.items():
+                        debug_text += f"• {key}: {value}\n"
+                else:
+                    debug_text = f"❌ No Firestore document found for user {user.id}"
+            else:
+                debug_text = "Not using Firestore database"
+                
+            # Also check language settings
+            has_lang = await donors_db.has_language_set(user.id)
+            current_lang = await donors_db.get_user_language(user.id)
+            debug_text += f"\n\nLanguage Check:\n"
+            debug_text += f"• has_language_set: {has_lang}\n"
+            debug_text += f"• current_language: {current_lang}"
+                
+            await update.message.reply_text(debug_text)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Debug error: {str(e)}")
+    
+    application.add_handler(CommandHandler("debuguser", debuguser_command))
     # Hidden command to control reasoning effort per user
     application.add_handler(CommandHandler("reason", reason_command))
     # Hidden callbacks for reasoning/model toggles
