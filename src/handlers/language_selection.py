@@ -300,7 +300,8 @@ async def reset_language_command(update: Update, context: ContextTypes.DEFAULT_T
     success = await donors_db.reset_user_language(user.id)
     
     if success:
-        reset_text = WELCOME_MESSAGES.get(current_lang, WELCOME_MESSAGES['en'])['language_reset']
+        # Always use English message after reset since language is now None
+        reset_text = WELCOME_MESSAGES['en']['language_reset']
         await update.message.reply_text(reset_text)
         logger.info(f"User {user.id} reset their language preference")
     else:

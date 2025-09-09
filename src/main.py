@@ -59,6 +59,7 @@ LOCALIZED_MESSAGES = {
         ),
         'buttons': {
             'info': "📱💡 Как включить живую локацию",
+            'language': "🌐 Язык / Language",
             'donate': "⭐💝 Поддержать проект"
         },
         'info_text': (
@@ -82,6 +83,7 @@ LOCALIZED_MESSAGES = {
         ),
         'buttons': {
             'info': "📱💡 How to enable Live Location",
+            'language': "🌐 Language / Язык",
             'donate': "⭐💝 Support project"
         },
         'info_text': (
@@ -105,6 +107,7 @@ LOCALIZED_MESSAGES = {
         ),
         'buttons': {
             'info': "📱💡 Activer la position en direct",
+            'language': "🌐 Langue / Language",
             'donate': "⭐💝 Soutenir le projet"
         },
         'info_text': (
@@ -141,7 +144,7 @@ async def send_welcome_message(user_id: int, chat_id: int, bot, language: str = 
     # Focus on Live Location: no direct one-time location button
     keyboard = [
         [KeyboardButton(buttons['info'])],
-        [KeyboardButton(buttons['donate'])],
+        [KeyboardButton(buttons['language']), KeyboardButton(buttons['donate'])],
     ]
     reply_markup = ReplyKeyboardMarkup(
         keyboard, resize_keyboard=True, one_time_keyboard=False
@@ -163,7 +166,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     # FIRST: Always respond immediately to avoid hanging
     try:
-        await update.message.reply_text("⏳ Обрабатываю...")
+        await update.message.reply_text("⏳ Processing...")
     except Exception as e:
         logger.error(f"Failed to send initial response: {e}")
     
@@ -179,7 +182,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 from src.handlers.location import get_localized_message as _msg
                 reset_text = await _msg(user.id, 'live_manual_stop')
             except Exception:
-                reset_text = "✅ Сессия сброшена. Начнём заново."
+                reset_text = "✅ Session reset. Let's start fresh."
             await context.bot.send_message(chat_id=chat_id, text=reset_text, parse_mode="Markdown")
             logger.info(f"/start: stopped existing live session for user {user.id}")
     except Exception as e:
@@ -196,7 +199,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         donors_db = await get_async_donors_db()
     except Exception as e:
         logger.error(f"Failed to get donors_db: {e}")
-        await context.bot.send_message(chat_id=chat_id, text="❌ Ошибка инициализации. Попробуйте ещё раз.")
+        await context.bot.send_message(chat_id=chat_id, text="❌ Initialization error. Please try again.")
         return
     
     try:
@@ -217,7 +220,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         logger.error(f"/start flow error for user {user.id}: {e}")
         # Fallback minimal message so user always sees a response
         try:
-            await context.bot.send_message(chat_id=chat_id, text="👋 Я готов. Отправь локацию (или Live Location) — начнём сначала.")
+            await context.bot.send_message(chat_id=chat_id, text="👋 I'm ready. Send location (or Live Location) to start.")
         except Exception:
             pass
 
@@ -425,6 +428,17 @@ def main() -> None:
     for pattern in info_patterns:
         application.add_handler(
             MessageHandler(filters.TEXT & filters.Regex(pattern), info_command)
+        )
+    
+    # Language button patterns
+    language_patterns = [
+        "^🌐 Язык / Language$",
+        "^🌐 Language / Язык$",
+        "^🌐 Langue / Language$"
+    ]
+    for pattern in language_patterns:
+        application.add_handler(
+            MessageHandler(filters.TEXT & filters.Regex(pattern), show_language_selection)
         )
     
     # Donate button patterns  
