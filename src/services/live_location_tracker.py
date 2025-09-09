@@ -61,7 +61,11 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                 logger.debug(f"Caption text for debugging (first 200 chars): {caption_text[:200]}")
                 logger.debug(f"Caption length: {len(caption_text)}")
                 
-                if len(caption_text) <= 1024:
+                # For better UX, prefer keeping sources with images if they fit
+                # Maximum safe caption length for Telegram
+                max_caption_length = 1024
+                
+                if len(caption_text) <= max_caption_length:
                     # Caption fits in Telegram limit, send as media group with caption
                     media_list = []
                     for i, image_url in enumerate(image_urls):
@@ -118,6 +122,35 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                             media_list.append(InputMediaPhoto(media=image_url))
                     await bot.send_media_group(chat_id=chat_id, media=media_list)
                     logger.info(f"Successfully sent long live text + {len(image_urls)} images as media group for {place}")
+                    
+                    # If we truncated and there were sources, send them as a separate message
+                    sources_start_pos = caption_text.find("\n\n🔗")
+                    if len(caption_text) > max_len and sources and sources_start_pos > 0:
+                        try:
+                            # Reconstruct sources section
+                            from ..handlers.location import get_localized_message as _get_msg
+                            from ..utils.formatting_utils import sanitize_url as _sanitize_url
+                            
+                            # Get user_id from chat_id by extracting from the context
+                            # For live location, chat_id is usually the user_id for private chats
+                            user_id = chat_id if chat_id > 0 else 0
+                            
+                            src_label = await _get_msg(user_id, 'sources_label')
+                            bullets = []
+                            for title, url in sources[:4]:
+                                # Remove square brackets and escape other Markdown characters in title
+                                safe_title = re.sub(r"[\[\]]", "", title)[:80]
+                                # Escape Markdown special chars in title to prevent parsing errors
+                                safe_title = safe_title.replace("*", "\\*").replace("_", "\\_").replace("`", "\\`").replace("(", "\\(").replace(")", "\\)")
+                                safe_url = _sanitize_url(url)
+                                bullets.append(f"- [{safe_title}]({safe_url})")
+                            sources_msg = f"{src_label}\n" + "\n".join(bullets)
+                            
+                            await bot.send_message(chat_id=chat_id, text=sources_msg, parse_mode="Markdown", disable_web_page_preview=True)
+                            logger.info(f"Sent truncated sources in separate message for {place}")
+                        except Exception as e:
+                            logger.warning(f"Failed to send truncated sources: {e}")
+                    
                 return
                 
             except Exception as media_group_error:
