@@ -327,11 +327,12 @@ class YandexImageSearch:
             except Exception:
                 pass
 
-        # Deduplicate while preserving order
+        # Deduplicate and filter wiki pages while preserving order
         deduped: List[str] = []
         seen = set()
         for u in images:
-            if u and u not in seen:
+            # Final safety check: only accept valid image URLs
+            if u and u not in seen and self._looks_like_image_url(u):
                 seen.add(u)
                 deduped.append(u)
         return deduped
@@ -487,7 +488,8 @@ class YandexImageSearch:
                 for k, v in node.items():
                     if isinstance(v, str) and k.lower() in ("url", "imageurl", "previewurl"):
                         norm = self._normalize_wikimedia_url(v)
-                        if self._looks_like_image_url(v) or norm != v:
+                        # Only accept if it looks like a valid image URL (not wiki page)
+                        if self._looks_like_image_url(norm):
                             urls.append(norm)
                             if len(urls) >= need:
                                 return urls
@@ -509,7 +511,23 @@ class YandexImageSearch:
     def _looks_like_image_url(url: str) -> bool:
         try:
             lower = url.lower()
-            return lower.startswith("http") and any(lower.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp"))
+            # Must be HTTP(S)
+            if not lower.startswith("http"):
+                return False
+            
+            # Special:FilePath URLs are always valid (Telegram can load them)
+            if "special:filepath" in lower:
+                return True
+            
+            # CRITICAL: Reject wiki page URLs (Telegram can't load these)
+            if "/wiki/file:" in lower:
+                return False
+            
+            # For other URLs, must end with image extension
+            if any(ext in lower for ext in (".jpg", ".jpeg", ".png", ".webp")):
+                return True
+            
+            return False
         except Exception:
             return False
 
@@ -524,7 +542,8 @@ class YandexImageSearch:
             out: List[str] = []
             for m in matches:
                 norm = self._normalize_wikimedia_url(m)
-                if norm not in seen:
+                # Only accept valid image URLs (not wiki pages)
+                if norm not in seen and self._looks_like_image_url(norm):
                     seen.add(norm)
                     out.append(norm)
                 if len(out) >= need:
