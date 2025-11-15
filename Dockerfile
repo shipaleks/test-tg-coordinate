@@ -4,30 +4,23 @@ FROM python:3.12-slim
 # Set working directory
 WORKDIR /app
 
-# No system packages required (all deps use prebuilt wheels)
-
-# Copy project files
-COPY pyproject.toml ./
+# Copy dependency files first for better caching
 COPY requirements.txt ./
-COPY src/ ./src/
-# Copy full docs directory (avoids lstat issues with globs on some builders)
-COPY docs/ ./docs/
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash app \
-    && chown -R app:app /app
+# Copy application code
+COPY pyproject.toml ./
+COPY src/ ./src/
+COPY docs/ ./docs/
 
-# Pre-create data directory with correct permissions for volume mount
-RUN mkdir -p /data && chown app:app /data && chmod 755 /data
+# Install package in editable mode
+RUN pip install --no-cache-dir -e .
 
-USER app
-
-# Expose port
+# Expose port (must match PORT env var in Koyeb)
 EXPOSE 8000
 
-# Run the application
+# Run the application (Koyeb will manage healthcheck via HTTP endpoints)
 CMD ["python", "-m", "src.main"] 
