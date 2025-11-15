@@ -12,7 +12,7 @@ from ..services.async_donors_wrapper import get_async_donors_db
 
 logger = logging.getLogger(__name__)
 async def reason_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Hidden command to set reasoning (minimal/low/medium/high) and model (gpt-5/gpt-5-mini) via buttons."""
+    """Hidden command to set reasoning (minimal/low/medium/high) and model (gpt-5.1/gpt-5.1-mini) via buttons."""
     user = update.effective_user
     donors_db = await get_async_donors_db()
     current_level = await donors_db.get_user_reasoning(user.id)
@@ -27,7 +27,7 @@ async def reason_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             InlineKeyboardButton(f"{mark} Reasoning: {level}", callback_data=f"set_reason:{level}")
         ])
     # Model row
-    for model in ["gpt-5", "gpt-5-mini"]:
+    for model in ["gpt-5.1", "gpt-5.1-mini"]:
         mark = "✅" if model == current_model else ""
         rows.append([
             InlineKeyboardButton(f"{mark} Model: {model}", callback_data=f"set_model:{model}")
@@ -60,7 +60,7 @@ async def handle_reason_model_callback(update: Update, context: ContextTypes.DEF
         rows.append([
             InlineKeyboardButton(f"{mark} Reasoning: {level}", callback_data=f"set_reason:{level}")
         ])
-    for model in ["gpt-5", "gpt-5-mini"]:
+    for model in ["gpt-5.1", "gpt-5.1-mini"]:
         mark = "✅" if model == current_model else ""
         rows.append([
             InlineKeyboardButton(f"{mark} Model: {model}", callback_data=f"set_model:{model}")

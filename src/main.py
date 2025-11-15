@@ -501,12 +501,40 @@ def main() -> None:
     if webhook_url:
         # Use webhook for production
         logger.info(f"Starting webhook on port {port}")
-        # Use synchronous run_webhook which handles event loop internally
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=port,
-            webhook_url=webhook_url,
-        )
+        
+        # Create custom web app with healthcheck endpoint
+        try:
+            from tornado.web import Application as TornadoApplication, RequestHandler
+            
+            class HealthCheckHandler(RequestHandler):
+                def get(self):
+                    """Healthcheck endpoint for Koyeb/Railway."""
+                    self.set_status(200)
+                    self.write("OK")
+            
+            # Create Tornado app with healthcheck at root
+            web_app = TornadoApplication([
+                (r"/", HealthCheckHandler),
+                (r"/health", HealthCheckHandler),
+                (r"/healthz", HealthCheckHandler),
+            ])
+            logger.info("Added healthcheck endpoints: /, /health, /healthz")
+            
+            # Use synchronous run_webhook which handles event loop internally
+            application.run_webhook(
+                listen="0.0.0.0",
+                port=port,
+                webhook_url=webhook_url,
+                web_app=web_app,  # Add custom routes
+            )
+        except ImportError:
+            # Fallback if tornado not available (should not happen with python-telegram-bot)
+            logger.warning("Tornado not available, running without healthcheck")
+            application.run_webhook(
+                listen="0.0.0.0",
+                port=port,
+                webhook_url=webhook_url,
+            )
     else:
         # Use polling for local development
         logger.info("Starting polling mode")

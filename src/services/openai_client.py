@@ -716,15 +716,15 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 language_instructions=language_instructions,
             )
 
-            # Always attempt GPT-5 Responses first (with web_search), then fallback on error
+            # Always attempt GPT-5.1 Responses first (with web_search), then fallback on error
             try:
-                logger.info("Attempting GPT-5 Responses with web_search... (forced)")
+                logger.info("Attempting GPT-5.1 Responses with web_search... (forced)")
                 content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location, user_id=user_id)
                 if content:
-                    logger.info("GPT-5 Responses: success (web_search enabled)")
+                    logger.info("GPT-5.1 Responses: success (web_search enabled)")
                     return content.strip()
             except Exception as e:
-                logger.warning(f"GPT-5 Responses path failed: {e}. Falling back to standard models.")
+                logger.warning(f"GPT-5.1 Responses path failed: {e}. Falling back to standard models.")
 
             # Default fallback models (only if GPT-5 path fails)
             if is_live_location:
@@ -845,7 +845,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             raise
 
     async def _get_with_gpt5_responses(self, system_prompt: str, user_prompt: str, is_live: bool, user_id: int | None = None) -> str | None:
-        """Attempt to use GPT-5 Responses API with built-in web_search tool.
+        """Attempt to use GPT-5.1 Responses API with built-in web_search tool.
 
         Returns text content or None on failure.
         """
@@ -889,20 +889,20 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             api_effort = level_map.get(reasoning_level or "high", "high")
             reasoning = {"effort": api_effort}
 
-            # Fetch per-user model if available (default: gpt-5-mini)
-            user_model = "gpt-5-mini"
+            # Fetch per-user model if available (default: gpt-5.1-mini)
+            user_model = "gpt-5.1-mini"
             try:
                 if user_id:
                     from .async_donors_wrapper import get_async_donors_db
                     db = await get_async_donors_db()
-                    user_model = (await db.get_user_model(user_id)) or "gpt-5-mini"
+                    user_model = (await db.get_user_model(user_id)) or "gpt-5.1-mini"
             except Exception:
-                user_model = "gpt-5-mini"
+                user_model = "gpt-5.1-mini"
 
             # Hosted web_search should use tool_choice="auto" per API guidance
             forced_tool_choice = "auto"
 
-            logger.info(f"GPT-5 Responses: sending request (model={user_model}, reasoning={api_effort}, tool_choice=auto)")
+            logger.info(f"GPT-5.1 Responses: sending request (model={user_model}, reasoning={api_effort}, tool_choice=auto)")
             async with self._api_semaphore:
                 response = await self.client.responses.create(
                     model=user_model,
@@ -931,13 +931,13 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 except Exception:
                     content = None
 
-            # If the model explicitly signals no POI found → escalate to gpt-5 (medium)
+            # If the model explicitly signals no POI found → escalate to gpt-5.1 (medium)
             if content and "[[NO_POI_FOUND]]" in content:
                 try:
-                    logger.info("NO_POI_FOUND token detected → retrying with gpt-5 (low)")
+                    logger.info("NO_POI_FOUND token detected → retrying with gpt-5.1 (low)")
                     async with self._api_semaphore:
                         retry = await self.client.responses.create(
-                            model="gpt-5",
+                            model="gpt-5.1",
                             input=messages,
                             tools=tools,
                             tool_choice="auto",
@@ -959,11 +959,11 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             return content
         except Exception as e:
-            # If mini fails, auto-upgrade to gpt-5 and retry once
+            # If mini fails, auto-upgrade to gpt-5.1 and retry once
             try:
-                logger.warning(f"GPT-5 Responses error with model: {e}")
-                user_model_retry = "gpt-5"
-                logger.info("Retrying GPT-5 Responses with model=gpt-5")
+                logger.warning(f"GPT-5.1 Responses error with model: {e}")
+                user_model_retry = "gpt-5.1"
+                logger.info("Retrying GPT-5.1 Responses with model=gpt-5.1")
                 async with self._api_semaphore:
                     retry = await self.client.responses.create(
                         model=user_model_retry,
@@ -974,7 +974,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     )
                 content = getattr(retry, "output_text", None)
                 if content:
-                    logger.info("GPT-5 Responses: retry output_text received")
+                    logger.info("GPT-5.1 Responses: retry output_text received")
                     return content
                 outputs = getattr(retry, "output", None)
                 if isinstance(outputs, list):
@@ -983,10 +983,10 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         if isinstance(parts, list):
                             for part in parts:
                                 if part.get("type") == "output_text" and part.get("text"):
-                                    logger.info("GPT-5 Responses: retry output_text extracted")
+                                    logger.info("GPT-5.1 Responses: retry output_text extracted")
                                     return part["text"]
             except Exception as e2:
-                logger.warning(f"GPT-5 Responses retry failed: {e2}")
+                logger.warning(f"GPT-5.1 Responses retry failed: {e2}")
             # Surface upstream for caller to decide on fallback
             raise
 

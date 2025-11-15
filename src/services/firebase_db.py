@@ -223,10 +223,10 @@ class FirestoreDatabase:
             snap = self.db.collection("users").document(str(user_id)).get()
             if snap.exists:
                 val = (snap.to_dict() or {}).get("model")
-                return (val or "gpt-5-mini").strip()
+                return (val or "gpt-5.1-mini").strip()
         except Exception:
             pass
-        return "gpt-5-mini"
+        return "gpt-5.1-mini"
 
     def set_user_model(self, user_id: int, model: str) -> bool:
         try:

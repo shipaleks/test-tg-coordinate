@@ -69,7 +69,7 @@ class PostgresDatabase:
                         user_id BIGINT PRIMARY KEY,
                         language TEXT DEFAULT 'ru',
                         reasoning TEXT DEFAULT 'high',
-                        model TEXT DEFAULT 'gpt-5-mini',
+                        model TEXT DEFAULT 'gpt-5.1-mini',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -83,7 +83,7 @@ class PostgresDatabase:
                     pass
                 try:
                     await conn.execute(
-                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS model TEXT DEFAULT 'gpt-5-mini'"
+                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS model TEXT DEFAULT 'gpt-5.1-mini'"
                     )
                 except Exception:
                     pass
