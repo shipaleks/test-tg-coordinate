@@ -502,39 +502,39 @@ def main() -> None:
         # Use webhook for production
         logger.info(f"Starting webhook on port {port}")
         
-        # Create custom web app with healthcheck endpoint
-        try:
-            from tornado.web import Application as TornadoApplication, RequestHandler
+        # Start simple healthcheck server in background thread
+        import threading
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        
+        class HealthCheckHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                """Healthcheck endpoint for Koyeb/Railway."""
+                if self.path in ["/", "/health", "/healthz"]:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/plain")
+                    self.end_headers()
+                    self.wfile.write(b"OK")
+                else:
+                    self.send_response(404)
+                    self.end_headers()
             
-            class HealthCheckHandler(RequestHandler):
-                def get(self):
-                    """Healthcheck endpoint for Koyeb/Railway."""
-                    self.set_status(200)
-                    self.write("OK")
-            
-            # Create Tornado app with healthcheck at root
-            web_app = TornadoApplication([
-                (r"/", HealthCheckHandler),
-                (r"/health", HealthCheckHandler),
-                (r"/healthz", HealthCheckHandler),
-            ])
-            logger.info("Added healthcheck endpoints: /, /health, /healthz")
-            
-            # Use synchronous run_webhook which handles event loop internally
-            application.run_webhook(
-                listen="0.0.0.0",
-                port=port,
-                webhook_url=webhook_url,
-                web_app=web_app,  # Add custom routes
-            )
-        except ImportError:
-            # Fallback if tornado not available (should not happen with python-telegram-bot)
-            logger.warning("Tornado not available, running without healthcheck")
-            application.run_webhook(
-                listen="0.0.0.0",
-                port=port,
-                webhook_url=webhook_url,
-            )
+            def log_message(self, format, *args):
+                # Suppress HTTP server logs to avoid spam
+                pass
+        
+        # Run healthcheck on a separate port to avoid conflicts
+        health_port = port + 1
+        health_server = HTTPServer(("0.0.0.0", health_port), HealthCheckHandler)
+        health_thread = threading.Thread(target=health_server.serve_forever, daemon=True)
+        health_thread.start()
+        logger.info(f"Healthcheck server started on port {health_port} (/, /health, /healthz)")
+        
+        # Use synchronous run_webhook which handles event loop internally
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=port,
+            webhook_url=webhook_url,
+        )
     else:
         # Use polling for local development
         logger.info("Starting polling mode")

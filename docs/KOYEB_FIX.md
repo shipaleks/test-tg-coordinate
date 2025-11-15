@@ -16,12 +16,15 @@ Instance Koyeb останавливался из-за отсутствия healt
 
 В настройках Koyeb сервиса установите:
 - **Health check path**: `/health` или `/`
-- **Port**: тот же порт что и в `PORT` переменной (обычно `8000`)
+- **Port**: `PORT + 1` (если основной 8080, то healthcheck на **8081**)
 - **Protocol**: HTTP
+- **Initial delay**: 60 секунд ⚠️ ВАЖНО!
 - **Interval**: 30 секунд
-- **Timeout**: 5 секунд
+- **Timeout**: 10 секунд
 - **Unhealthy threshold**: 3
 - **Healthy threshold**: 2
+
+⚠️ **КРИТИЧНО**: Healthcheck работает на отдельном порту (PORT+1), чтобы не конфликтовать с Telegram webhook сервером.
 
 ### 2. Environment Variables
 
