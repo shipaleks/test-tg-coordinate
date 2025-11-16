@@ -516,8 +516,7 @@ class LiveLocationTracker:
                 # Send fact at current coordinates
                 try:
                     send_start_time = datetime.now()
-                    # Increment fact counter
-                    session_data.fact_count += 1
+                    # DON'T increment counter yet - only increment when fact is actually sent
 
                     openai_client = get_openai_client()
                     response = await openai_client.get_nearby_fact(
@@ -528,9 +527,9 @@ class LiveLocationTracker:
                         user_id=session_data.user_id,
                     )
 
-                    # Check if no POI was found - skip this iteration
+                    # Check if no POI was found - skip this iteration WITHOUT incrementing counter
                     if response and "[[NO_POI_FOUND]]" in response:
-                        logger.info(f"No POI found for live location fact #{session_data.fact_count} for user {session_data.user_id}")
+                        logger.info(f"No POI found for live location (attempt skipped, counter not incremented) for user {session_data.user_id}")
                         continue  # Skip to next interval
 
                     # Parse the response to extract place and fact
@@ -609,6 +608,9 @@ class LiveLocationTracker:
                                 fact = " ".join(fact_lines)
                                 break
 
+                    # Increment counter ONLY when we have a real fact to send
+                    session_data.fact_count += 1
+                    
                     # Format the response with live location indicator and fact number
                     # Import get_localized_message at top of function to avoid circular imports
                     from ..handlers.location import get_localized_message, _escape_markdown
@@ -734,8 +736,10 @@ class LiveLocationTracker:
                         f"Error sending live location fact to user {session_data.user_id}: {e}"
                     )
 
-                    # Send error message with fact number  
+                    # Increment counter for error message too (so user sees progress even on errors)
                     session_data.fact_count += 1
+                    
+                    # Send error message with fact number  
                     from ..handlers.location import get_localized_message
                     error_fact = await get_localized_message(session_data.user_id, 'error_no_info')
                     error_response = await get_localized_message(session_data.user_id, 'live_fact_format', 
