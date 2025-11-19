@@ -59,6 +59,7 @@ LOCALIZED_MESSAGES = {
         ),
         'buttons': {
             'info': "📱💡 Как включить живую локацию",
+            'one_time': "📍 Разовая локация",
             'language': "🌐 Язык / Language",
             'donate': "⭐💝 Поддержать проект"
         },
@@ -77,12 +78,13 @@ LOCALIZED_MESSAGES = {
     },
     'en': {
         'welcome': (
-            "🗺️ Hi, I’m *Bot Voyage*. I’ll show surprising facts around you.\n\n"
-            "ℹ️ Live location means you share your real‑time location for a chosen time. You can close Telegram — I’ll keep sending facts as push notifications.\n\n"
+            "🗺️ Hi, I'm *Bot Voyage*. I'll show surprising facts around you.\n\n"
+            "ℹ️ Live location means you share your real‑time location for a chosen time. You can close Telegram — I'll keep sending facts as push notifications.\n\n"
             "🔴 Turn it on? Tap below — 3 short steps."
         ),
         'buttons': {
             'info': "📱💡 How to enable Live Location",
+            'one_time': "📍 One-time location",
             'language': "🌐 Language / Язык",
             'donate': "⭐💝 Support project"
         },
@@ -102,11 +104,12 @@ LOCALIZED_MESSAGES = {
     'fr': {
         'welcome': (
             "🗺️ Bonjour, je suis *Bot Voyage*. Je montre des faits inattendus autour de vous.\n\n"
-            "ℹ️ La position en direct = partager votre position en temps réel pendant une durée choisie. Vous pouvez fermer Telegram — j’enverrai quand même les faits.\n\n"
-            "🔴 On l’active ? 3 étapes ci‑dessous."
+            "ℹ️ La position en direct = partager votre position en temps réel pendant une durée choisie. Vous pouvez fermer Telegram — j'enverrai quand même les faits.\n\n"
+            "🔴 On l'active ? 3 étapes ci‑dessous."
         ),
         'buttons': {
             'info': "📱💡 Activer la position en direct",
+            'one_time': "📍 Position unique",
             'language': "🌐 Langue / Language",
             'donate': "⭐💝 Soutenir le projet"
         },
@@ -141,9 +144,10 @@ async def send_welcome_message(user_id: int, chat_id: int, bot, language: str = 
     buttons = messages['buttons']
     
     # Create keyboard with localized buttons
-    # Focus on Live Location: no direct one-time location button
+    # Focus on Live Location, but include one-time location for convenience
     keyboard = [
         [KeyboardButton(buttons['info'])],
+        [KeyboardButton(buttons['one_time'], request_location=True)],
         [KeyboardButton(buttons['language']), KeyboardButton(buttons['donate'])],
     ]
     reply_markup = ReplyKeyboardMarkup(
@@ -490,7 +494,19 @@ def main() -> None:
     application.add_handler(
         CallbackQueryHandler(handle_interval_callback, pattern="^interval_")
     )
-    # No callback handler needed: onboarding sends sequential messages without buttons
+    
+    # Handler for "show live info" button (after static fact)
+    async def show_live_info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show live location info when user clicks upsell button."""
+        query = update.callback_query
+        await query.answer()
+        # Reuse existing info_command
+        await info_command(update, context)
+    
+    application.add_handler(
+        CallbackQueryHandler(show_live_info_callback, pattern="^show_live_info$")
+    )
+    
     application.add_handler(
         CallbackQueryHandler(handle_donation_callback, pattern="^donate_")
     )

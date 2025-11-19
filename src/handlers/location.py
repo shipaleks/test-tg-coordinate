@@ -43,6 +43,8 @@ LOCATION_MESSAGES = {
         'interval_30min': "Каждые 30 минут",
         'interval_60min': "Каждые 60 минут",
         'live_activated': "🔴 *Живая локация активирована!*\n\n📍 Отслеживание: {minutes} минут\n⏰ Факты каждые: {interval} минут\n\n🚀 Первый факт придёт примерно через 3–5 минут, затем — автоматически по расписанию.\n\nОстановите sharing чтобы завершить сессию.",
+        'static_upsell': "💡 *Совет:* Это был разовый факт.\n\nХотите получать факты автоматически во время прогулки? Включите *живую локацию* — не нужно нажимать каждый раз!",
+        'static_upsell_button': "📱 Как включить живую локацию",
         'place_label': "📍 *Место:*",
         'fact_label': "💡 *Факт:*",
         'sources_label': "🔗 *Источники:*",
@@ -64,6 +66,8 @@ LOCATION_MESSAGES = {
         'interval_30min': "Every 30 minutes", 
         'interval_60min': "Every 60 minutes",
         'live_activated': "🔴 *Live location activated!*\n\n📍 Tracking: {minutes} minutes\n⏰ Facts every: {interval} minutes\n\n🚀 The first fact will arrive in about 3–5 minutes, then continue automatically.\n\nStop sharing to end the session.",
+        'static_upsell': "💡 *Tip:* This was a one-time fact.\n\nWant facts automatically during your walk? Enable *live location* — no need to tap each time!",
+        'static_upsell_button': "📱 How to enable live location",
         'place_label': "📍 *Place:*",
         'fact_label': "💡 *Fact:*",
         'sources_label': "🔗 *Sources:*",
@@ -85,6 +89,8 @@ LOCATION_MESSAGES = {
         'interval_30min': "Toutes les 30 minutes",
         'interval_60min': "Toutes les 60 minutes",
         'live_activated': "🔴 *Position en direct activée !*\n\n📍 Suivi : {minutes} minutes\n⏰ Faits toutes les : {interval} minutes\n\n🚀 Le premier fait arrivera dans ~3–5 minutes, puis automatiquement.\n\nArrêtez le partage pour terminer la session.",
+        'static_upsell': "💡 *Conseil :* C'était un fait ponctuel.\n\nVoulez-vous recevoir des faits automatiquement pendant votre promenade ? Activez la *position en direct* — plus besoin de cliquer à chaque fois !",
+        'static_upsell_button': "📱 Comment activer la position en direct",
         'place_label': "📍 *Lieu :*",
         'fact_label': "💡 *Fait :*",
         'sources_label': "🔗 *Sources :*",
@@ -573,16 +579,17 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.info(f"Static location - using coordinate-based cache key: '{cache_key}'")
         
         # Get fact with history when available; fallback to legacy get_nearby_fact for test mocks
+        # ALWAYS use reasoning=none for static location (first and only fact) for instant response
         response = None
         try:
             get_with_history = getattr(openai_client, "get_nearby_fact_with_history", None)
             if get_with_history and inspect.iscoroutinefunction(get_with_history):
-                response = await get_with_history(lat, lon, cache_key, user_id)
+                response = await get_with_history(lat, lon, cache_key, user_id, force_reasoning_none=True)
             else:
-                response = await openai_client.get_nearby_fact(lat, lon)
+                response = await openai_client.get_nearby_fact(lat, lon, force_reasoning_none=True)
         except Exception:
             # Fallback to legacy method on any error
-            response = await openai_client.get_nearby_fact(lat, lon)
+            response = await openai_client.get_nearby_fact(lat, lon, force_reasoning_none=True)
         
         # NO_POI_FOUND should be handled internally by openai_client with retry
         # If we still get it here, it means even the retry failed
@@ -794,6 +801,26 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             pass
 
         logger.info(f"Sent fact to user {user_id}")
+        
+        # Suggest live location after static fact (educational upsell)
+        try:
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            
+            upsell_text = await get_localized_message(user_id, 'static_upsell')
+            upsell_button_text = await get_localized_message(user_id, 'static_upsell_button')
+            
+            keyboard = [[InlineKeyboardButton(upsell_button_text, callback_data="show_live_info")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=upsell_text,
+                parse_mode="Markdown",
+                reply_markup=reply_markup
+            )
+            logger.info(f"Sent live location upsell to user {user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to send live location upsell: {e}")
 
     except Exception as e:
         logger.error(f"Error processing location for user {user_id}: {e}")

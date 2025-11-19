@@ -520,12 +520,18 @@ class LiveLocationTracker:
                     # DON'T increment counter yet - only increment when fact is actually sent
 
                     openai_client = get_openai_client()
+                    
+                    # First fact always uses reasoning=none for speed (regardless of user settings)
+                    # Subsequent facts use user's preferred reasoning level
+                    force_reasoning_none = (session_data.fact_count == 0)
+                    
                     response = await openai_client.get_nearby_fact(
                         session_data.latitude,
                         session_data.longitude,
                         is_live_location=True,
                         previous_facts=session_data.fact_history,
                         user_id=session_data.user_id,
+                        force_reasoning_none=force_reasoning_none,
                     )
 
                     # Check if no POI was found - skip this iteration WITHOUT incrementing counter

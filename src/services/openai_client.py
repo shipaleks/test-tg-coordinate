@@ -272,6 +272,7 @@ Sources/Источники:
         is_live_location: bool = False,
         previous_facts: list = None,
         user_id: int = None,
+        force_reasoning_none: bool = False,
     ) -> str:
         """Get an interesting fact about a location.
 
@@ -870,14 +871,19 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             tools = [{"type": "web_search"}]
 
             # Resolve per-user reasoning (default none for speed)
-            reasoning_level = "none"
-            try:
-                if user_id:
-                    from .async_donors_wrapper import get_async_donors_db
-                    db = await get_async_donors_db()
-                    reasoning_level = (await db.get_user_reasoning(user_id)) or "none"
-            except Exception:
+            # SPECIAL: First fact always uses reasoning=none for instant response
+            if force_reasoning_none:
                 reasoning_level = "none"
+                logger.info("First fact: forcing reasoning=none for speed")
+            else:
+                reasoning_level = "none"
+                try:
+                    if user_id:
+                        from .async_donors_wrapper import get_async_donors_db
+                        db = await get_async_donors_db()
+                        reasoning_level = (await db.get_user_reasoning(user_id)) or "none"
+                except Exception:
+                    reasoning_level = "none"
 
             # Map our levels to API levels
             # GPT-5.1 supports: none, low, medium, high
@@ -2231,7 +2237,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         images = await self.get_wikipedia_images(search_keywords, max_images=1)
         return images[0] if images else None
 
-    async def get_nearby_fact_with_history(self, lat: float, lon: float, cache_key: str | None = None, user_id: int = None) -> str:
+    async def get_nearby_fact_with_history(self, lat: float, lon: float, cache_key: str | None = None, user_id: int = None, force_reasoning_none: bool = False) -> str:
         """Get fact for static location with history tracking to avoid repetition.
 
         Args:
@@ -2239,6 +2245,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             lon: Longitude coordinate
             cache_key: Cache key for the location (coordinates or search keywords)
             user_id: User ID to check premium status for o3 model access
+            force_reasoning_none: If True, always use reasoning=none for speed
 
         Returns:
             A location name and an interesting fact about it
@@ -2256,7 +2263,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         logger.info(f"Calling get_nearby_fact with {len(previous_facts)} previous facts")
         if previous_facts:
             logger.info(f"Previous facts being sent to AI: {previous_facts}")
-        fact_response = await self.get_nearby_fact(lat, lon, is_live_location=False, previous_facts=previous_facts, user_id=user_id)
+        fact_response = await self.get_nearby_fact(lat, lon, is_live_location=False, previous_facts=previous_facts, user_id=user_id, force_reasoning_none=force_reasoning_none)
 
         # Parse the response to extract place and fact for history
         if cache_key:
