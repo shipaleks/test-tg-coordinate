@@ -279,9 +279,10 @@ Sources/Источники:
         Args:
             lat: Latitude coordinate
             lon: Longitude coordinate
-            is_live_location: If True, use o4-mini for detailed facts. If False, use gpt-4.1 for speed.
+            is_live_location: If True, use o4-mini for detailed facts. If False, use GPT-5.1 Responses.
             previous_facts: List of previously sent facts to avoid repetition (for live location)
-            user_id: User ID to check premium status for o3 model access
+            user_id: User ID to check premium status
+            force_reasoning_none: If True, force reasoning=none for fast first fact
 
         Returns:
             A location name and an interesting fact about it
@@ -290,6 +291,7 @@ Sources/Источники:
             Exception: If OpenAI API call fails
         """
         try:
+            # Note: force_reasoning_none parameter is available in this scope
             # Check if user has premium access for o3 model and get language preference
             is_premium_user = False
             user_language = "ru"  # Default to Russian as most users are Russian-speaking
@@ -720,7 +722,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Always attempt GPT-5.1 Responses first (with web_search), then fallback on error
             try:
                 logger.info("Attempting GPT-5.1 Responses with web_search... (forced)")
-                content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location, user_id=user_id)
+                content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location, user_id=user_id, force_reasoning_none=force_reasoning_none)
                 if content:
                     logger.info("GPT-5.1 Responses: success (web_search enabled)")
                     return content.strip()
@@ -845,9 +847,12 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             logger.error(f"Failed to generate fact for {lat},{lon}: {e}")
             raise
 
-    async def _get_with_gpt5_responses(self, system_prompt: str, user_prompt: str, is_live: bool, user_id: int | None = None) -> str | None:
+    async def _get_with_gpt5_responses(self, system_prompt: str, user_prompt: str, is_live: bool, user_id: int | None = None, force_reasoning_none: bool = False) -> str | None:
         """Attempt to use GPT-5.1 Responses API with built-in web_search tool.
 
+        Args:
+            force_reasoning_none: If True, force reasoning=none regardless of user settings
+            
         Returns text content or None on failure.
         """
         try:
