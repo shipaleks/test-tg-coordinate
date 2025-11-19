@@ -359,15 +359,16 @@ def main() -> None:
     
     # Optional: migrate model names from gpt-5/gpt-5-mini to gpt-5.1/gpt-5.1-mini
     # NOTE: This is OPTIONAL! OpenAI auto-routes "gpt-5" → "gpt-5.1" via aliases
-    # Only needed for log consistency or if OpenAI deprecates old aliases
-    if os.environ.get("RUN_MODEL_MIGRATION", "").lower() == "true":
-        try:
-            import asyncio
-            from src.utils.migrate_model_names import migrate_model_names
-            asyncio.get_event_loop_policy().get_event_loop().run_until_complete(migrate_model_names())
-            logger.info("✅ Model names migration completed: gpt-5 → gpt-5.1, gpt-5-mini → gpt-5.1-mini")
-        except Exception as e:
-            logger.warning(f"⚠️ Model migration failed or skipped: {e}")
+    # DISABLED: Run migration manually via script instead of blocking startup
+    # To run migration: python -m src.utils.migrate_model_names
+    # if os.environ.get("RUN_MODEL_MIGRATION", "").lower() == "true":
+    #     try:
+    #         import asyncio
+    #         from src.utils.migrate_model_names import migrate_model_names
+    #         asyncio.get_event_loop_policy().get_event_loop().run_until_complete(migrate_model_names())
+    #         logger.info("✅ Model names migration completed: gpt-5 → gpt-5.1, gpt-5-mini → gpt-5.1-mini")
+    #     except Exception as e:
+    #         logger.warning(f"⚠️ Model migration failed or skipped: {e}")
 
     # Get bot token from environment
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
