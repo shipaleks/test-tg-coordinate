@@ -204,10 +204,10 @@ class FirestoreDatabase:
             snap = self.db.collection("users").document(str(user_id)).get()
             if snap.exists:
                 val = (snap.to_dict() or {}).get("reasoning")
-                return (val or "minimal").strip()
+                return (val or "medium").strip()
         except Exception:
             pass
-        return "minimal"
+        return "medium"
 
     def set_user_reasoning(self, user_id: int, level: str) -> bool:
         try:

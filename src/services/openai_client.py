@@ -880,14 +880,22 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 reasoning_level = "medium"
 
             # Map our levels to API levels
+            # GPT-5.1 supports: none, low, medium, high
             level_map = {
-                "minimal": "low",   # minimal not supported with web_search → degrade to low
+                "none": "none",       # No reasoning (fast, low-latency)
+                "minimal": "low",     # Legacy: minimal → low for compatibility
                 "low": "low",
                 "medium": "medium",
                 "high": "high",
             }
-            api_effort = level_map.get(reasoning_level or "high", "high")
-            reasoning = {"effort": api_effort}
+            api_effort = level_map.get(reasoning_level or "medium", "medium")
+            
+            # For "none" reasoning, don't pass reasoning parameter at all (per API docs)
+            if api_effort == "none":
+                reasoning = None
+                logger.info("GPT-5.1 Responses: using reasoning=none (no reasoning parameter)")
+            else:
+                reasoning = {"effort": api_effort}
 
             # Fetch per-user model if available (default: gpt-5.1-mini)
             user_model = "gpt-5.1-mini"
@@ -902,15 +910,22 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Hosted web_search should use tool_choice="auto" per API guidance
             forced_tool_choice = "auto"
 
-            logger.info(f"GPT-5.1 Responses: sending request (model={user_model}, reasoning={api_effort}, tool_choice=auto)")
+            logger.info(f"GPT-5.1 Responses: sending request (model={user_model}, reasoning={api_effort if reasoning else 'none'}, tool_choice=auto)")
+            
+            # Build request kwargs
+            request_kwargs = {
+                "model": user_model,
+                "input": messages,
+                "tools": tools,
+                "tool_choice": forced_tool_choice,
+            }
+            
+            # Only add reasoning parameter if not None
+            if reasoning is not None:
+                request_kwargs["reasoning"] = reasoning
+            
             async with self._api_semaphore:
-                response = await self.client.responses.create(
-                    model=user_model,
-                    input=messages,
-                    tools=tools,
-                    tool_choice=forced_tool_choice,
-                    reasoning=reasoning,
-                )
+                response = await self.client.responses.create(**request_kwargs)
 
             # Debug: log response structure to understand format
             logger.info(f"GPT-5.1 Responses: received response type={type(response).__name__}")

@@ -142,9 +142,20 @@ class AsyncDonorsWrapper:
         """Get user's preferred reasoning level (async)."""
         await self._ensure_initialized()
         if self._is_postgres:
-            return await self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
+            level = await self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
         else:
-            return self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
+            level = self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
+        
+        # Map legacy reasoning levels (for backward compatibility)
+        REASONING_MAPPING = {
+            "minimal": "low",  # Legacy minimal → low
+            # Keep current levels as-is
+            "none": "none",
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+        }
+        return REASONING_MAPPING.get(level, level)  # Return mapped or original
 
     async def set_user_reasoning(self, user_id: int, level: str) -> bool:
         """Set user's preferred reasoning level (async)."""

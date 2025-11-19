@@ -12,7 +12,7 @@ from ..services.async_donors_wrapper import get_async_donors_db
 
 logger = logging.getLogger(__name__)
 async def reason_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Hidden command to set reasoning (minimal/low/medium/high) and model (gpt-5.1/gpt-5.1-mini) via buttons."""
+    """Hidden command to set reasoning (none/low/medium/high) and model (gpt-5.1/gpt-5.1-mini) via buttons."""
     user = update.effective_user
     donors_db = await get_async_donors_db()
     current_level = await donors_db.get_user_reasoning(user.id)
@@ -20,8 +20,8 @@ async def reason_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     # Build inline keyboard
     rows = []
-    # Reasoning row
-    for level in ["minimal", "low", "medium", "high"]:
+    # Reasoning row - GPT-5.1 supports: none, low, medium, high
+    for level in ["none", "low", "medium", "high"]:
         mark = "✅" if level == current_level else ""
         rows.append([
             InlineKeyboardButton(f"{mark} Reasoning: {level}", callback_data=f"set_reason:{level}")
@@ -55,7 +55,7 @@ async def handle_reason_model_callback(update: Update, context: ContextTypes.DEF
     current_level = await donors_db.get_user_reasoning(user.id)
     current_model = await donors_db.get_user_model(user.id)
     rows = []
-    for level in ["minimal", "low", "medium", "high"]:
+    for level in ["none", "low", "medium", "high"]:
         mark = "✅" if level == current_level else ""
         rows.append([
             InlineKeyboardButton(f"{mark} Reasoning: {level}", callback_data=f"set_reason:{level}")

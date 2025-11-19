@@ -305,17 +305,17 @@ class PostgresDatabase:
             return False
 
     async def get_user_reasoning(self, user_id: int) -> str:
-        """Get user's preferred reasoning effort (minimal/low/medium/high)."""
+        """Get user's preferred reasoning effort (none/low/medium/high)."""
         try:
             async with self.pool.acquire() as conn:
                 level = await conn.fetchval(
                     "SELECT reasoning FROM user_preferences WHERE user_id = $1",
                     user_id,
                 )
-                return (level or "minimal").strip()
+                return (level or "medium").strip()
         except Exception as e:
             logger.error(f"Failed to get user reasoning: {e}")
-            return "minimal"
+            return "medium"
 
     async def set_user_reasoning(self, user_id: int, level: str) -> bool:
         """Set user's preferred reasoning effort (minimal/low/medium/high)."""

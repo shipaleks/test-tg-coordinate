@@ -519,7 +519,7 @@ class DonorsDatabase:
             return False
 
     def get_user_reasoning(self, user_id: int) -> str:
-        """Get user's preferred reasoning level (minimal/low/medium/high)."""
+        """Get user's preferred reasoning level (none/low/medium/high)."""
         try:
             with self._lock:
                 with sqlite3.connect(self.db_path) as conn:
@@ -527,10 +527,10 @@ class DonorsDatabase:
                         "SELECT reasoning FROM user_preferences WHERE user_id = ?",
                         (user_id,)
                     ).fetchone()
-                    return (row[0] if row and row[0] else "minimal").strip()
+                    return (row[0] if row and row[0] else "medium").strip()
         except Exception as e:
             logger.error(f"Failed to get user reasoning for user {user_id}: {e}")
-            return "minimal"
+            return "medium"
 
     def get_user_model(self, user_id: int) -> str:
         """Get user's preferred model (gpt-5.1 or gpt-5.1-mini)."""
