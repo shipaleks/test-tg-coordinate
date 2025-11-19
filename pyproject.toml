@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nearby-fact-bot"
-version = "1.3.1"
+version = "1.3.2"
 description = "Telegram bot that provides interesting facts about places near your location"
 requires-python = ">=3.11"
 dependencies = [
