@@ -357,7 +357,9 @@ def main() -> None:
         except Exception as e:
             logger.warning(f"RESET_LANG_ON_DEPLOY failed or unsupported: {e}")
     
-    # One-time migration: update model names from gpt-5/gpt-5-mini to gpt-5.1/gpt-5.1-mini
+    # Optional: migrate model names from gpt-5/gpt-5-mini to gpt-5.1/gpt-5.1-mini
+    # NOTE: This is OPTIONAL! OpenAI auto-routes "gpt-5" → "gpt-5.1" via aliases
+    # Only needed for log consistency or if OpenAI deprecates old aliases
     if os.environ.get("RUN_MODEL_MIGRATION", "").lower() == "true":
         try:
             import asyncio
