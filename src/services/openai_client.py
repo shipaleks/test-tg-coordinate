@@ -914,7 +914,21 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             # Debug: log response structure to understand format
             logger.info(f"GPT-5.1 Responses: received response type={type(response).__name__}")
-            logger.debug(f"GPT-5.1 Responses: response attributes={dir(response)}")
+            
+            # Log all available attributes (non-private)
+            attrs = [attr for attr in dir(response) if not attr.startswith('_')]
+            logger.info(f"GPT-5.1 Responses: available attributes={attrs}")
+            
+            # Try to log response as dict if possible
+            try:
+                if hasattr(response, "model_dump"):
+                    dump = response.model_dump()
+                    logger.info(f"GPT-5.1 Responses: model_dump keys={list(dump.keys())}")
+                elif hasattr(response, "dict"):
+                    dump = response.dict()
+                    logger.info(f"GPT-5.1 Responses: dict keys={list(dump.keys())}")
+            except Exception as e:
+                logger.debug(f"Could not dump response: {e}")
             
             # Try multiple ways to extract content from new SDK format
             content = None
@@ -948,23 +962,45 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 content = response.output_text
                 logger.info("GPT-5.1 Responses: extracted via .output_text")
             
-            # Method 3: Parse output structure (old SDK)
+            # Method 3: Parse output structure
             elif hasattr(response, "output"):
                 try:
                     outputs = response.output
+                    logger.info(f"GPT-5.1 Responses: output type={type(outputs).__name__}")
+                    
+                    # If output is a list
                     if isinstance(outputs, list):
-                        for item in outputs:
-                            parts = item.get("content") if isinstance(item, dict) else None
-                            if isinstance(parts, list):
-                                for part in parts:
-                                    if part.get("type") == "output_text" and part.get("text"):
-                                        content = part["text"]
-                                        logger.info("GPT-5.1 Responses: extracted from output structure")
-                                        break
+                        logger.info(f"GPT-5.1 Responses: output is list with {len(outputs)} items")
+                        for idx, item in enumerate(outputs):
+                            logger.info(f"GPT-5.1 Responses: output[{idx}] type={type(item).__name__}")
+                            
+                            # If item is dict with content
+                            if isinstance(item, dict):
+                                parts = item.get("content")
+                                if isinstance(parts, list):
+                                    for part in parts:
+                                        if isinstance(part, dict) and part.get("type") == "output_text":
+                                            text = part.get("text")
+                                            if text:
+                                                content = text
+                                                logger.info(f"GPT-5.1 Responses: extracted from output[{idx}].content (length={len(content)})")
+                                                break
+                            # If item has text attribute directly
+                            elif hasattr(item, "text"):
+                                content = item.text
+                                logger.info(f"GPT-5.1 Responses: extracted from output[{idx}].text")
+                                break
+                            
                             if content:
                                 break
+                    # If output is a single object with text
+                    elif hasattr(outputs, "text"):
+                        content = outputs.text
+                        logger.info("GPT-5.1 Responses: extracted from output.text")
+                    
                 except Exception as e:
                     logger.warning(f"Failed to parse output structure: {e}")
+                    logger.exception("Full traceback:")
                     content = None
             
             # Method 4: Try to get content from choices (like chat completions)
