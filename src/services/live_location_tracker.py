@@ -493,9 +493,10 @@ class LiveLocationTracker:
                 
                 # Check if we haven't received updates in a while (user stopped sharing)
                 # Telegram usually sends updates every ~30-60 seconds for live location
-                # If no update for 3 minutes, user likely stopped sharing
+                # BUT if user is stationary, updates may be sparse
+                # Use 10 minutes threshold to avoid false positives
                 time_since_update = current_time - session_data.last_update
-                if time_since_update > timedelta(minutes=3):
+                if time_since_update > timedelta(minutes=10):
                     logger.info(
                         f"Live location stopped updating for user {session_data.user_id} "
                         f"(last update: {session_data.last_update}, {time_since_update.total_seconds():.0f}s ago)"
@@ -541,7 +542,8 @@ class LiveLocationTracker:
                     poi_lon = None
 
                     # Try to parse structured response from <answer> tags first
-                    answer_match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
+                    # Make regex flexible: accept with or without closing tag
+                    answer_match = re.search(r"<answer>(.*?)(?:</answer>|$)", response, re.DOTALL)
                     if answer_match:
                         answer_content = answer_match.group(1).strip()
                         
@@ -610,7 +612,7 @@ class LiveLocationTracker:
 
                     # Increment counter ONLY when we have a real fact to send
                     session_data.fact_count += 1
-                    
+
                     # Format the response with live location indicator and fact number
                     # Import get_localized_message at top of function to avoid circular imports
                     from ..handlers.location import get_localized_message, _escape_markdown
@@ -727,6 +729,10 @@ class LiveLocationTracker:
                     except Exception:
                         pass
 
+                    # Update last_update timestamp to keep session alive
+                    # Even if coordinates didn't change, we successfully sent a fact
+                    session_data.last_update = datetime.now()
+                    
                     logger.info(
                         f"Sent live location fact #{session_data.fact_count} to user {session_data.user_id}"
                     )
@@ -738,7 +744,7 @@ class LiveLocationTracker:
 
                     # Increment counter for error message too (so user sees progress even on errors)
                     session_data.fact_count += 1
-                    
+
                     # Send error message with fact number  
                     from ..handlers.location import get_localized_message
                     error_fact = await get_localized_message(session_data.user_id, 'error_no_info')

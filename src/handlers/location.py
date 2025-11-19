@@ -594,7 +594,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         final_search_keywords = None
 
         # Try to parse structured response from <answer> tags first
-        answer_match = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
+        # Make regex flexible: accept with or without closing tag
+        answer_match = re.search(r"<answer>(.*?)(?:</answer>|$)", response, re.DOTALL)
         if answer_match:
             answer_content = answer_match.group(1).strip()
             poi_coords: tuple[float, float] | None = None
