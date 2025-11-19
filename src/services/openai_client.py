@@ -921,8 +921,27 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             
             # Method 1: Direct text attribute (new SDK)
             if hasattr(response, "text"):
-                content = response.text
-                logger.info("GPT-5.1 Responses: extracted via .text attribute")
+                text_obj = response.text
+                logger.info(f"GPT-5.1 Responses: .text type={type(text_obj).__name__}")
+                
+                # Try to extract string from text object
+                if isinstance(text_obj, str):
+                    content = text_obj
+                elif hasattr(text_obj, "value"):
+                    content = text_obj.value
+                elif hasattr(text_obj, "content"):
+                    content = text_obj.content
+                elif hasattr(text_obj, "text"):
+                    content = text_obj.text
+                else:
+                    # Try to convert to string
+                    try:
+                        content = str(text_obj)
+                    except:
+                        content = None
+                
+                if content:
+                    logger.info(f"GPT-5.1 Responses: extracted text from .text object (length={len(content)})")
             
             # Method 2: output_text convenience accessor
             elif hasattr(response, "output_text"):
