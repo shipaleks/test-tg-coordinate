@@ -519,8 +519,11 @@ class YandexImageSearch:
             if "special:filepath" in lower:
                 return True
             
-            # CRITICAL: Reject wiki page URLs (Telegram can't load these)
-            if "/wiki/file:" in lower:
+            # CRITICAL: Reject ALL wiki page URLs (desktop and mobile)
+            # Telegram can't load these, only direct image URLs work
+            if "/wiki/file:" in lower or "/wiki/fichier:" in lower:
+                return False
+            if "wikipedia.org/wiki/" in lower and not "special:filepath" in lower:
                 return False
             
             # For other URLs, must end with image extension
