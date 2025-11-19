@@ -943,10 +943,10 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     if isinstance(outputs, list) and len(outputs) > 0:
                         logger.info(f"GPT-5.1 Responses: output is list with {len(outputs)} items")
                         
-                        # Iterate through all items to find the one with type='output_text'
+                        # Iterate through all items to find the one with type='text' or 'output_text'
                         for idx, item in enumerate(outputs):
-                            # Log first 3 items to debug
-                            if idx < 3:
+                            # Log first 3 and last 3 items to debug
+                            if idx < 3 or idx >= len(outputs) - 3:
                                 item_type = type(item).__name__
                                 logger.info(f"GPT-5.1 Responses: output[{idx}] type={item_type}")
                                 
@@ -956,35 +956,47 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                                 elif isinstance(item, dict):
                                     logger.info(f"GPT-5.1 Responses: output[{idx}] dict keys={list(item.keys())}")
                             
-                            # Check if item has type='output_text' (pydantic object)
-                            if hasattr(item, "type") and item.type == "output_text":
-                                # Try to get text from this item
-                                if hasattr(item, "text") and isinstance(item.text, str):
-                                    content = item.text
-                                    logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}].text (type=output_text, length={len(content)})")
-                                    break
-                                elif hasattr(item, "content") and isinstance(item.content, str):
-                                    content = item.content
-                                    logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}].content (type=output_text, length={len(content)})")
-                                    break
+                            # Check if item has type='text' or 'output_text' (pydantic object)
+                            if hasattr(item, "type"):
+                                item_type_val = item.type
+                                if item_type_val in ["text", "output_text", "message"]:
+                                    # Try to get text from this item
+                                    if hasattr(item, "text") and isinstance(item.text, str):
+                                        content = item.text
+                                        logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}].text (type={item_type_val}, length={len(content)})")
+                                        break
+                                    elif hasattr(item, "content"):
+                                        # content might be list of content parts
+                                        content_val = item.content
+                                        if isinstance(content_val, str):
+                                            content = content_val
+                                            logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}].content (type={item_type_val}, length={len(content)})")
+                                            break
+                                        elif isinstance(content_val, list):
+                                            # Look for text in content list
+                                            for part in content_val:
+                                                if isinstance(part, dict) and part.get("type") == "text":
+                                                    text = part.get("text")
+                                                    if text and isinstance(text, str):
+                                                        content = text
+                                                        logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}].content[].text (length={len(content)})")
+                                                        break
+                                                elif hasattr(part, "text") and isinstance(part.text, str):
+                                                    content = part.text
+                                                    logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}].content[].text (length={len(content)})")
+                                                    break
+                                        if content:
+                                            break
                             
-                            # Check if item is dict with type='output_text'
-                            elif isinstance(item, dict) and item.get("type") == "output_text":
-                                text = item.get("text")
-                                if text and isinstance(text, str):
-                                    content = text
-                                    logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}]['text'] (dict, length={len(content)})")
-                                    break
-                            
-                            # LAST in list might be the final answer (web_search results come first)
-                            # Save it as potential content
-                            if idx == len(outputs) - 1:
-                                if hasattr(item, "text") and isinstance(item.text, str):
-                                    content = item.text
-                                    logger.info(f"GPT-5.1 Responses: using LAST item output[{idx}].text (length={len(content)})")
-                                elif isinstance(item, dict) and "text" in item and isinstance(item["text"], str):
-                                    content = item["text"]
-                                    logger.info(f"GPT-5.1 Responses: using LAST item output[{idx}]['text'] (length={len(content)})")
+                            # Check if item is dict with type='text' or 'output_text'
+                            elif isinstance(item, dict):
+                                item_type_val = item.get("type")
+                                if item_type_val in ["text", "output_text", "message"]:
+                                    text = item.get("text")
+                                    if text and isinstance(text, str):
+                                        content = text
+                                        logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}]['text'] (dict, type={item_type_val}, length={len(content)})")
+                                        break
                     
                 except Exception as e:
                     logger.warning(f"Failed to parse output structure: {e}")
