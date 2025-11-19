@@ -912,12 +912,27 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     reasoning=reasoning,
                 )
 
-            # Try convenience accessor first
-            content = getattr(response, "output_text", None)
-            # Fallback: try to extract from output structure
-            if not content:
+            # Debug: log response structure to understand format
+            logger.info(f"GPT-5.1 Responses: received response type={type(response).__name__}")
+            logger.debug(f"GPT-5.1 Responses: response attributes={dir(response)}")
+            
+            # Try multiple ways to extract content from new SDK format
+            content = None
+            
+            # Method 1: Direct text attribute (new SDK)
+            if hasattr(response, "text"):
+                content = response.text
+                logger.info("GPT-5.1 Responses: extracted via .text attribute")
+            
+            # Method 2: output_text convenience accessor
+            elif hasattr(response, "output_text"):
+                content = response.output_text
+                logger.info("GPT-5.1 Responses: extracted via .output_text")
+            
+            # Method 3: Parse output structure (old SDK)
+            elif hasattr(response, "output"):
                 try:
-                    outputs = getattr(response, "output", None)
+                    outputs = response.output
                     if isinstance(outputs, list):
                         for item in outputs:
                             parts = item.get("content") if isinstance(item, dict) else None
@@ -925,11 +940,25 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                                 for part in parts:
                                     if part.get("type") == "output_text" and part.get("text"):
                                         content = part["text"]
+                                        logger.info("GPT-5.1 Responses: extracted from output structure")
                                         break
                             if content:
                                 break
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Failed to parse output structure: {e}")
                     content = None
+            
+            # Method 4: Try to get content from choices (like chat completions)
+            elif hasattr(response, "choices") and response.choices:
+                try:
+                    content = response.choices[0].message.content
+                    logger.info("GPT-5.1 Responses: extracted from choices (chat format)")
+                except Exception:
+                    pass
+            
+            if not content:
+                logger.warning(f"GPT-5.1 Responses: could not extract content from response, available attributes: {[attr for attr in dir(response) if not attr.startswith('_')]}")
+                content = None
 
             # If the model explicitly signals no POI found → escalate to gpt-5.1 (medium)
             if content and "[[NO_POI_FOUND]]" in content:
