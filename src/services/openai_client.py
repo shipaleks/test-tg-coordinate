@@ -719,119 +719,24 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 language_instructions=language_instructions,
             )
 
-            # Always attempt GPT-5.1 Responses first (with web_search), then fallback on error
+            # Always use GPT-5.1 Responses with web_search for all facts
+            # No fallback to gpt-4.1 - same quality for static and live location
             try:
                 logger.info("Attempting GPT-5.1 Responses with web_search... (forced)")
                 content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location, user_id=user_id, force_reasoning_none=force_reasoning_none)
                 if content:
                     logger.info("GPT-5.1 Responses: success (web_search enabled)")
                     return content.strip()
+                else:
+                    logger.error("GPT-5.1 Responses returned None, cannot generate fact")
+                    raise ValueError("Empty response from GPT-5.1 Responses")
             except Exception as e:
-                logger.warning(f"GPT-5.1 Responses path failed: {e}. Falling back to standard models.")
+                logger.error(f"GPT-5.1 Responses failed: {e}")
+                raise  # Don't fallback, raise error to user
 
-            # Default fallback models (only if GPT-5 path fails)
-            if is_live_location:
-                model_to_use = "o4-mini"
-                max_tokens_limit = 10000
-            else:
-                model_to_use = "gpt-4.1"
-                max_tokens_limit = 400
-
-            response = None
-            if is_live_location:
-                # Use advanced models for live (o3 for premium, o4-mini for regular)
-                try:
-                    if model_to_use in ["o3", "o4-mini"]:
-                        async with self._api_semaphore:
-                            response = await self.client.chat.completions.create(
-                            model=model_to_use,
-                            messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_prompt},
-                            ],
-                            max_completion_tokens=max_tokens_limit,
-                        )
-                    else:
-                        async with self._api_semaphore:
-                            response = await self.client.chat.completions.create(
-                            model=model_to_use,
-                            messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_prompt},
-                            ],
-                            max_completion_tokens=max_tokens_limit,
-                            temperature=0.6,
-                        )
-                    logger.info(f"{model_to_use} (live) response: {response}")
-                    content = (
-                        response.choices[0].message.content
-                        if response.choices
-                        else None
-                    )
-
-                    if not content:
-                        logger.warning(
-                            f"{model_to_use} returned empty content, falling back to gpt-4.1"
-                        )
-                        raise ValueError(f"Empty content from {model_to_use}")
-
-                except Exception as e:
-                    logger.warning(
-                        f"{model_to_use} failed ({e}), falling back to gpt-4.1"
-                    )
-                    async with self._api_semaphore:
-                        response = await self.client.chat.completions.create(
-                        model="gpt-4.1",
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        max_tokens=800,
-                        temperature=0.6,
-                    )
-                    logger.info(f"gpt-4.1 fallback response: {response}")
-                    content = (
-                        response.choices[0].message.content
-                        if response.choices
-                        else None
-                    )
-            else:
-                # Use gpt-4.1 for static location
-                try:
-                    if previous_facts:
-                        logger.info(f"Sending prompt to GPT-4.1 with {len(previous_facts)} previous facts")
-                        logger.debug(f"User prompt preview: {user_prompt[:200]}...")
-
-                    async with self._api_semaphore:
-                        response = await self.client.chat.completions.create(
-                        model="gpt-4.1",
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        max_tokens=400,
-                        temperature=0.7,
-                    )
-                    logger.info(f"gpt-4.1 (static location) response: {response}")
-                    content = (
-                        response.choices[0].message.content
-                        if response.choices
-                        else None
-                    )
-
-                    if not content:
-                        logger.warning(
-                            "gpt-4.1 returned empty content for static location"
-                        )
-                        raise ValueError("Empty content from gpt-4.1")
-
-                except Exception as e:
-                    logger.error(f"gpt-4.1 failed for static location: {e}")
-                    raise
-
-            if not content:
-                logger.error(f"Empty content even after fallback: {response}")
-                raise ValueError("Empty response from OpenAI")
+            # This code should never be reached (GPT-5.1 Responses should work or raise)
+            # Kept as emergency fallback only
+            logger.error("Reached fallback code unexpectedly - GPT-5.1 should have worked or raised")
 
             logger.info(f"Generated fact for location {lat},{lon}")
 
