@@ -157,9 +157,18 @@ class AsyncDonorsWrapper:
     async def get_user_model(self, user_id: int) -> str:
         await self._ensure_initialized()
         if self._is_postgres:
-            return await self._db.get_user_model(user_id)  # type: ignore[attr-defined]
+            model = await self._db.get_user_model(user_id)  # type: ignore[attr-defined]
         else:
-            return self._db.get_user_model(user_id)  # type: ignore[attr-defined]
+            model = self._db.get_user_model(user_id)  # type: ignore[attr-defined]
+        
+        # Map legacy model names to current versions (future-proof)
+        MODEL_MAPPING = {
+            "gpt-5": "gpt-5.1",
+            "gpt-5-mini": "gpt-5.1-mini",
+            # Future mappings can be added here:
+            # "gpt-5.1": "gpt-5.2" (when available)
+        }
+        return MODEL_MAPPING.get(model, model)  # Return mapped or original
 
     async def set_user_model(self, user_id: int, model: str) -> bool:
         await self._ensure_initialized()
