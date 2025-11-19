@@ -59,7 +59,7 @@ LOCALIZED_MESSAGES = {
         ),
         'buttons': {
             'info': "📱💡 Как включить живую локацию",
-            'one_time': "📍 Разовая локация",
+            'one_time': "📍 Отправить локацию",
             'language': "🌐 Язык / Language",
             'donate': "⭐💝 Поддержать проект"
         },
@@ -84,7 +84,7 @@ LOCALIZED_MESSAGES = {
         ),
         'buttons': {
             'info': "📱💡 How to enable Live Location",
-            'one_time': "📍 One-time location",
+            'one_time': "📍 Send location",
             'language': "🌐 Language / Язык",
             'donate': "⭐💝 Support project"
         },
@@ -109,7 +109,7 @@ LOCALIZED_MESSAGES = {
         ),
         'buttons': {
             'info': "📱💡 Activer la position en direct",
-            'one_time': "📍 Position unique",
+            'one_time': "📍 Envoyer ma position",
             'language': "🌐 Langue / Language",
             'donate': "⭐💝 Soutenir le projet"
         },
