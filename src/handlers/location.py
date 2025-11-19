@@ -803,9 +803,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.info(f"Sent fact to user {user_id}")
         
         # Suggest live location after static fact (educational upsell)
+        # Only for static locations, not for live location start
         try:
-            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-            
             upsell_text = await get_localized_message(user_id, 'static_upsell')
             upsell_button_text = await get_localized_message(user_id, 'static_upsell_button')
             
