@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 DONATION_MESSAGES = {
     'ru': {
         'title': "🌟 *Поддержать проект*",
-        'donor_status': "🎁 *Донатер проекта*\n📊 Всего звезд: {total_stars}⭐\n🧠 GPT-5.1 (reasoning + web_search) активна для живых локаций",
+        'donor_status': "🎁 *Донатер проекта*\n📊 Всего звезд: {total_stars}⭐\n🧠 Улучшенный reasoning (больше проверок) активирован",
         'support_helps': "Ваша поддержка помогает:",
         'help_points': [
             "🤖 Оплачивать OpenAI API для качественных фактов",
@@ -35,7 +35,7 @@ DONATION_MESSAGES = {
     },
     'en': {
         'title': "🌟 *Support the project*",
-        'donor_status': "🎁 *Project supporter*\n📊 Total stars: {total_stars}⭐\n🧠 GPT-5.1 (reasoning + web_search) active for live locations",
+        'donor_status': "🎁 *Project supporter*\n📊 Total stars: {total_stars}⭐\n🧠 Enhanced reasoning (more verification) activated",
         'support_helps': "Your support helps:",
         'help_points': [
             "🤖 Pay for OpenAI API for quality facts",
@@ -50,7 +50,7 @@ DONATION_MESSAGES = {
     },
     'fr': {
         'title': "🌟 *Soutenir le projet*",
-        'donor_status': "🎁 *Soutien du projet*\n📊 Total étoiles : {total_stars}⭐\n🧠 GPT-5.1 (reasoning + web_search) actif pour les positions en direct",
+        'donor_status': "🎁 *Soutien du projet*\n📊 Total étoiles : {total_stars}⭐\n🧠 Reasoning amélioré (plus de vérifications) activé",
         'support_helps': "Votre soutien aide à :",
         'help_points': [
             "🤖 Payer l'API OpenAI pour des faits de qualité",
@@ -354,7 +354,7 @@ async def handle_successful_payment(update: Update, context: ContextTypes.DEFAUL
                 success_text = (
                     f"🎉 *Спасибо за поддержку!*\n\n"
                     f"💫 Получено: {stars_amount}⭐\n\n"
-                    f"🧠 Теперь факты будет составлять и проверять более умная модель — точнее и надёжнее.\n\n"
+                    f"🧠 Факты теперь будут генерироваться с улучшенным reasoning (больше проверок и деталей).\n\n"
                     f"✨ Это наш способ сказать спасибо за то, что помогаете проекту развиваться!"
                 )
             else:
