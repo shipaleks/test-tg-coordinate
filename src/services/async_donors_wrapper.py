@@ -139,7 +139,10 @@ class AsyncDonorsWrapper:
             return self._db.reset_user_language(user_id)  # type: ignore[attr-defined]
 
     async def get_user_reasoning(self, user_id: int) -> str:
-        """Get user's preferred reasoning level (async)."""
+        """Get user's preferred reasoning level (async).
+        
+        Auto-upgrades donors from 'none' to 'low' as a bonus reward.
+        """
         await self._ensure_initialized()
         if self._is_postgres:
             level = await self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
@@ -155,7 +158,18 @@ class AsyncDonorsWrapper:
             "medium": "medium",
             "high": "high",
         }
-        return REASONING_MAPPING.get(level, level)  # Return mapped or original
+        mapped_level = REASONING_MAPPING.get(level, level)
+        
+        # BONUS: Auto-upgrade donors from 'none' to 'low' (hidden reward)
+        if mapped_level == "none":
+            try:
+                is_donor = await self.is_premium_user(user_id)
+                if is_donor:
+                    return "low"  # Donors get better reasoning automatically
+            except Exception:
+                pass
+        
+        return mapped_level
 
     async def set_user_reasoning(self, user_id: int, level: str) -> bool:
         """Set user's preferred reasoning level (async)."""
@@ -175,7 +189,8 @@ class AsyncDonorsWrapper:
         # Map legacy model names to current versions (future-proof)
         MODEL_MAPPING = {
             "gpt-5": "gpt-5.1",
-            "gpt-5-mini": "gpt-5.1-mini",
+            "gpt-5-mini": "gpt-5.1",  # Map mini → full (mini has access issues)
+            "gpt-5.1-mini": "gpt-5.1",  # Map mini → full (mini has access issues)
             # Future mappings can be added here:
             # "gpt-5.1": "gpt-5.2" (when available)
         }

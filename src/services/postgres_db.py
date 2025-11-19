@@ -68,8 +68,8 @@ class PostgresDatabase:
                     CREATE TABLE IF NOT EXISTS user_preferences (
                         user_id BIGINT PRIMARY KEY,
                         language TEXT DEFAULT 'ru',
-                        reasoning TEXT DEFAULT 'high',
-                        model TEXT DEFAULT 'gpt-5.1-mini',
+                        reasoning TEXT DEFAULT 'none',
+                        model TEXT DEFAULT 'gpt-5.1',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -77,13 +77,13 @@ class PostgresDatabase:
                 # Ensure reasoning column exists
                 try:
                     await conn.execute(
-                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS reasoning TEXT DEFAULT 'high'"
+                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS reasoning TEXT DEFAULT 'none'"
                     )
                 except Exception:
                     pass
                 try:
                     await conn.execute(
-                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS model TEXT DEFAULT 'gpt-5.1-mini'"
+                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS model TEXT DEFAULT 'gpt-5.1'"
                     )
                 except Exception:
                     pass
@@ -312,10 +312,10 @@ class PostgresDatabase:
                     "SELECT reasoning FROM user_preferences WHERE user_id = $1",
                     user_id,
                 )
-                return (level or "medium").strip()
+                return (level or "none").strip()
         except Exception as e:
             logger.error(f"Failed to get user reasoning: {e}")
-            return "medium"
+            return "none"
 
     async def set_user_reasoning(self, user_id: int, level: str) -> bool:
         """Set user's preferred reasoning effort (minimal/low/medium/high)."""

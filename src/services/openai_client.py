@@ -869,15 +869,15 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             ]
             tools = [{"type": "web_search"}]
 
-            # Resolve per-user reasoning (default medium)
-            reasoning_level = "medium"
+            # Resolve per-user reasoning (default none for speed)
+            reasoning_level = "none"
             try:
                 if user_id:
                     from .async_donors_wrapper import get_async_donors_db
                     db = await get_async_donors_db()
-                    reasoning_level = (await db.get_user_reasoning(user_id)) or "medium"
+                    reasoning_level = (await db.get_user_reasoning(user_id)) or "none"
             except Exception:
-                reasoning_level = "medium"
+                reasoning_level = "none"
 
             # Map our levels to API levels
             # GPT-5.1 supports: none, low, medium, high
@@ -897,15 +897,15 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             else:
                 reasoning = {"effort": api_effort}
 
-            # Fetch per-user model if available (default: gpt-5.1-mini)
-            user_model = "gpt-5.1-mini"
+            # Fetch per-user model if available (default: gpt-5.1)
+            user_model = "gpt-5.1"
             try:
                 if user_id:
                     from .async_donors_wrapper import get_async_donors_db
                     db = await get_async_donors_db()
-                    user_model = (await db.get_user_model(user_id)) or "gpt-5.1-mini"
+                    user_model = (await db.get_user_model(user_id)) or "gpt-5.1"
             except Exception:
-                user_model = "gpt-5.1-mini"
+                user_model = "gpt-5.1"
 
             # Hosted web_search should use tool_choice="auto" per API guidance
             forced_tool_choice = "auto"

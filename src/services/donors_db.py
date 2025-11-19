@@ -124,8 +124,8 @@ class DonorsDatabase:
                             CREATE TABLE IF NOT EXISTS user_preferences (
                             user_id INTEGER PRIMARY KEY,
                             language TEXT DEFAULT 'en',
-                            reasoning TEXT DEFAULT 'high',
-                            model TEXT DEFAULT 'gpt-5.1-mini',
+                            reasoning TEXT DEFAULT 'none',
+                            model TEXT DEFAULT 'gpt-5.1',
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                             updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
@@ -179,8 +179,8 @@ class DonorsDatabase:
                                 CREATE TABLE IF NOT EXISTS user_preferences (
                                     user_id INTEGER PRIMARY KEY,
                                     language TEXT DEFAULT 'en',
-                                    reasoning TEXT DEFAULT 'high',
-                                    model TEXT DEFAULT 'gpt-5.1-mini',
+                                    reasoning TEXT DEFAULT 'none',
+                                    model TEXT DEFAULT 'gpt-5.1',
                                     created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                                     updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                                 )
@@ -460,7 +460,7 @@ class DonorsDatabase:
                     # Preserve existing reasoning if present
                     conn.execute("""
                         INSERT INTO user_preferences (user_id, language, reasoning, model, updated_at)
-                        VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'high'), COALESCE((SELECT model FROM user_preferences WHERE user_id = ?), 'gpt-5.1-mini'), ?)
+                        VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'none'), COALESCE((SELECT model FROM user_preferences WHERE user_id = ?), 'gpt-5.1'), ?)
                         ON CONFLICT(user_id) DO UPDATE SET language=excluded.language, updated_at=excluded.updated_at
                     """, (user_id, language, user_id, user_id, current_time))
                     
@@ -527,13 +527,13 @@ class DonorsDatabase:
                         "SELECT reasoning FROM user_preferences WHERE user_id = ?",
                         (user_id,)
                     ).fetchone()
-                    return (row[0] if row and row[0] else "medium").strip()
+                    return (row[0] if row and row[0] else "none").strip()
         except Exception as e:
             logger.error(f"Failed to get user reasoning for user {user_id}: {e}")
-            return "medium"
+            return "none"
 
     def get_user_model(self, user_id: int) -> str:
-        """Get user's preferred model (gpt-5.1 or gpt-5.1-mini)."""
+        """Get user's preferred model (gpt-5.1)."""
         try:
             with self._lock:
                 with sqlite3.connect(self.db_path) as conn:
@@ -541,7 +541,7 @@ class DonorsDatabase:
                         "SELECT model FROM user_preferences WHERE user_id = ?",
                         (user_id,)
                     ).fetchone()
-                    return (row[0] if row and row[0] else "gpt-5.1-mini").strip()
+                    return (row[0] if row and row[0] else "gpt-5.1").strip()
         except Exception as e:
             logger.error(f"Failed to get user model for user {user_id}: {e}")
             return "gpt-5.1"
