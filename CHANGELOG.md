@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.3.3] - 2025-11-28
+
+### 🐛 Fixed
+- **Duplicate Place Prevention**: Fixed issue where live location facts could repeat the same place with different names
+- **Place Name Normalization**: Added intelligent comparison that handles translations and variations (e.g., "Tour Eiffel" = "Eiffel Tower")
+- **Retry Mechanism**: When AI returns a duplicate place, system now retries up to 2 times with stronger instructions
+- **Enhanced Prompts**: Added explicit "forbidden places" list to AI prompts for better duplicate avoidance
+
+### ✨ Added
+- `normalize_place_name()` - Normalizes place names for comparison across languages
+- `is_duplicate_place()` - Checks if a place is duplicate of previous places
+- `extract_place_names_from_history()` - Extracts place names from fact history
+
+### 📝 Documentation
+- Added `docs/DUPLICATE_FIX_V1.3.3.md` - Detailed fix documentation
+
+---
+
 ## [v1.3.1] - 2025-11-15
 
 ### ✨ Added

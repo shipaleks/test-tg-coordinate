@@ -14,8 +14,13 @@ from .firebase_stats import record_movement as fb_record_movement
 from ..utils.formatting_utils import extract_sources_from_answer as _extract_live_sources
 from ..utils.formatting_utils import strip_sources_section as _strip_live_sources
 from ..utils.formatting_utils import remove_bare_links_from_text as _remove_bare_links_from_text
+from ..utils.formatting_utils import is_duplicate_place as _is_duplicate_place
+from ..utils.formatting_utils import extract_place_names_from_history as _extract_place_names
 # Avoid importing handlers at module import time to prevent circular deps.
 # We'll import get_localized_message lazily inside functions.
+
+# Maximum retry attempts when AI returns a duplicate place
+MAX_DUPLICATE_RETRIES = 2
 
 logger = logging.getLogger(__name__)
 
@@ -525,110 +530,158 @@ class LiveLocationTracker:
                     # Subsequent facts use user's preferred reasoning level
                     force_reasoning_none = (session_data.fact_count == 0)
                     
-                    response = await openai_client.get_nearby_fact(
-                        session_data.latitude,
-                        session_data.longitude,
-                        is_live_location=True,
-                        previous_facts=session_data.fact_history,
-                        user_id=session_data.user_id,
-                        force_reasoning_none=force_reasoning_none,
-                    )
-
-                    # Check if no POI was found - skip this iteration WITHOUT incrementing counter
-                    if response and "[[NO_POI_FOUND]]" in response:
-                        logger.info(f"No POI found for live location (attempt skipped, counter not incremented) for user {session_data.user_id}")
-                        continue  # Skip to next interval
-
-                    # Parse the response to extract place and fact
-                    from ..handlers.location import get_localized_message
-                    place = await get_localized_message(session_data.user_id, 'near_you')  # Default location
-                    fact = response  # Default to full response if parsing fails
-                    search_keywords = ""
-                    poi_lat = None  # POI coordinates from the fact
-                    poi_lon = None
-
-                    # Try to parse structured response from <answer> tags first
-                    # Make regex flexible: accept with or without closing tag
-                    answer_match = re.search(r"<answer>(.*?)(?:</answer>|$)", response, re.DOTALL)
-                    if answer_match:
-                        answer_content = answer_match.group(1).strip()
-                        
-                        # Extract location from answer content
-                        location_match = re.search(r"Location:\s*(.+?)(?:\n|$)", answer_content)
-                        if location_match:
-                            place = location_match.group(1).strip()
-                        
-                        # Extract precise POI coordinates if provided (don't overwrite user coordinates!)
-                        coord_match = re.search(r"Coordinates:\s*([\-\d\.]+)\s*,\s*([\-\d\.]+)", answer_content)
-                        if coord_match:
-                            try:
-                                poi_lat = float(coord_match.group(1))
-                                poi_lon = float(coord_match.group(2))
-                            except Exception:
-                                pass
-
-                        # Extract search keywords from answer content
-                        search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
-                        if search_match:
-                            search_keywords = search_match.group(1).strip()
-                        
-                        # Extract fact from answer content, stopping before Sources/Источники
-                        fact_match = re.search(r"Interesting fact:\s*(.*?)(?=\n(?:Sources|Источники)\s*:|$)", answer_content, re.DOTALL)
-                        if fact_match:
-                            fact = _strip_live_sources(fact_match.group(1).strip())
-                            fact = _remove_bare_links_from_text(fact)
-                        # Build localized sources block from answer content (single, clean block)
-                        sources = _extract_live_sources(answer_content)
-                        sources_block = ""
-                        if sources:
-                            from ..handlers.location import get_localized_message as _get_msg
-                            from ..utils.formatting_utils import sanitize_url as _sanitize_url
-                            src_label = await _get_msg(session_data.user_id, 'sources_label')
-                            bullets = []
-                            for title, url in sources[:4]:
-                                # Remove square brackets and escape other Markdown characters in title
-                                safe_title = re.sub(r"[\[\]]", "", title)[:80]
-                                # Escape Markdown special chars in title to prevent parsing errors
-                                safe_title = safe_title.replace("*", "\\*").replace("_", "\\_").replace("`", "\\`").replace("(", "\\(").replace(")", "\\)")
-                                safe_url = _sanitize_url(url)
-                                bullets.append(f"- [{safe_title}]({safe_url})")
-                            sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
+                    # Extract previous place names for duplicate checking
+                    previous_place_names = _extract_place_names(session_data.fact_history)
                     
-                    # Legacy fallback for old format responses
-                    else:
-                        lines = response.split("\n")
+                    # Try to get a unique fact, with retries if duplicate detected
+                    place = None
+                    fact = None
+                    search_keywords = ""
+                    poi_lat = None
+                    poi_lon = None
+                    sources = []
+                    sources_block = ""
+                    response = None
+                    
+                    for duplicate_retry in range(MAX_DUPLICATE_RETRIES + 1):
+                        # Build previous_facts with stronger emphasis on place names
+                        # Include explicit list of place names to avoid
+                        extended_previous_facts = session_data.fact_history.copy()
                         
-                        # Try to parse old structured response format
-                        for i, line in enumerate(lines):
-                            if line.startswith("Локация:"):
-                                place = line.replace("Локация:", "").strip()
-                            elif line.startswith("Интересный факт:"):
-                                # Join all lines after Интересный факт: as the fact might be multiline
-                                fact_lines = []
-                                # Start from the current line, removing the prefix
-                                fact_lines.append(
-                                    line.replace("Интересный факт:", "").strip()
+                        # On retry, add explicit duplicate warning
+                        if duplicate_retry > 0:
+                            logger.info(f"Duplicate retry {duplicate_retry}/{MAX_DUPLICATE_RETRIES} for user {session_data.user_id}")
+                            # Add strong instruction to avoid the duplicate place
+                            avoid_places = ", ".join([f'"{p}"' for p in previous_place_names[-5:]])
+                            extended_previous_facts.append(
+                                f"DUPLICATE DETECTED! You MUST find a COMPLETELY DIFFERENT place. "
+                                f"DO NOT mention these places again: {avoid_places}"
+                            )
+                        
+                        response = await openai_client.get_nearby_fact(
+                            session_data.latitude,
+                            session_data.longitude,
+                            is_live_location=True,
+                            previous_facts=extended_previous_facts,
+                            user_id=session_data.user_id,
+                            force_reasoning_none=force_reasoning_none,
+                        )
+                        
+                        # Check if no POI was found
+                        if response and "[[NO_POI_FOUND]]" in response:
+                            logger.info(f"No POI found for live location (attempt skipped) for user {session_data.user_id}")
+                            break  # Exit retry loop, will skip to next interval
+                        
+                        # Parse the response to extract place and fact
+                        from ..handlers.location import get_localized_message
+                        place = await get_localized_message(session_data.user_id, 'near_you')  # Default location
+                        fact = response  # Default to full response if parsing fails
+                        search_keywords = ""
+                        poi_lat = None
+                        poi_lon = None
+                        sources = []
+                        sources_block = ""
+                        
+                        # Try to parse structured response from <answer> tags first
+                        answer_match = re.search(r"<answer>(.*?)(?:</answer>|$)", response, re.DOTALL)
+                        if answer_match:
+                            answer_content = answer_match.group(1).strip()
+                            
+                            # Extract location from answer content
+                            location_match = re.search(r"Location:\s*(.+?)(?:\n|$)", answer_content)
+                            if location_match:
+                                place = location_match.group(1).strip()
+                            
+                            # Extract precise POI coordinates if provided
+                            coord_match = re.search(r"Coordinates:\s*([\-\d\.]+)\s*,\s*([\-\d\.]+)", answer_content)
+                            if coord_match:
+                                try:
+                                    poi_lat = float(coord_match.group(1))
+                                    poi_lon = float(coord_match.group(2))
+                                except Exception:
+                                    pass
+                            
+                            # Extract search keywords from answer content
+                            search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
+                            if search_match:
+                                search_keywords = search_match.group(1).strip()
+                            
+                            # Extract fact from answer content
+                            fact_match = re.search(r"Interesting fact:\s*(.*?)(?=\n(?:Sources|Источники)\s*:|$)", answer_content, re.DOTALL)
+                            if fact_match:
+                                fact = _strip_live_sources(fact_match.group(1).strip())
+                                fact = _remove_bare_links_from_text(fact)
+                            
+                            # Build sources block
+                            sources = _extract_live_sources(answer_content)
+                            if sources:
+                                from ..handlers.location import get_localized_message as _get_msg
+                                from ..utils.formatting_utils import sanitize_url as _sanitize_url
+                                src_label = await _get_msg(session_data.user_id, 'sources_label')
+                                bullets = []
+                                for title, url in sources[:4]:
+                                    safe_title = re.sub(r"[\[\]]", "", title)[:80]
+                                    safe_title = safe_title.replace("*", "\\*").replace("_", "\\_").replace("`", "\\`").replace("(", "\\(").replace(")", "\\)")
+                                    safe_url = _sanitize_url(url)
+                                    bullets.append(f"- [{safe_title}]({safe_url})")
+                                sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
+                        
+                        # Legacy fallback for old format responses
+                        else:
+                            lines = response.split("\n")
+                            for i, line in enumerate(lines):
+                                if line.startswith("Локация:"):
+                                    place = line.replace("Локация:", "").strip()
+                                elif line.startswith("Интересный факт:"):
+                                    fact_lines = []
+                                    fact_lines.append(line.replace("Интересный факт:", "").strip())
+                                    for j in range(i + 1, len(lines)):
+                                        if lines[j].strip():
+                                            fact_lines.append(lines[j].strip())
+                                    fact = " ".join(fact_lines)
+                                    break
+                        
+                        # CHECK FOR DUPLICATE: compare against previous places
+                        if _is_duplicate_place(place, previous_place_names):
+                            logger.warning(
+                                f"Duplicate place detected for user {session_data.user_id}: '{place}' "
+                                f"(previous: {previous_place_names[-3:]})"
+                            )
+                            if duplicate_retry < MAX_DUPLICATE_RETRIES:
+                                # Will retry with stronger instructions
+                                continue
+                            else:
+                                # Max retries reached, skip this fact
+                                logger.error(
+                                    f"Max duplicate retries reached for user {session_data.user_id}, "
+                                    f"skipping this interval"
                                 )
-                                # Add all subsequent lines
-                                for j in range(i + 1, len(lines)):
-                                    if lines[j].strip():  # Only add non-empty lines
-                                        fact_lines.append(lines[j].strip())
-                                fact = " ".join(fact_lines)
+                                place = None  # Signal to skip
                                 break
+                        else:
+                            # Unique place found, exit retry loop
+                            logger.info(f"Unique place found for user {session_data.user_id}: '{place}'")
+                            break
+                    
+                    # Check if we should skip this iteration (NO_POI_FOUND or max duplicate retries)
+                    if response and "[[NO_POI_FOUND]]" in response:
+                        continue  # Skip to next interval
+                    
+                    if place is None:
+                        # Max duplicate retries reached, skip this interval
+                        continue
 
                     # Increment counter ONLY when we have a real fact to send
                     session_data.fact_count += 1
 
                     # Format the response with live location indicator and fact number
-                    # Import get_localized_message at top of function to avoid circular imports
                     from ..handlers.location import get_localized_message, _escape_markdown
-                    # Escape Markdown characters in place and fact to prevent formatting issues
                     escaped_place = _escape_markdown(place)
                     escaped_fact = _escape_markdown(fact)
                     formatted_response = await get_localized_message(session_data.user_id, 'live_fact_format', number=session_data.fact_count, place=escaped_place, fact=escaped_fact)
                     
                     # Add sources to the main message if available
-                    if 'sources_block' in locals() and sources_block:
+                    if sources_block:
                         formatted_response = f"{formatted_response}{sources_block}"
 
                     # Save fact to history to avoid repetition

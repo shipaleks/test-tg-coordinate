@@ -202,8 +202,40 @@ Write your response in {user_language}.
 
         prev_block = ""
         if previous_facts:
-            prev_text = "\n".join([f"- {fact}" for fact in previous_facts[-5:]])
-            prev_block = f"""\nPREVIOUS FACTS ALREADY MENTIONED (avoid repeating places/details):\n{prev_text}\n\nCRITICAL: Choose a DIFFERENT spot/aspect than anything listed above."""
+            # Extract place names from history for explicit no-repeat list
+            place_names = []
+            fact_entries = []
+            for entry in previous_facts[-5:]:
+                # Handle both "Place: Fact" format and plain entries
+                if ": " in entry:
+                    place_name = entry.split(": ", 1)[0].strip()
+                    if place_name:
+                        place_names.append(place_name)
+                fact_entries.append(f"- {entry}")
+            
+            prev_text = "\n".join(fact_entries)
+            
+            # Build explicit forbidden places list
+            if place_names:
+                places_list = ", ".join([f'"{p}"' for p in place_names])
+                prev_block = f"""
+PREVIOUS FACTS ALREADY MENTIONED:
+{prev_text}
+
+⛔ FORBIDDEN PLACES (DO NOT USE - find a DIFFERENT location!):
+{places_list}
+
+CRITICAL DUPLICATE PREVENTION:
+- You MUST choose a COMPLETELY DIFFERENT place than any listed above
+- Do NOT mention the same building/monument/location with a different name
+- Even if a famous landmark is nearby, pick a DIFFERENT, lesser-known spot
+- If you cannot find a unique place, return [[NO_POI_FOUND]] rather than repeat"""
+            else:
+                prev_block = f"""
+PREVIOUS FACTS ALREADY MENTIONED (avoid repeating places/details):
+{prev_text}
+
+CRITICAL: Choose a DIFFERENT spot/aspect than anything listed above."""
 
         if is_live_location:
             user_prompt = f"""Analyze these coordinates: {lat}, {lon}

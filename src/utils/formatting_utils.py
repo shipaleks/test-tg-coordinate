@@ -113,3 +113,166 @@ def remove_bare_links_from_text(text: str) -> str:
         return text
 
 
+def normalize_place_name(place: str) -> str:
+    """Normalize a place name for duplicate detection.
+    
+    This function removes common prefixes, suffixes, articles, and punctuation
+    to allow comparison of place names that may be written differently:
+    - "Église Saint-Eustache" → "saint eustache"
+    - "Church of Saint-Eustache, Paris" → "saint eustache"
+    - "The Saint-Eustache church" → "saint eustache church"
+    """
+    if not place:
+        return ""
+    
+    normalized = place.lower().strip()
+    
+    # First, remove city names at the end (common pattern: "Place Name, Paris")
+    # Do this BEFORE removing prefixes to preserve the main place name
+    normalized = re.sub(r",\s*[a-zA-Zа-яА-Яéèêëàâùûôîïç\s]+$", "", normalized)
+    
+    # Common translations/equivalents for well-known landmarks
+    # These are bidirectional mappings to handle cross-language duplicates
+    landmark_normalizations = {
+        # Eiffel Tower variations
+        r"tour\s+eiffel": "eiffel",
+        r"eiffel\s+tower": "eiffel",
+        r"эйфелева\s+башня": "eiffel",
+        # Louvre variations
+        r"musée\s+du\s+louvre": "louvre",
+        r"louvre\s+museum": "louvre",
+        r"the\s+louvre": "louvre",
+        r"музей\s+лувр": "louvre",
+        # Notre-Dame variations
+        r"notre[- ]dame\s+de\s+paris": "notre dame",
+        r"cathédrale\s+notre[- ]dame": "notre dame",
+        r"notre[- ]dame\s+cathedral": "notre dame",
+        r"собор\s+парижской\s+богоматери": "notre dame",
+        # Arc de Triomphe
+        r"arc\s+de\s+triomphe": "arc triomphe",
+        r"триумфальная\s+арка": "arc triomphe",
+    }
+    
+    for pattern, replacement in landmark_normalizations.items():
+        normalized = re.sub(pattern, replacement, normalized, flags=re.IGNORECASE)
+    
+    # Remove common prefixes/articles in multiple languages
+    prefixes_to_remove = [
+        # French
+        r"^l'", r"^la\s+", r"^le\s+", r"^les\s+", r"^du\s+", r"^de\s+la\s+", r"^de\s+l'",
+        r"^église\s+", r"^cathédrale\s+", r"^basilique\s+", r"^musée\s+", r"^palais\s+",
+        r"^place\s+", r"^rue\s+", r"^avenue\s+", r"^boulevard\s+",
+        # English
+        r"^the\s+", r"^a\s+", r"^an\s+",
+        r"^church\s+of\s+", r"^cathedral\s+of\s+", r"^basilica\s+of\s+",
+        r"^museum\s+of\s+", r"^palace\s+of\s+",
+        r"^saint\s+", r"^st\.?\s+",
+        # Russian
+        r"^церковь\s+", r"^собор\s+", r"^храм\s+", r"^музей\s+", r"^дворец\s+",
+        r"^площадь\s+", r"^улица\s+", r"^проспект\s+", r"^бульвар\s+",
+        # German
+        r"^die\s+", r"^der\s+", r"^das\s+",
+        r"^kirche\s+", r"^dom\s+", r"^schloss\s+",
+        # Spanish
+        r"^el\s+", r"^la\s+", r"^los\s+", r"^las\s+",
+        r"^iglesia\s+de\s+", r"^catedral\s+de\s+",
+        # Italian
+        r"^il\s+", r"^lo\s+", r"^la\s+", r"^i\s+", r"^gli\s+", r"^le\s+",
+        r"^chiesa\s+di\s+", r"^basilica\s+di\s+",
+    ]
+    
+    for prefix in prefixes_to_remove:
+        normalized = re.sub(prefix, "", normalized, flags=re.IGNORECASE)
+    
+    # Replace special characters with spaces
+    normalized = re.sub(r"[-–—_/\\]", " ", normalized)
+    
+    # Remove punctuation
+    normalized = re.sub(r"[.,;:!?'\"()[\]{}]", "", normalized)
+    
+    # Collapse multiple spaces
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    
+    # If result is too short (e.g., just a number), use original with basic cleanup
+    if len(normalized) < 3:
+        # Fallback: basic cleanup without aggressive prefix removal
+        normalized = place.lower().strip()
+        normalized = re.sub(r",\s*[a-zA-Zа-яА-Яéèêëàâùûôîïç\s]+$", "", normalized)
+        normalized = re.sub(r"[-–—_/\\]", " ", normalized)
+        normalized = re.sub(r"[.,;:!?'\"()[\]{}]", "", normalized)
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+    
+    return normalized
+
+
+def is_duplicate_place(new_place: str, previous_places: list[str], threshold: float = 0.7) -> bool:
+    """Check if a place name is a duplicate of any previous places.
+    
+    Uses normalized comparison and substring matching.
+    
+    Args:
+        new_place: The new place name to check
+        previous_places: List of previously mentioned place names
+        threshold: Similarity threshold (not currently used, for future fuzzy matching)
+    
+    Returns:
+        True if this appears to be a duplicate
+    """
+    if not new_place or not previous_places:
+        return False
+    
+    new_normalized = normalize_place_name(new_place)
+    if not new_normalized:
+        return False
+    
+    # Split into tokens for comparison
+    new_tokens = set(new_normalized.split())
+    
+    for prev in previous_places:
+        prev_normalized = normalize_place_name(prev)
+        if not prev_normalized:
+            continue
+        
+        # Exact match after normalization
+        if new_normalized == prev_normalized:
+            return True
+        
+        prev_tokens = set(prev_normalized.split())
+        
+        # Check for significant overlap (more than 70% of tokens match)
+        if new_tokens and prev_tokens:
+            common_tokens = new_tokens & prev_tokens
+            # If either set is mostly contained in the other
+            overlap_ratio_new = len(common_tokens) / len(new_tokens)
+            overlap_ratio_prev = len(common_tokens) / len(prev_tokens)
+            
+            if overlap_ratio_new >= threshold or overlap_ratio_prev >= threshold:
+                return True
+        
+        # Check if one is substring of another (handles cases like "Saint-Eustache" vs "Église Saint-Eustache")
+        if new_normalized in prev_normalized or prev_normalized in new_normalized:
+            return True
+    
+    return False
+
+
+def extract_place_names_from_history(fact_history: list[str]) -> list[str]:
+    """Extract just the place names from fact history entries.
+    
+    Fact history format: "Place Name: fact text..."
+    
+    Args:
+        fact_history: List of strings in format "Place: Fact"
+    
+    Returns:
+        List of place names only
+    """
+    places = []
+    for entry in fact_history:
+        if ": " in entry:
+            place = entry.split(": ", 1)[0].strip()
+            if place:
+                places.append(place)
+    return places
+
+
