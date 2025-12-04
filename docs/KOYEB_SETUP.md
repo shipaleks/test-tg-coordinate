@@ -40,7 +40,7 @@
 
 ```bash
 # Telegram Bot Token (от @BotFather)
-TELEGRAM_BOT_TOKEN=7663163201:AAGYYcgoNdPCCMsw3HdhcLrAFPszwxw_UX4
+TELEGRAM_BOT_TOKEN=<your_token>
 
 # OpenAI API Key
 OPENAI_API_KEY=sk-proj-...

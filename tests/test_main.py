@@ -1,34 +1,34 @@
-"""Tests for main application functionality."""
+"""Tests for main module."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import anyio
 import pytest
 from src.main import info_command, start_command
-from telegram import Chat, Message, Update, User
+from telegram import Update, User, Chat, Message
+from telegram.ext import ContextTypes
 
 
 @pytest.fixture
 def mock_update():
-    """Create a mock update for command testing."""
-    # Create mock user
+    """Create a mock update."""
     user = MagicMock(spec=User)
     user.id = 123456
+    user.first_name = "Test User"
+    user.username = "testuser"
+    user.language_code = "en"
 
-    # Create mock chat
     chat = MagicMock(spec=Chat)
     chat.id = 123456
 
-    # Create mock message
     message = MagicMock(spec=Message)
     message.reply_text = AsyncMock()
 
-    # Create mock update
     update = MagicMock(spec=Update)
-    update.message = message
     update.effective_user = user
     update.effective_chat = chat
-
+    update.message = message
+    
     return update
 
 
@@ -36,6 +36,9 @@ def mock_update():
 def mock_context():
     """Create a mock context."""
     context = MagicMock()
+    context.bot = MagicMock()
+    context.bot.send_message = AsyncMock()
+    context.bot.send_photo = AsyncMock()
     return context
 
 
@@ -44,45 +47,36 @@ def test_start_command(mock_update, mock_context):
 
     async def _test():
         # Call start command
-        await start_command(mock_update, mock_context)
+        # We need to mock get_async_donors_db to avoid real DB calls
+        with patch("src.main.get_async_donors_db") as mock_get_db, \
+             patch("src.main.fb_ensure_user", new_callable=AsyncMock):
+            
+            mock_db = MagicMock()
+            mock_db.has_language_set = AsyncMock(return_value=False) # New user
+            mock_get_db.return_value = mock_db
+            
+            await start_command(mock_update, mock_context)
 
-        # Verify reply was sent
-        mock_update.message.reply_text.assert_called_once()
-        call_args = mock_update.message.reply_text.call_args
-
-        # Check that welcome text contains key information
-        text = call_args[0][0]  # First positional argument
-        assert "🗺️" in text
-        assert "Добро пожаловать" in text
-        assert "Живая локация — ваш персональный экскурсовод" in text
-        assert "прогулки" in text
-        assert "разовая отправка" in text
-
-        # Check that markdown is used
-        assert call_args[1]["parse_mode"] == "Markdown"
-
-        # Check that reply_markup (keyboard) is present
-        assert "reply_markup" in call_args[1]
-        reply_markup = call_args[1]["reply_markup"]
-
-        # Verify keyboard structure
-        assert reply_markup.resize_keyboard is True
-        assert reply_markup.one_time_keyboard is False
-
-        # Check keyboard buttons
-        keyboard = reply_markup.keyboard
-        assert len(keyboard) == 2  # Two rows
-        assert len(keyboard[0]) == 1  # First row has 1 button (info)
-        assert len(keyboard[1]) == 1  # Second row has 1 button (location)
-
-        # Check info button (now first)
-        info_button = keyboard[0][0]
-        assert info_button.text == "📱 Как поделиться Live Location"
-
-        # Check location button (now second)
-        location_button = keyboard[1][0]
-        assert location_button.text == "🔴 Поделиться локацией"
-        assert location_button.request_location is True
+            # Verify "Processing" message was sent
+            assert mock_update.message.reply_text.called
+            
+            # Since has_language_set is False, it should show language selection
+            # Verify language selection message was sent
+            # This uses context.bot.send_message or update.message.reply_text?
+            # In main.py: show_language_selection uses update.message.reply_text
+            
+            # Check calls to reply_text
+            calls = mock_update.message.reply_text.call_args_list
+            assert len(calls) >= 1
+            
+            # Check if language selection text is in one of the calls
+            found_lang_msg = False
+            for call in calls:
+                args, _ = call
+                if "Выберите ваш язык" in args[0] or "Language" in args[0]:
+                    found_lang_msg = True
+                    break
+            assert found_lang_msg
 
     anyio.run(_test)
 
@@ -91,23 +85,33 @@ def test_info_command(mock_update, mock_context):
     """Test info command sends detailed help information."""
 
     async def _test():
-        # Call info command
-        await info_command(mock_update, mock_context)
+        with patch("src.main.get_async_donors_db") as mock_get_db:
+            mock_db = MagicMock()
+            mock_db.get_user_language = AsyncMock(return_value="ru")
+            mock_get_db.return_value = mock_db
 
-        # Verify reply was sent
-        mock_update.message.reply_text.assert_called_once()
-        call_args = mock_update.message.reply_text.call_args
+            # Call info command
+            await info_command(mock_update, mock_context)
 
-        # Check that info text contains key information
-        text = call_args[0][0]  # First positional argument
-        assert "📱 *Как поделиться Live Location:*" in text
-        assert "Живая локация — основной режим" in text
-        assert "Персональный экскурсовод" in text
-        assert "Share Live Location" in text
-        assert "туристических прогулок" in text
-        assert "Разовая геопозиция" in text
-
-        # Check that markdown is used
-        assert call_args[1]["parse_mode"] == "Markdown"
+            # Verify messages were sent
+            # info_command sends messages via context.bot.send_message and send_photo
+            
+            assert mock_context.bot.send_message.called
+            
+            # Check for key phrases in the sent messages (both text and photo captions)
+            
+            # Collect text messages
+            calls_text = mock_context.bot.send_message.call_args_list
+            texts = [call.kwargs.get('text', '') or (call.args[1] if len(call.args) > 1 else '') for call in calls_text]
+            
+            # Collect photo captions
+            calls_photo = mock_context.bot.send_photo.call_args_list
+            captions = [call.kwargs.get('caption', '') for call in calls_photo]
+            
+            combined_text = " ".join(texts + captions)
+            
+            assert "Что такое живая локация" in combined_text
+            # It sends steps sequentially
+            assert "Шаг 1/3" in combined_text
 
     anyio.run(_test)

@@ -73,4 +73,8 @@ Thumbs.db
 
 # Project specific
 ngrok
-ngrok.exe 
+ngrok.exe
+
+# Database
+*.db
+*.sqlite3

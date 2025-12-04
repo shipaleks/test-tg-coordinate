@@ -1,216 +1,129 @@
-# Bot Voyage v1.3 🗺️
+# Bot Voyage 🗺️
 
-Telegram-бот для получения интересных фактов о местах. Отправьте локацию — получите удивительную историю!
+**Bot Voyage** is a Telegram bot that acts as your personal AI tour guide. Send your location (static or live) and get surprising, verified facts about nearby places.
 
-## ✨ Новое в v1.3.2
+## ✨ Key Features
 
-### ⚡ **Мгновенный первый факт**
-- Первый факт всегда приходит быстро (10-15s)
-- Используется reasoning=none для скорости
-- Последующие факты: настройки пользователя
+### 📍 Instant Facts
+- Send your **static location** via attachment.
+- Receive an interesting fact about a nearby landmark in seconds (10-15s).
+- Uses **OpenAI GPT-5.1** with web search to ensure accuracy.
 
-### 🎓 **Образовательный onboarding**
-- После разового факта: предложение live location
-- Кнопка "Как включить живую локацию"
-- Деликатно объясняет преимущества
+### 🔴 Live Location (Tour Mode)
+- Share your **Live Location** for a hands-free tour experience.
+- Select an update interval (e.g., every 5, 10, 30, or 60 minutes).
+- The bot automatically sends new facts as you walk.
+- **Numbered Facts**: Keep track of your journey (Fact #1, #2...).
+- **Smart Duplicate Prevention**: Ensures you don't hear about the same place twice, even if you circle back.
 
-### 📍 **Кнопка разовой локации**
-- Добавлена в главное меню
-- Удобнее отправить локацию
-- Live location всё равно на первом месте
+### 🌐 Multilingual Support
+- Automatically detects and supports:
+  - 🇬🇧 English
+  - 🇷🇺 Russian
+  - 🇫🇷 French
+- Change language anytime via the main menu.
 
-### 🔢 **Нумерация фактов** (v1.3)
-- Live location факты нумеруются: "🔴 Факт #1", "🔴 Факт #2" и т.д.
-- Убрано неестественное "Начальный факт"
-- Лучше видно прогресс во время прогулки
+### 🧠 Advanced AI Logic
+- Powered by **GPT-5.1** (Reasoning models).
+- **Reasoning Levels**: Adjusts AI depth (minimal/low/medium/high) based on user tier or settings.
+- **Web Search**: Mandatory verification step to reduce hallucinations.
 
-### 📍 Упрощенный интерфейс (v1.2.1)
-- **Кнопка локации** — мгновенная отправка геопозиции
-- **Подробная инструкция** — как использовать live location
-- **Убрана лишняя кнопка** — Telegram сам умеет скрывать клавиатуру
+## 🛠️ Tech Stack
 
-### Как использовать:
+- **Language**: Python 3.12
+- **Framework**: `python-telegram-bot` (AsyncIO)
+- **AI Engine**: OpenAI GPT-5.1 & GPT-5.1-mini
+- **Database**: 
+  - **Firestore**: User profiles & settings (production)
+  - **PostgreSQL**: Donation tracking & analytics
+  - **SQLite**: Local development fallback
+- **Infrastructure**: Docker, Railway / Koyeb
+- **CI/CD**: GitHub Actions
 
-**📍 Быстрая отправка:**
-- Кнопка «📍 Поделиться локацией» → мгновенный факт
+## 🚀 Getting Started
 
-**🔴 Живая локация (прогулки):**
-- Скрепка 📎 → Location → Share Live Location
-- Выберите время → настройте интервал → получайте факты автоматически
+### Prerequisites
+- Python 3.12+
+- Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
+- OpenAI API Key (with access to GPT-5 models)
+- Firebase Credentials (optional, for production)
 
-## 🚀 Возможности
+### Local Development
 
-### 📍 Статическая локация
-- Мгновенный интересный факт о месте
-- Обработка координат и фактов с GPT‑5.1 (reasoning) + обязательный web_search
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/bot-voyage.git
+   cd bot-voyage
+   ```
 
-### 🔴 Живая локация (Live Location)
-- **Настраиваемые интервалы**: 5, 10, 30, 60 минут  
-- **Нумерованные факты**: видите прогресс путешествия
-- **Автоматические факты** во время движения
-- **Обновление координат** в реальном времени
-- Идеально для туристических прогулок по городу
+2. **Create a virtual environment**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
 
-## 🎯 Почему живая локация?
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Идеально для туристических прогулок — узнавайте о местах автоматически, не отвлекаясь от экскурсии!
+4. **Configure environment**
+   Copy `.env.example` to `.env` and fill in your keys:
+   ```bash
+   cp .env.example .env
+   ```
+   Required variables:
+   - `TELEGRAM_BOT_TOKEN`: Your bot token.
+   - `OPENAI_API_KEY`: Your OpenAI key.
 
-**Пример использования:**
+5. **Run the bot**
+   ```bash
+   # Run in polling mode (easiest for local dev)
+   python -m src.main
+   ```
+
+## 📦 Deployment
+
+### Railway / Koyeb
+
+The project is Dockerized and ready for cloud deployment.
+
+1. **Environment Variables**: Set the following in your project settings:
+   - `TELEGRAM_BOT_TOKEN`
+   - `OPENAI_API_KEY`
+   - `WEBHOOK_URL`: Your public URL (e.g., `https://your-app.koyeb.app`)
+   - `PORT`: (Default: 8000)
+
+2. **Healthcheck**:
+   The bot exposes a health check endpoint at `/` and `/health` to prevent platform timeouts.
+
+3. **Push to deploy**:
+   Connect your GitHub repository to Railway or Koyeb for automatic deployments.
+
+## 📂 Project Structure
+
 ```
-📎 → Location → Share Live Location (1 час)
-🔴 Выбираете интервал: каждые 10 минут  
-🔴 Факт #1 → 🔴 Факт #2 → 🔴 Факт #3...
-🗺️ Получаете нумерованные факты во время прогулки!
+├── docs/               # Documentation & guides
+├── infra/              # Infrastructure configs
+├── src/
+│   ├── handlers/       # Telegram command & message handlers
+│   ├── services/       # External services (OpenAI, Firebase, DB)
+│   ├── utils/          # Helper functions
+│   └── main.py         # Entry point
+├── tests/              # Pytest suite
+├── .env.example        # Template for environment variables
+├── Dockerfile          # Production Docker image
+└── requirements.txt    # Python dependencies
 ```
-
-## 🛠️ Технический стек
-
-- **Python 3.12** + python-telegram-bot
-- **OpenAI GPT‑5.1 (reasoning + web_search)** для генерации фактов и проверки
-- **AsyncIO** для параллельной обработки live-локаций
-- **Railway** для deployment
-- **GitHub Actions** для CI/CD
-
-## 📋 Архитектура
-
-### Обработка локаций
-```python
-# Автоматическое определение типа
-if location.live_period:
-    # Живая локация → выбор интервала → фоновые задачи
-    show_interval_selection()
-else:
-    # Статическая → мгновенный факт
-    send_immediate_fact()
-```
-
-### Live Location система
-- **Session management**: отслеживание множественных пользователей
-- **Background tasks**: автоматическая отправка фактов по таймеру
-- **Coordinate updates**: обработка edited_message для обновления позиции
-- **Graceful shutdown**: корректное завершение при остановке sharing
-
-## 🧪 Тестирование
-
-```bash
-# Запуск всех тестов
-python -m pytest tests/ -v
-
-# Тесты клавиатуры  
-python -m pytest tests/test_main.py -v
-
-# Тесты live location
-python -m pytest tests/test_live_location_tracker.py -v
-
-# Тесты обработки локаций
-python -m pytest tests/test_location_handler.py -v
-```
-
-**Покрытие**: 13 тестов, включая упрощенную функциональность клавиатуры
-
-## 🚀 Deployment
-
-### Production (Railway)
-```bash
-git push origin main  # → автоматический деплой
-```
-
-### Local development
-```bash
-cp .env.example .env
-# Заполните TELEGRAM_BOT_TOKEN и OPENAI_API_KEY
-
-# Режим polling (для разработки)
-unset WEBHOOK_URL  
-python -m src.main
-```
-
-## 📖 Документация
-
-- **[PRD.md](docs/PRD.md)** — Product Requirements Document
-- **[LIVE_LOCATION_V1.1.md](docs/LIVE_LOCATION_V1.1.md)** — Live Location архитектура
-- **[LOCATION_KEYBOARD_V1.2.md](docs/LOCATION_KEYBOARD_V1.2.md)** — Клавиатура v1.2
-- **[DEPLOYMENT_FIXES.md](docs/DEPLOYMENT_FIXES.md)** — Решение проблем деплоя
-- **[FINAL_DEPLOYMENT.md](docs/FINAL_DEPLOYMENT.md)** — Production guide
-
-## 🔄 История версий
-
-### v1.3.2 (текущая)
-- ✅ **Быстрый первый факт** (reasoning=none, 10-15s)
-- ✅ **Upsell live location** после разового факта
-- ✅ **Кнопка разовой локации** в меню
-- ✅ Донаторы: auto-upgrade reasoning none → low
-
-### v1.3.1
-- ✅ Обновление до GPT‑5.1 (улучшенная точность и качество)
-- ✅ Healthcheck endpoint для Koyeb/Railway
-- ✅ Зафиксированные версии зависимостей
-- ✅ Reasoning modes: none/low/medium/high
-
-### v1.3
-- ✅ Переход на GPT‑5 с reasoning и принудительным web_search
-- ✅ Онлайновая верификация координат/фактов перед ответом
-- ✅ Улучшено извлечение изображений (Wikimedia Special:FilePath)
-
-### v1.2.2
-- ✅ **Нумерация фактов** — 🔴 Факт #1, #2, #3...
-- ✅ **Убрано "Начальный факт"** — более естественно
-- ✅ **Счетчик в данных сессии** — fact_count в LiveLocationData
-
-### v1.2.1
-- ✅ **Упрощенный интерфейс** — убрана лишняя кнопка
-- ✅ **Исправлены инструкции** — live location через скрепку
-- ✅ **Краткие тексты** — меньше информационного шума
-
-### v1.2  
-- ✅ **Кнопка локации** — ReplyKeyboardMarkup
-- ✅ **Информационная система** — встроенная справка
-
-### v1.1  
-- ✅ **Live Location** — автоматические факты каждые N минут
-- ✅ **Настраиваемые интервалы** — 5, 10, 30, 60 минут
-- ✅ **Полная русификация** — включая OpenAI промпты
-
-### v1.0
-- ✅ **MVP** — статические локации + факты o3
-- ✅ **Production deployment** — Railway + webhook
-
-## 🌟 User Experience
-
-### Упрощенный интерфейс v1.2.1:
-```
-Стартовая клавиатура:
-┌─────────────────────────────┐
-│  📍 Поделиться локацией      │  ← кнопка request_location
-├─────────────────────────────┤
-│  ℹ️ Подробная инструкция    │  ← как использовать live location
-└─────────────────────────────┘
-```
-
-**Результат**: фокус на главной функциональности, меньше отвлекающих элементов
 
 ## 🤝 Contributing
 
+Contributions are welcome! Please verify your changes with existing tests:
+
 ```bash
-git clone https://github.com/shipaleks/test-tg-coordinate.git
-cd test-tg-coordinate
-
-# Setup
-python -m venv venv
-source venv/bin/activate  # или venv\Scripts\activate на Windows
-pip install -r requirements.txt
-
-# Development
 python -m pytest tests/ -v
-python -m src.main
 ```
 
-## 📊 Статус проекта
+## 📄 License
 
-- ✅ **Production Ready** — работает в Railway
-- ✅ **Полное тестирование** — 13 unit tests
-- ✅ **CI/CD Pipeline** — GitHub Actions
-- ✅ **Comprehensive docs** — техническая документация
-- ✅ **User-friendly UX** — простой и понятный интерфейс
-
-**NearbyFactBot v1.2.2 — готов к использованию!** 🚀 
+[MIT](LICENSE)
