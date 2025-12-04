@@ -281,12 +281,16 @@ class LiveLocationData:
     monitor_task: asyncio.Task | None = None  # Health monitoring task
     session_start: datetime = None  # Track when session started
     stop_requested: bool = False  # Flag to signal stop request
+    last_coordinate_update: datetime = None  # Track when Telegram last sent coordinate update
+    is_generating_fact: bool = False  # Flag to indicate fact generation in progress
 
     def __post_init__(self):
         if self.fact_history is None:
             self.fact_history = []
         if self.session_start is None:
             self.session_start = datetime.now()
+        if self.last_coordinate_update is None:
+            self.last_coordinate_update = datetime.now()
 
 
 class LiveLocationTracker:
@@ -382,6 +386,7 @@ class LiveLocationTracker:
                 session.latitude = latitude
                 session.longitude = longitude
                 session.last_update = datetime.now()
+                session.last_coordinate_update = datetime.now()  # Track coordinate updates from Telegram
 
                 logger.info(
                     f"Updated live location for user {user_id}: {latitude}, {longitude}"
@@ -496,15 +501,16 @@ class LiveLocationTracker:
                         logger.error(f"Failed to send session end notification: {notify_error}")
                     break
                 
-                # Check if we haven't received updates in a while (user stopped sharing)
-                # Telegram usually sends updates every ~30-60 seconds for live location
-                # BUT if user is stationary, updates may be sparse
-                # Use 10 minutes threshold to avoid false positives
-                time_since_update = current_time - session_data.last_update
-                if time_since_update > timedelta(minutes=10):
+                # Check if we haven't received coordinate updates from Telegram
+                # This indicates user stopped sharing live location
+                # Use adaptive threshold: min 3 minutes, or interval + 2 minutes (whichever is larger)
+                # This gives time for Telegram to send updates while user is stationary
+                coordinate_timeout_minutes = max(3, session_data.fact_interval_minutes + 2)
+                time_since_coordinate_update = current_time - session_data.last_coordinate_update
+                if time_since_coordinate_update > timedelta(minutes=coordinate_timeout_minutes):
                     logger.info(
                         f"Live location stopped updating for user {session_data.user_id} "
-                        f"(last update: {session_data.last_update}, {time_since_update.total_seconds():.0f}s ago)"
+                        f"(last coordinate update: {session_data.last_coordinate_update}, {time_since_coordinate_update.total_seconds():.0f}s ago, threshold: {coordinate_timeout_minutes} min)"
                     )
                     # Send notification that we detected manual stop
                     try:
@@ -523,6 +529,11 @@ class LiveLocationTracker:
                 try:
                     send_start_time = datetime.now()
                     # DON'T increment counter yet - only increment when fact is actually sent
+
+                    # Set flag to indicate generation in progress
+                    session_data.is_generating_fact = True
+                    # Update last_update timestamp BEFORE generation to prevent monitor from killing session
+                    session_data.last_update = datetime.now()
 
                     openai_client = get_openai_client()
                     
@@ -791,7 +802,9 @@ class LiveLocationTracker:
                     # Update last_update timestamp to keep session alive
                     # Even if coordinates didn't change, we successfully sent a fact
                     session_data.last_update = datetime.now()
-                    
+                    # Clear generation flag
+                    session_data.is_generating_fact = False
+
                     logger.info(
                         f"Sent live location fact #{session_data.fact_count} to user {session_data.user_id}"
                     )
@@ -804,12 +817,17 @@ class LiveLocationTracker:
                     # Increment counter for error message too (so user sees progress even on errors)
                     session_data.fact_count += 1
 
-                    # Send error message with fact number  
+                    # Update last_update even on error to prevent monitor from killing session
+                    session_data.last_update = datetime.now()
+                    # Clear generation flag
+                    session_data.is_generating_fact = False
+
+                    # Send error message with fact number
                     from ..handlers.location import get_localized_message
                     error_fact = await get_localized_message(session_data.user_id, 'error_no_info')
-                    error_response = await get_localized_message(session_data.user_id, 'live_fact_format', 
-                                                         number=session_data.fact_count, 
-                                                         place="", 
+                    error_response = await get_localized_message(session_data.user_id, 'live_fact_format',
+                                                         number=session_data.fact_count,
+                                                         place="",
                                                          fact=error_fact)
 
                     try:
@@ -858,7 +876,7 @@ class LiveLocationTracker:
         self, session_data: LiveLocationData, bot: Bot
     ) -> None:
         """Monitor session health and detect when user stops sharing.
-        
+
         This task runs in parallel with fact sending and checks more frequently
         if the user has stopped sharing their live location.
         """
@@ -866,28 +884,53 @@ class LiveLocationTracker:
             while True:
                 # Check every 30 seconds
                 await asyncio.sleep(30)
-                
+
                 current_time = datetime.now()
-                
+
                 # Check if session has exceeded its live_period
                 session_end_time = session_data.session_start + timedelta(seconds=session_data.live_period)
                 if current_time >= session_end_time:
                     # Let the main loop handle expiration
                     break
-                
-                # Check if we haven't received updates in 10 minutes
-                # (give more time for slow fact generation and sparse location updates)
+
+                # ADAPTIVE TIMEOUT: Give enough time for fact generation (can take 15+ minutes with GPT-5.1 reasoning)
+                # Formula: (interval * 2) + 20 minutes for generation overhead
+                # Minimum: 25 minutes to avoid false positives
+                adaptive_timeout_minutes = max(
+                    (session_data.fact_interval_minutes * 2) + 20,
+                    25
+                )
+
+                # Skip check if currently generating fact (prevents false positive during long AI generation)
+                if session_data.is_generating_fact:
+                    logger.debug(f"Health monitor: skipping check for user {session_data.user_id} (fact generation in progress)")
+                    continue
+
+                # Check if we haven't received updates in adaptive timeout period
                 time_since_update = current_time - session_data.last_update
-                if time_since_update > timedelta(minutes=10):
-                    logger.info(
-                        f"Health monitor detected stopped live location for user {session_data.user_id} "
-                        f"(last update: {time_since_update.total_seconds():.0f}s ago)"
+                if time_since_update > timedelta(minutes=adaptive_timeout_minutes):
+                    logger.warning(
+                        f"Health monitor detected stalled session for user {session_data.user_id} "
+                        f"(last update: {time_since_update.total_seconds():.0f}s ago, timeout: {adaptive_timeout_minutes} min)"
                     )
+
+                    # Send notification to user about session timeout
+                    try:
+                        from ..handlers.location import get_localized_message
+                        timeout_message = await get_localized_message(session_data.user_id, 'live_manual_stop')
+                        await bot.send_message(
+                            chat_id=session_data.chat_id,
+                            text=timeout_message,
+                            parse_mode="Markdown",
+                        )
+                    except Exception as notify_error:
+                        logger.error(f"Health monitor: failed to send timeout notification: {notify_error}")
+
                     # Cancel the main fact sending task
                     if session_data.task and not session_data.task.done():
                         session_data.task.cancel()
                     break
-                    
+
         except asyncio.CancelledError:
             logger.debug(f"Health monitor cancelled for user {session_data.user_id}")
         except Exception as e:
