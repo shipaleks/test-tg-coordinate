@@ -503,9 +503,9 @@ class LiveLocationTracker:
                 
                 # Check if we haven't received coordinate updates from Telegram
                 # This indicates user stopped sharing live location
-                # Use adaptive threshold: min 3 minutes, or interval + 2 minutes (whichever is larger)
-                # This gives time for Telegram to send updates while user is stationary
-                coordinate_timeout_minutes = max(3, session_data.fact_interval_minutes + 2)
+                # Use adaptive threshold: min 15 minutes, or interval + 10 minutes (whichever is larger)
+                # This gives PLENTY of time for Telegram to send updates even if user is stationary
+                coordinate_timeout_minutes = max(15, session_data.fact_interval_minutes + 10)
                 time_since_coordinate_update = current_time - session_data.last_coordinate_update
                 if time_since_coordinate_update > timedelta(minutes=coordinate_timeout_minutes):
                     logger.info(
@@ -894,11 +894,11 @@ class LiveLocationTracker:
                     break
 
                 # ADAPTIVE TIMEOUT: Give enough time for fact generation (can take 15+ minutes with GPT-5.1 reasoning)
-                # Formula: (interval * 2) + 20 minutes for generation overhead
-                # Minimum: 25 minutes to avoid false positives
+                # Formula: (interval * 3) + 30 minutes for generation overhead
+                # Minimum: 40 minutes to avoid false positives
                 adaptive_timeout_minutes = max(
-                    (session_data.fact_interval_minutes * 2) + 20,
-                    25
+                    (session_data.fact_interval_minutes * 3) + 30,
+                    40
                 )
 
                 # Skip check if currently generating fact (prevents false positive during long AI generation)
