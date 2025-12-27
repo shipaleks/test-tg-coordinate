@@ -280,7 +280,7 @@ def test_session_expiry():
 
         with patch(
             "src.services.live_location_tracker.get_openai_client"
-        ) as mock_get_client:
+        ):
             with patch("asyncio.sleep") as mock_sleep:
                 # Mock to return immediately on first sleep call
                 mock_sleep.return_value = asyncio.Future()

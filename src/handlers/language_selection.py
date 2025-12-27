@@ -29,7 +29,7 @@ async def reason_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     claude_models = [
         ("claude-opus-4-5-20251101", "Opus 4.5 (Best Quality)"),
         ("claude-sonnet-4-20250514", "Sonnet 4 (Balanced)"),
-        ("claude-3-5-haiku-20241022", "Haiku 3.5 (Fastest)"),
+        ("claude-haiku-4-5-20251001", "Haiku 4.5 (Fastest)"),
     ]
     for model_id, model_name in claude_models:
         mark = "✅" if model_id == current_model else "○"
@@ -98,7 +98,7 @@ async def handle_reason_model_callback(update: Update, context: ContextTypes.DEF
     claude_models = [
         ("claude-opus-4-5-20251101", "Opus 4.5 (Best Quality)"),
         ("claude-sonnet-4-20250514", "Sonnet 4 (Balanced)"),
-        ("claude-3-5-haiku-20241022", "Haiku 3.5 (Fastest)"),
+        ("claude-haiku-4-5-20251001", "Haiku 4.5 (Fastest)"),
     ]
     for model_id, model_name in claude_models:
         mark = "✅" if model_id == current_model else "○"

@@ -608,7 +608,7 @@ Sources:
         try:
             # Get user preferences
             user_language = "ru"  # Default to Russian
-            user_model = self.MODEL_OPUS  # Default model
+            user_model = self.MODEL_HAIKU  # Default model (Haiku 4.5)
 
             if user_id:
                 try:
