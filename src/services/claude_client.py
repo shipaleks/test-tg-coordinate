@@ -115,6 +115,7 @@ class ClaudeClient:
     # Model constants
     MODEL_OPUS = "claude-opus-4-5-20251101"
     MODEL_SONNET = "claude-sonnet-4-20250514"
+    MODEL_HAIKU = "claude-3-5-haiku-20241022"
 
     def __init__(self, api_key: str | None = None):
         """Initialize Claude client.
@@ -617,8 +618,11 @@ Sources:
 
                     # Check user model preference
                     stored_model = await donors_db.get_user_model(user_id)
-                    if stored_model == "claude-sonnet-4-20250514":
+                    if stored_model == self.MODEL_SONNET:
                         user_model = self.MODEL_SONNET
+                    elif stored_model == self.MODEL_HAIKU:
+                        user_model = self.MODEL_HAIKU
+                    # else: defaults to MODEL_OPUS
                 except Exception as e:
                     logger.warning(f"Failed to get user preferences: {e}")
 
