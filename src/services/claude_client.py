@@ -625,13 +625,87 @@ Sources:
             # Perform web search for context
             web_search_results = ""
             try:
-                # Search for UNUSUAL, HIDDEN places (not tourist landmarks!)
-                # Atlas Obscura style: forgotten, counterintuitive, locals don't know
-                search_queries = [
-                    f"hidden gems unusual places {lat},{lon}",
-                    f"obscure historical sites secrets {lat} {lon}",
-                    f"forgotten places Atlas Obscura {lat},{lon}",
-                ]
+                # First, get location name via reverse geocoding to search for specific places
+                location_name = None
+                try:
+                    coords = await self._get_coordinates_from_nominatim(
+                        f"{lat},{lon}", user_lat=lat, user_lon=lon
+                    )
+                    if coords and len(coords) > 2:
+                        # coords[2] contains address details
+                        location_name = coords[2]
+                except Exception as e:
+                    logger.warning(f"Reverse geocoding failed: {e}")
+
+                # Build search queries based on location name or coordinates
+                search_queries = []
+
+                if location_name:
+                    # Extract city and specific location
+                    # Parse location_name which is like "24 rue de la Glacière, Paris, France"
+                    parts = [p.strip() for p in location_name.split(",")]
+
+                    if len(parts) >= 2:
+                        street = parts[0]  # "24 rue de la Glacière"
+                        city = parts[1] if len(parts) > 1 else ""  # "Paris"
+
+                        # Search for specific street/building + city
+                        search_queries = [
+                            f'"{street}" {city} history facts',
+                            f'"{street}" {city} historical building',
+                            f"{city} unusual places hidden secrets",
+                        ]
+                    else:
+                        # Fallback to city-based search
+                        search_queries = [
+                            f"{location_name} history interesting facts",
+                            f"{location_name} hidden gems unusual",
+                        ]
+                else:
+                    # Fallback: reverse geocode to get city at least
+                    import httpx
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        response = await client.get(
+                            "https://nominatim.openstreetmap.org/reverse",
+                            params={
+                                "lat": lat,
+                                "lon": lon,
+                                "format": "json",
+                                "addressdetails": 1,
+                            },
+                            headers={"User-Agent": "NearbyFactBot/1.0"},
+                        )
+                        if response.status_code == 200:
+                            data = response.json()
+                            address = data.get("address", {})
+                            city = (
+                                address.get("city")
+                                or address.get("town")
+                                or address.get("village")
+                                or ""
+                            )
+                            suburb = address.get("suburb", "")
+                            road = address.get("road", "")
+
+                            # Build queries with specific location info
+                            if road and city:
+                                search_queries = [
+                                    f'"{road}" {city} history facts',
+                                    f'"{road}" {city} interesting places',
+                                    f"{city} {suburb} unusual hidden places",
+                                ]
+                            elif city:
+                                search_queries = [
+                                    f"{city} {suburb} interesting facts history",
+                                    f"{city} unusual places hidden gems",
+                                    f"{city} historical sites secrets",
+                                ]
+                            else:
+                                # Last resort: coordinate-based search
+                                search_queries = [
+                                    f"Paris unusual places {lat} {lon}",
+                                    f"historical sites near {lat},{lon}",
+                                ]
 
                 all_results = []
                 for query in search_queries[:3]:
