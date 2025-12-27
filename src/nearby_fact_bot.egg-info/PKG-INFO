@@ -1,14 +1,17 @@
 Metadata-Version: 2.4
 Name: nearby-fact-bot
-Version: 1.0.0
-Summary: Telegram bot that provides interesting facts about places near your location
+Version: 2.0.0
+Summary: Telegram bot that provides interesting facts about places near your location (powered by Claude)
 Requires-Python: >=3.11
 Requires-Dist: python-telegram-bot[webhooks]==21.7
-Requires-Dist: openai>=1.54.0
-Requires-Dist: asyncio-throttle>=1.0.2
+Requires-Dist: anthropic>=0.50.0
+Requires-Dist: asyncio-throttle==1.0.2
+Requires-Dist: python-dotenv==1.0.1
+Requires-Dist: aiohttp==3.10.11
+Requires-Dist: httpx>=0.27.0
 Provides-Extra: dev
 Requires-Dist: ruff>=0.4.0; extra == "dev"
 Requires-Dist: black>=24.3.0; extra == "dev"
 Requires-Dist: pytest>=8.0.0; extra == "dev"
-Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
+Requires-Dist: pytest-anyio>=0.0.0; extra == "dev"
 Requires-Dist: pytest-mock>=3.12.0; extra == "dev"

@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Bot Voyage** (nearby-fact-bot) is a sophisticated Telegram bot that provides location-based facts using OpenAI's GPT-5.1 model with web search verification. It supports both static location queries and real-time live location tracking with multi-language support (5 languages).
+**Bot Voyage** (nearby-fact-bot) is a sophisticated Telegram bot that provides location-based facts using **Anthropic Claude Opus 4.5** with Brave Search web verification. It supports both static location queries and real-time live location tracking with multi-language support (5 languages).
 
-**Version**: 1.3.2
+**Version**: 2.0.0
 **Python**: 3.12
-**Main Dependencies**: python-telegram-bot 21.7, openai 1.99.2
+**Main Dependencies**: python-telegram-bot 21.7, anthropic 0.50+, httpx 0.27+
 
 ## Development Commands
 
@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run specific test**: `python -m pytest tests/test_<module>.py -v`
 - **Lint code**: `ruff check src/ tests/`
 - **Format code**: `black src/ tests/`
-- **Run bot locally**: `python -m src.main` (requires .env with TELEGRAM_BOT_TOKEN and OPENAI_API_KEY)
+- **Run bot locally**: `python -m src.main` (requires .env with TELEGRAM_BOT_TOKEN, ANTHROPIC_API_KEY, and BRAVE_API_KEY)
 
 ### Development Setup
 ```bash
@@ -32,7 +32,7 @@ python -m src.main
 
 ### Core Components
 
-**Bot Voyage** provides location-based facts using OpenAI's GPT-5.1 model (with GPT-5.1-mini fallback). The architecture supports:
+**Bot Voyage** provides location-based facts using **Claude Opus 4.5** (with Claude Sonnet 4 as alternative). The architecture supports:
 - Static location queries with immediate response
 - Live location tracking with configurable intervals (5/10/30/60 minutes)
 - Multi-language support (Russian, English, French, Portuguese-Brazil, Ukrainian)
@@ -52,7 +52,7 @@ python -m src.main
 
 #### `src/handlers/location.py` (650+ lines)
 **Core location processing and fact delivery**
-- **Static locations**: Immediate fact generation with GPT-5.1
+- **Static locations**: Immediate fact generation with Claude Opus 4.5
 - **Live locations**: Interval selection flow → background fact delivery with numbering
 - Duplicate prevention across sessions
 - Media group implementation for Wikipedia images (up to 4 images)
@@ -87,14 +87,20 @@ python -m src.main
 - **Session cleanup**: Automatic termination when live sharing stops/expires
 - Thread-safe session storage with asyncio locks
 
-#### `src/services/openai_client.py` (2304 lines - Core AI Engine)
+#### `src/services/claude_client.py` (1200+ lines - Core AI Engine)
 **Comprehensive AI fact generation with verification**
-- **Model system**: GPT-5.1 for all facts (static + live) with GPT-5.1-mini fallback
-- **Web search verification**: At least 2 searches per fact for accuracy
+- **Model system**: Claude Opus 4.5 for all facts (static + live) with Claude Sonnet 4 alternative
+- **Web search verification**: Brave Search API integration for fact verification
+- **Separate Russian prompts**: Dedicated prompts for Russian language quality
 - **Multi-tier coordinate lookup**:
   1. Direct parsing from model response
-  2. WebSearch with GPT-5.1 for precise coordinates
-  3. Nominatim geocoding service (OSM) as fallback
+  2. Nominatim geocoding service (OSM) with smart fallbacks
+
+#### `src/services/web_search.py` (180 lines)
+**Brave Search API integration**
+- Web search for fact verification
+- Search result formatting for AI prompts
+- Language-aware search queries
 - **StaticLocationHistory class**: Coordinate-based caching (3 decimal places ~111m precision)
   - In-memory cache with 24-hour TTL
   - Max 1000 entries with automatic cleanup
@@ -257,7 +263,8 @@ python -m src.main
 
 **Required**
 - `TELEGRAM_BOT_TOKEN` - Bot token from @BotFather
-- `OPENAI_API_KEY` - OpenAI API key for GPT-5.1
+- `ANTHROPIC_API_KEY` - Anthropic API key for Claude Opus 4.5
+- `BRAVE_API_KEY` - Brave Search API key for web search (get at https://brave.com/search/api/)
 
 **Optional - Deployment**
 - `WEBHOOK_URL` - Public URL for production (triggers webhook mode)
@@ -392,7 +399,7 @@ CREATE TABLE user_preferences (
      - Install dependencies: pip install -e ".[dev]"
      - Lint: ruff check src/ tests/
      - Format check: black --check src/ tests/
-     - Test: pytest tests/ -v (with OPENAI_API_KEY=test-key)
+     - Test: pytest tests/ -v (with ANTHROPIC_API_KEY=test-key)
    ```
 
 2. **Deploy Job** (Conditional: main branch + push only)
@@ -413,7 +420,7 @@ CREATE TABLE user_preferences (
 # Setup
 unset WEBHOOK_URL
 cp .env.example .env
-# Edit .env with TELEGRAM_BOT_TOKEN and OPENAI_API_KEY
+# Edit .env with TELEGRAM_BOT_TOKEN, ANTHROPIC_API_KEY, and BRAVE_API_KEY
 
 # Run
 python -m src.main
@@ -431,7 +438,8 @@ railway volume create --mount /data
 
 # Environment variables (set in Railway dashboard)
 TELEGRAM_BOT_TOKEN=...
-OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+BRAVE_API_KEY=...
 WEBHOOK_URL=https://your-app.railway.app
 PORT=8000
 ```
@@ -712,7 +720,8 @@ await context.bot.send_media_group(chat_id, media_group)
 ```bash
 # .env file
 TELEGRAM_BOT_TOKEN=your_token
-OPENAI_API_KEY=your_key
+ANTHROPIC_API_KEY=your_key
+BRAVE_API_KEY=your_key
 
 # Run
 python -m src.main
@@ -724,7 +733,7 @@ python -m src.main
 pytest tests/ -v
 
 # Run specific test file
-pytest tests/test_openai_client.py -v
+pytest tests/test_claude_client.py -v
 
 # Run with coverage
 pytest tests/ --cov=src --cov-report=html
@@ -750,8 +759,9 @@ pytest tests/ --cov=src --cov-report=html
 - Check logs for session creation
 
 **Facts not generating**
-- Verify `OPENAI_API_KEY` is valid
-- Check OpenAI API quota/limits
+- Verify `ANTHROPIC_API_KEY` is valid
+- Check Anthropic API quota/limits
+- Verify `BRAVE_API_KEY` for web search
 - Review logs for API errors
 
 **Images not appearing**

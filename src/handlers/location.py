@@ -1,6 +1,7 @@
 """Location message handler for Telegram bot."""
 
 import asyncio
+import inspect
 import logging
 import re
 
@@ -13,22 +14,29 @@ from telegram import (
     Update,
 )
 from telegram.ext import ContextTypes
-from urllib.parse import quote
 
-from ..services.live_location_tracker import get_live_location_tracker
-from ..services.openai_client import get_openai_client
+from ..services.async_donors_wrapper import get_async_donors_db
+from ..services.claude_client import get_claude_client as get_openai_client
 from ..services.firebase_stats import increment_fact_counters as fb_increment_fact
 from ..services.firebase_stats import record_movement as fb_record_movement
-import inspect
-from ..services.async_donors_wrapper import get_async_donors_db
+from ..services.live_location_tracker import get_live_location_tracker
+from ..utils.formatting_utils import (
+    escape_html as _escape_html,
+)
 from ..utils.formatting_utils import (
     extract_sources_from_answer as _extract_sources_from_answer,
-    strip_sources_section as _strip_sources_section,
-    sanitize_url as _sanitize_url,
-    escape_html as _escape_html,
+)
+from ..utils.formatting_utils import (
     label_to_html as _label_to_html,
-    extract_bare_links as _extract_bare_links,
+)
+from ..utils.formatting_utils import (
     remove_bare_links_from_text as _remove_bare_links_from_text,
+)
+from ..utils.formatting_utils import (
+    sanitize_url as _sanitize_url,
+)
+from ..utils.formatting_utils import (
+    strip_sources_section as _strip_sources_section,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,7 +47,7 @@ LOCATION_MESSAGES = {
         'image_fallback': "",
         'live_location_received': "🔴 *Живая локация получена!*\n\n📍 Отслеживание на {minutes} минут\n\nКак часто присылать интересные факты?",
         'interval_5min': "Каждые 5 минут",
-        'interval_10min': "Каждые 10 минут", 
+        'interval_10min': "Каждые 10 минут",
         'interval_30min': "Каждые 30 минут",
         'interval_60min': "Каждые 60 минут",
         'live_activated': "🔴 *Живая локация активирована!*\n\n📍 Отслеживание: {minutes} минут\n⏰ Факты каждые: {interval} минут\n\n🚀 Первый факт придёт примерно через 3–5 минут, затем — автоматически по расписанию.\n\nОстановите sharing чтобы завершить сессию.",
@@ -63,7 +71,7 @@ LOCATION_MESSAGES = {
         'live_location_received': "🔴 *Live location received!*\n\n📍 Tracking for {minutes} minutes\n\nHow often should I send interesting facts?",
         'interval_5min': "Every 5 minutes",
         'interval_10min': "Every 10 minutes",
-        'interval_30min': "Every 30 minutes", 
+        'interval_30min': "Every 30 minutes",
         'interval_60min': "Every 60 minutes",
         'live_activated': "🔴 *Live location activated!*\n\n📍 Tracking: {minutes} minutes\n⏰ Facts every: {interval} minutes\n\n🚀 The first fact will arrive in about 3–5 minutes, then continue automatically.\n\nStop sharing to end the session.",
         'static_upsell': "💡 *Tip:* This was a one-time fact.\n\nWant facts automatically during your walk? Enable *live location* — no need to tap each time!",
@@ -214,22 +222,22 @@ def _escape_markdown(text: str) -> str:
     service_tags = ['[[NO_POI_FOUND]]']
     protected_text = text
     replacements = {}
-    
+
     for i, tag in enumerate(service_tags):
         if tag in protected_text:
             placeholder = f"__SERVICE_TAG_{i}__"
             replacements[placeholder] = tag
             protected_text = protected_text.replace(tag, placeholder)
-    
+
     # Now escape markdown characters
     chars_to_escape = ['*', '_', '`', '[', ']']
     for char in chars_to_escape:
         protected_text = protected_text.replace(char, '\\' + char)
-    
+
     # Restore service tags
     for placeholder, original_tag in replacements.items():
         protected_text = protected_text.replace(placeholder, original_tag)
-    
+
     return protected_text
 
 
@@ -295,7 +303,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
         longitude = lon
         sources_list = sources
         image_urls = await openai_client.get_wikipedia_images(
-            search_keywords, 
+            search_keywords,
             max_images=4,  # Max 4 for media group
             lat=lat,
             lon=lon,
@@ -303,13 +311,13 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
             sources=sources,
             fact_text=formatted_response  # Pass full fact text for better relevance
         )
-        
+
         if image_urls:
             # Try sending all images with text as media group
             try:
                 logger.info(f"Attempting to send fact with {len(image_urls)} images for {place}")
                 logger.debug(f"Formatted response length: {len(formatted_response)} chars")
-                
+
                 if len(formatted_response) <= 1024:
                     # Caption fits in Telegram limit, send as media group with caption
                     media_list = []
@@ -320,7 +328,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                         else:
                             # Other images get no caption
                             media_list.append(InputMediaPhoto(media=image_url))
-                    
+
                     # Prefer single post: if more than one image, still send as media group; if exactly one, send as single photo
                     if len(media_list) == 1:
                         await bot.send_photo(
@@ -351,7 +359,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                                 break
                         short_caption = formatted_response[:break_point].rstrip() + "..."
                         # Ensure markdown is balanced by counting asterisks and brackets
-                        asterisk_count = short_caption.count('*') 
+                        asterisk_count = short_caption.count('*')
                         bracket_count = short_caption.count('[') - short_caption.count(']')
                         paren_count = short_caption.count('(') - short_caption.count(')')
                         # Add missing closing markers
@@ -372,7 +380,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                     await bot.send_media_group(chat_id=chat_id, media=media_list, reply_to_message_id=reply_to_message_id)
                     logger.info(f"Successfully sent long text + {len(image_urls)} images as media group for {place}")
                 return
-                
+
             except Exception as media_group_error:
                 logger.error(f"Failed to send text + media group: {media_group_error}")
                 logger.error(f"Error type: {type(media_group_error)}")
@@ -380,7 +388,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                     logger.error(f"Image URLs that failed: {[img.media for img in media_list]}")
                 except Exception:
                     logger.error("Image URLs that failed: unavailable")
-                
+
                 # Try with fewer images if we had multiple images
                 if len(image_urls) > 2:
                     logger.info(f"Retrying with fewer images (2 instead of {len(image_urls)})")
@@ -392,7 +400,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                                 retry_media_list.append(InputMediaPhoto(media=image_url, caption=formatted_response, parse_mode="Markdown"))
                             else:
                                 retry_media_list.append(InputMediaPhoto(media=image_url))
-                        
+
                         await bot.send_media_group(
                             chat_id=chat_id,
                             media=retry_media_list,
@@ -402,7 +410,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                         return
                     except Exception as retry_error:
                         logger.error(f"Retry with fewer images also failed: {retry_error}")
-                
+
                 # Check if text was sent successfully by trying to send it again
                 # (This is a fallback in case the text sending also failed)
                 try:
@@ -412,7 +420,7 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                     return
                 except Exception as text_fallback_error:
                     logger.error(f"Failed to send fallback text: {text_fallback_error}")
-                
+
                 # Last resort: try sending individual images
                 try:
                     # Try to send individual images (up to 2 to avoid spam)
@@ -429,20 +437,20 @@ async def send_fact_with_images(bot, chat_id, formatted_response, search_keyword
                         except Exception as individual_error:
                             logger.debug(f"Failed to send individual image: {individual_error}")
                             continue
-                    
+
                     if successful_images > 0:
                         logger.info(f"Sent {successful_images} individual images (no text) for {place}")
                     else:
                         logger.warning(f"All image sending methods failed for {place}")
                     return
-                    
+
                 except Exception as individual_fallback_error:
                     logger.error(f"Failed to send individual images fallback: {individual_fallback_error}")
-        
+
         # No images found or all fallbacks failed, send just the text
         await _send_text_resilient(bot, chat_id, formatted_response, reply_to_message_id, html_text=html_text)
         logger.info(f"Sent fact without images for {place}")
-            
+
     except Exception as e:
         logger.warning(f"Failed to send fact with images: {e}")
         # Final fallback to text-only message
@@ -495,23 +503,23 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Check if user has an active live location session
         tracker = get_live_location_tracker()
         has_active_session = tracker.is_user_tracking(user_id)
-        
+
         # If user has active session and this is a regular location (no live_period),
         # it means live location sharing has stopped
         if has_active_session and not location.live_period:
             logger.info(f"Detected live location stop signal for user {user_id}")
             await tracker.stop_live_location(user_id)
-            
+
             # Send confirmation message
             stop_response = await get_localized_message(user_id, 'live_stopped')
-            
+
             await update.message.reply_text(
                 text=stop_response,
                 parse_mode="Markdown",
                 reply_to_message_id=update.message.message_id,
             )
             return
-        
+
         # Send typing indicator
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
@@ -572,12 +580,12 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await fb_record_movement(user_id, lat, lon)
         except Exception:
             pass
-        
+
         # Use coordinates as stable cache key instead of unreliable AI-generated keywords
         # Round coordinates to ~111m precision for caching (3 decimal places)
         cache_key = f"{round(lat, 3)}_{round(lon, 3)}"
         logger.info(f"Static location - using coordinate-based cache key: '{cache_key}'")
-        
+
         # Get fact with history when available; fallback to legacy get_nearby_fact for test mocks
         # ALWAYS use reasoning=none for static location (first and only fact) for instant response
         response = None
@@ -590,10 +598,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         except Exception:
             # Fallback to legacy method on any error
             response = await openai_client.get_nearby_fact(lat, lon, force_reasoning_none=True)
-        
+
         # NO_POI_FOUND should be handled internally by openai_client with retry
         # If we still get it here, it means even the retry failed
-        
+
         # Parse the response to extract place and fact
         logger.info(f"Final response for static location: {response[:100]}...")
         place = await get_localized_message(user_id, 'near_you')  # Default location
@@ -606,12 +614,12 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if answer_match:
             answer_content = answer_match.group(1).strip()
             poi_coords: tuple[float, float] | None = None
-            
+
             # Extract location from answer content
             location_match = re.search(r"Location:\s*(.+?)(?:\n|$)", answer_content)
             if location_match:
                 place = location_match.group(1).strip()
-            
+
             # Extract precise coordinates if provided
             coord_match = re.search(r"Coordinates:\s*([\-\d\.]+)\s*,\s*([\-\d\.]+)", answer_content)
             if coord_match:
@@ -626,7 +634,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
             if search_match:
                 final_search_keywords = search_match.group(1).strip()
-            
+
             # Extract fact from answer content (stop before Sources/Источники if present)
             fact_match = re.search(
                 r"Interesting fact:\s*(.*?)(?=\n(?:Sources|Источники)\s*:|$)",
@@ -637,11 +645,11 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 fact = _strip_sources_section(fact_match.group(1).strip())
                 # Remove bare links in body (e.g., (example.com))
                 fact = _remove_bare_links_from_text(fact)
-        
+
         # Legacy fallback for old format responses
         else:
             lines = response.split("\n")
-            
+
             # Try to parse old structured response format
             for i, line in enumerate(lines):
                 if line.startswith("Локация:"):
@@ -657,7 +665,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                             fact_lines.append(lines[j].strip())
                     fact = " ".join(fact_lines)
                     break
-            
+
             # Extract search keywords from legacy format
             legacy_search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
             if legacy_search_match:
@@ -722,17 +730,17 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         html_formatted = html_formatted.replace("💡 *Fait :*", "💡 <b>Fait :</b>")
         if html_sources_block:
             html_formatted = f"{html_formatted}{html_sources_block}"
-        
+
         # Send fact with images using extracted search keywords
         if final_search_keywords:
             # Pass coordinates opportunistically via keyword locals for the new pipeline
             lat_kw = lat
             lon_kw = lon
             await send_fact_with_images(
-                context.bot, 
-                chat_id, 
-                formatted_response, 
-                final_search_keywords, 
+                context.bot,
+                chat_id,
+                formatted_response,
+                final_search_keywords,
                 place,
                 user_id=user_id,
                 reply_to_message_id=update.message.message_id,
@@ -801,16 +809,16 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             pass
 
         logger.info(f"Sent fact to user {user_id}")
-        
+
         # Suggest live location after static fact (educational upsell)
         # Only for static locations, not for live location start
         try:
             upsell_text = await get_localized_message(user_id, 'static_upsell')
             upsell_button_text = await get_localized_message(user_id, 'static_upsell_button')
-            
+
             keyboard = [[InlineKeyboardButton(upsell_button_text, callback_data="show_live_info")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
+
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=upsell_text,
@@ -856,7 +864,7 @@ async def handle_interval_callback(
                 parse_mode="Markdown",
             )
             return
-            
+
         interval_minutes = int(data_parts[1])
         lat = float(data_parts[2])
         lon = float(data_parts[3])
@@ -869,10 +877,10 @@ async def handle_interval_callback(
 
         # Start live location tracking with selected interval
         tracker = get_live_location_tracker()
-        
+
         # Add small delay to ensure any previous session cleanup is complete
         await asyncio.sleep(0.1)
-        
+
         # Start session with a safety timeout so handler never hangs
         import asyncio as _asyncio
         try:
@@ -888,7 +896,7 @@ async def handle_interval_callback(
                 ),
                 timeout=3.0,
             )
-        except _asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"Timeout starting live location for user {user_id}")
             await query.edit_message_text(
                 text="😔 Timeout setting up live location. Please resend live location and pick an interval again.",
@@ -897,8 +905,8 @@ async def handle_interval_callback(
             return
 
         # Update the message to show confirmation
-        confirmation_text = await get_localized_message(user_id, 'live_activated', 
-                                                 minutes=live_period // 60, 
+        confirmation_text = await get_localized_message(user_id, 'live_activated',
+                                                 minutes=live_period // 60,
                                                  interval=interval_minutes)
 
         await query.edit_message_text(text=confirmation_text, parse_mode="Markdown")

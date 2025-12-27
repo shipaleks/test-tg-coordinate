@@ -8,14 +8,20 @@ from datetime import datetime, timedelta
 
 from telegram import Bot, InputMediaPhoto
 
-from .openai_client import get_openai_client
-from .firebase_stats import increment_fact_counters as fb_increment_fact
-from .firebase_stats import record_movement as fb_record_movement
-from ..utils.formatting_utils import extract_sources_from_answer as _extract_live_sources
-from ..utils.formatting_utils import strip_sources_section as _strip_live_sources
-from ..utils.formatting_utils import remove_bare_links_from_text as _remove_bare_links_from_text
+from ..utils.formatting_utils import (
+    extract_place_names_from_history as _extract_place_names,
+)
+from ..utils.formatting_utils import (
+    extract_sources_from_answer as _extract_live_sources,
+)
 from ..utils.formatting_utils import is_duplicate_place as _is_duplicate_place
-from ..utils.formatting_utils import extract_place_names_from_history as _extract_place_names
+from ..utils.formatting_utils import (
+    remove_bare_links_from_text as _remove_bare_links_from_text,
+)
+from ..utils.formatting_utils import strip_sources_section as _strip_live_sources
+from .claude_client import get_claude_client as get_openai_client
+from .firebase_stats import increment_fact_counters as fb_increment_fact
+
 # Avoid importing handlers at module import time to prevent circular deps.
 # We'll import get_localized_message lazily inside functions.
 
@@ -42,7 +48,7 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
         latitude = lat
         longitude = lon
         image_urls = await openai_client.get_wikipedia_images(
-            search_keywords, 
+            search_keywords,
             max_images=4,  # Max 4 for media group
             lat=lat,
             lon=lon,
@@ -50,7 +56,7 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
             sources=sources,
             fact_text=formatted_response  # Pass full fact text for better relevance
         )
-        
+
 
 
         if image_urls:
@@ -61,15 +67,15 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
 
                 # Use full response as caption but ensure Markdown is safe
                 caption_text = formatted_response
-                
+
                 # Debug logging for Markdown issues
                 logger.debug(f"Caption text for debugging (first 200 chars): {caption_text[:200]}")
                 logger.debug(f"Caption length: {len(caption_text)}")
-                
+
                 # For better UX, prefer keeping sources with images if they fit
                 # Maximum safe caption length for Telegram
                 max_caption_length = 1024
-                
+
                 if len(caption_text) <= max_caption_length:
                     # Caption fits in Telegram limit, send as media group with caption
                     media_list = []
@@ -127,19 +133,23 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                             media_list.append(InputMediaPhoto(media=image_url))
                     await bot.send_media_group(chat_id=chat_id, media=media_list)
                     logger.info(f"Successfully sent long live text + {len(image_urls)} images as media group for {place}")
-                    
+
                     # If we truncated and there were sources, send them as a separate message
                     sources_start_pos = caption_text.find("\n\n🔗")
                     if len(caption_text) > max_len and sources and sources_start_pos > 0:
                         try:
                             # Reconstruct sources section
-                            from ..handlers.location import get_localized_message as _get_msg
-                            from ..utils.formatting_utils import sanitize_url as _sanitize_url
-                            
+                            from ..handlers.location import (
+                                get_localized_message as _get_msg,
+                            )
+                            from ..utils.formatting_utils import (
+                                sanitize_url as _sanitize_url,
+                            )
+
                             # Get user_id from chat_id by extracting from the context
                             # For live location, chat_id is usually the user_id for private chats
                             user_id = chat_id if chat_id > 0 else 0
-                            
+
                             src_label = await _get_msg(user_id, 'sources_label')
                             bullets = []
                             for title, url in sources[:4]:
@@ -150,14 +160,14 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                                 safe_url = _sanitize_url(url)
                                 bullets.append(f"- [{safe_title}]({safe_url})")
                             sources_msg = f"{src_label}\n" + "\n".join(bullets)
-                            
+
                             await bot.send_message(chat_id=chat_id, text=sources_msg, parse_mode="Markdown", disable_web_page_preview=True)
                             logger.info(f"Sent truncated sources in separate message for {place}")
                         except Exception as e:
                             logger.warning(f"Failed to send truncated sources: {e}")
-                    
+
                 return
-                
+
             except Exception as media_group_error:
                 logger.error(f"Failed to send live fact text + media group: {media_group_error}")
                 logger.error(f"Live fact error type: {type(media_group_error)}")
@@ -165,7 +175,7 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                     logger.error(f"Live image URLs that failed: {[img.media for img in media_list]}")
                 except Exception:
                     logger.error("Live image URLs that failed: unavailable")
-                
+
                 # Try with fewer images if we had multiple images
                 if len(image_urls) > 2:
                     logger.info(f"Retrying live fact with fewer images (2 instead of {len(image_urls)})")
@@ -193,7 +203,7 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                         return
                     except Exception as retry_error:
                         logger.error(f"Live fact retry with fewer images also failed: {retry_error}")
-                
+
                 # Check if text was sent successfully by trying to send it again
                 try:
                     # Import localization function to avoid circular imports
@@ -211,7 +221,7 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                     return
                 except Exception as text_fallback_error:
                     logger.error(f"Failed to send live fact fallback text: {text_fallback_error}")
-                
+
                 # Last resort: try sending individual images
                 try:
                     # Try to send individual images (up to 2 to avoid spam)
@@ -227,16 +237,16 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
                         except Exception as individual_error:
                             logger.debug(f"Failed to send individual live fact image: {individual_error}")
                             continue
-                    
+
                     if successful_images > 0:
                         logger.info(f"Sent {successful_images} individual live images (no text) for {place}")
                     else:
                         logger.warning(f"All live image sending methods failed for {place}")
                     return
-                    
+
                 except Exception as individual_fallback_error:
                     logger.error(f"Failed to send individual live fact images fallback: {individual_fallback_error}")
-        
+
         # No images found or all fallbacks failed, send just the text
         try:
             await bot.send_message(
@@ -247,7 +257,7 @@ async def send_live_fact_with_images(bot, chat_id, formatted_response, search_ke
         except Exception:
             await bot.send_message(chat_id=chat_id, text=formatted_response)
         logger.info(f"Sent live fact without images for {place}")
-            
+
     except Exception as e:
         logger.warning(f"Failed to send live fact with images: {e}")
         # Final fallback to text-only message
@@ -346,14 +356,14 @@ class LiveLocationTracker:
             try:
                 # Eagerly store session before tasks so we can cancel on slow startups
                 self._active_sessions[user_id] = session_data
-                
+
                 task = asyncio.create_task(self._fact_sending_loop(session_data, bot))
                 session_data.task = task
-                
+
                 # Start health monitor task
                 monitor_task = asyncio.create_task(self._monitor_session_health(session_data, bot))
                 session_data.monitor_task = monitor_task
-                
+
                 logger.info(
                     f"Started live location tracking for user {user_id} for {live_period}s, facts every {fact_interval_minutes} min"
                 )
@@ -402,7 +412,7 @@ class LiveLocationTracker:
         if user_id in self._active_sessions:
             session = self._active_sessions[user_id]
             session.stop_requested = True  # Signal to stop
-            
+
         # Try to acquire lock with timeout to avoid hanging
         try:
             # Use wait_for for Python 3.9+ compatibility
@@ -410,7 +420,7 @@ class LiveLocationTracker:
                 self._stop_with_lock(user_id),
                 timeout=1.0
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Timeout stopping session for user {user_id}, forcing stop")
             # Force stop without lock
             if user_id in self._active_sessions:
@@ -420,7 +430,7 @@ class LiveLocationTracker:
                 if hasattr(session, 'monitor_task') and session.monitor_task and not session.monitor_task.done():
                     session.monitor_task.cancel()
                 logger.info(f"Force-stopped live location for user {user_id}")
-    
+
     async def _stop_with_lock(self, user_id: int) -> None:
         """Stop session with lock acquired."""
         async with self._lock:
@@ -440,7 +450,7 @@ class LiveLocationTracker:
                     await session.task
                 except asyncio.CancelledError:
                     pass
-            
+
             # Cancel monitor task
             if hasattr(session, 'monitor_task') and session.monitor_task and not session.monitor_task.done():
                 session.monitor_task.cancel()
@@ -479,9 +489,9 @@ class LiveLocationTracker:
                 if session_data.stop_requested:
                     logger.info(f"Stop requested for user {session_data.user_id}, exiting fact loop")
                     break
-                    
+
                 current_time = datetime.now()
-                
+
                 # Check if session has exceeded its live_period
                 if current_time >= session_end_time:
                     logger.info(
@@ -500,7 +510,7 @@ class LiveLocationTracker:
                     except Exception as notify_error:
                         logger.error(f"Failed to send session end notification: {notify_error}")
                     break
-                
+
                 # Check if we haven't received coordinate updates from Telegram
                 # This indicates user stopped sharing live location
                 # Use adaptive threshold: min 15 minutes, or interval + 10 minutes (whichever is larger)
@@ -536,14 +546,14 @@ class LiveLocationTracker:
                     session_data.last_update = datetime.now()
 
                     openai_client = get_openai_client()
-                    
+
                     # First fact always uses reasoning=none for speed (regardless of user settings)
                     # Subsequent facts use user's preferred reasoning level
                     force_reasoning_none = (session_data.fact_count == 0)
-                    
+
                     # Extract previous place names for duplicate checking
                     previous_place_names = _extract_place_names(session_data.fact_history)
-                    
+
                     # Try to get a unique fact, with retries if duplicate detected
                     place = None
                     fact = None
@@ -553,12 +563,12 @@ class LiveLocationTracker:
                     sources = []
                     sources_block = ""
                     response = None
-                    
+
                     for duplicate_retry in range(MAX_DUPLICATE_RETRIES + 1):
                         # Build previous_facts with stronger emphasis on place names
                         # Include explicit list of place names to avoid
                         extended_previous_facts = session_data.fact_history.copy()
-                        
+
                         # On retry, add explicit duplicate warning
                         if duplicate_retry > 0:
                             logger.info(f"Duplicate retry {duplicate_retry}/{MAX_DUPLICATE_RETRIES} for user {session_data.user_id}")
@@ -568,7 +578,7 @@ class LiveLocationTracker:
                                 f"DUPLICATE DETECTED! You MUST find a COMPLETELY DIFFERENT place. "
                                 f"DO NOT mention these places again: {avoid_places}"
                             )
-                        
+
                         response = await openai_client.get_nearby_fact(
                             session_data.latitude,
                             session_data.longitude,
@@ -577,12 +587,12 @@ class LiveLocationTracker:
                             user_id=session_data.user_id,
                             force_reasoning_none=force_reasoning_none,
                         )
-                        
+
                         # Check if no POI was found
                         if response and "[[NO_POI_FOUND]]" in response:
                             logger.info(f"No POI found for live location (attempt skipped) for user {session_data.user_id}")
                             break  # Exit retry loop, will skip to next interval
-                        
+
                         # Parse the response to extract place and fact
                         from ..handlers.location import get_localized_message
                         place = await get_localized_message(session_data.user_id, 'near_you')  # Default location
@@ -592,17 +602,17 @@ class LiveLocationTracker:
                         poi_lon = None
                         sources = []
                         sources_block = ""
-                        
+
                         # Try to parse structured response from <answer> tags first
                         answer_match = re.search(r"<answer>(.*?)(?:</answer>|$)", response, re.DOTALL)
                         if answer_match:
                             answer_content = answer_match.group(1).strip()
-                            
+
                             # Extract location from answer content
                             location_match = re.search(r"Location:\s*(.+?)(?:\n|$)", answer_content)
                             if location_match:
                                 place = location_match.group(1).strip()
-                            
+
                             # Extract precise POI coordinates if provided
                             coord_match = re.search(r"Coordinates:\s*([\-\d\.]+)\s*,\s*([\-\d\.]+)", answer_content)
                             if coord_match:
@@ -611,23 +621,27 @@ class LiveLocationTracker:
                                     poi_lon = float(coord_match.group(2))
                                 except Exception:
                                     pass
-                            
+
                             # Extract search keywords from answer content
                             search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
                             if search_match:
                                 search_keywords = search_match.group(1).strip()
-                            
+
                             # Extract fact from answer content
                             fact_match = re.search(r"Interesting fact:\s*(.*?)(?=\n(?:Sources|Источники)\s*:|$)", answer_content, re.DOTALL)
                             if fact_match:
                                 fact = _strip_live_sources(fact_match.group(1).strip())
                                 fact = _remove_bare_links_from_text(fact)
-                            
+
                             # Build sources block
                             sources = _extract_live_sources(answer_content)
                             if sources:
-                                from ..handlers.location import get_localized_message as _get_msg
-                                from ..utils.formatting_utils import sanitize_url as _sanitize_url
+                                from ..handlers.location import (
+                                    get_localized_message as _get_msg,
+                                )
+                                from ..utils.formatting_utils import (
+                                    sanitize_url as _sanitize_url,
+                                )
                                 src_label = await _get_msg(session_data.user_id, 'sources_label')
                                 bullets = []
                                 for title, url in sources[:4]:
@@ -636,7 +650,7 @@ class LiveLocationTracker:
                                     safe_url = _sanitize_url(url)
                                     bullets.append(f"- [{safe_title}]({safe_url})")
                                 sources_block = f"\n\n{src_label}\n" + "\n".join(bullets)
-                        
+
                         # Legacy fallback for old format responses
                         else:
                             lines = response.split("\n")
@@ -651,7 +665,7 @@ class LiveLocationTracker:
                                             fact_lines.append(lines[j].strip())
                                     fact = " ".join(fact_lines)
                                     break
-                        
+
                         # CHECK FOR DUPLICATE: compare against previous places
                         if _is_duplicate_place(place, previous_place_names):
                             logger.warning(
@@ -673,11 +687,11 @@ class LiveLocationTracker:
                             # Unique place found, exit retry loop
                             logger.info(f"Unique place found for user {session_data.user_id}: '{place}'")
                             break
-                    
+
                     # Check if we should skip this iteration (NO_POI_FOUND or max duplicate retries)
                     if response and "[[NO_POI_FOUND]]" in response:
                         continue  # Skip to next interval
-                    
+
                     if place is None:
                         # Max duplicate retries reached, skip this interval
                         continue
@@ -686,11 +700,14 @@ class LiveLocationTracker:
                     session_data.fact_count += 1
 
                     # Format the response with live location indicator and fact number
-                    from ..handlers.location import get_localized_message, _escape_markdown
+                    from ..handlers.location import (
+                        _escape_markdown,
+                        get_localized_message,
+                    )
                     escaped_place = _escape_markdown(place)
                     escaped_fact = _escape_markdown(fact)
                     formatted_response = await get_localized_message(session_data.user_id, 'live_fact_format', number=session_data.fact_count, place=escaped_place, fact=escaped_fact)
-                    
+
                     # Add sources to the main message if available
                     if sources_block:
                         formatted_response = f"{formatted_response}{sources_block}"
@@ -701,10 +718,10 @@ class LiveLocationTracker:
                     # Send the fact with images using extracted search keywords
                     if search_keywords:
                         await send_live_fact_with_images(
-                            bot, 
-                            session_data.chat_id, 
-                            formatted_response, 
-                            search_keywords, 
+                            bot,
+                            session_data.chat_id,
+                            formatted_response,
+                            search_keywords,
                             place,
                             lat=poi_lat,  # Use POI coordinates for image search
                             lon=poi_lon,
@@ -716,10 +733,10 @@ class LiveLocationTracker:
                         if legacy_search_match:
                             legacy_search_keywords = legacy_search_match.group(1).strip()
                             await send_live_fact_with_images(
-                                bot, 
-                                session_data.chat_id, 
-                                formatted_response, 
-                                legacy_search_keywords, 
+                                bot,
+                                session_data.chat_id,
+                                formatted_response,
+                                legacy_search_keywords,
                                 place,
                                 lat=poi_lat,  # Use POI coordinates for image search
                                 lon=poi_lon,
@@ -760,7 +777,7 @@ class LiveLocationTracker:
                                 logger.info(f"Adjusted venue via Nominatim from Search: {venue_lat}, {venue_lon}")
                     except Exception:
                         pass
-                    
+
                     if venue_lat is not None and venue_lon is not None:
                         try:
                             # Send venue with location for navigation
@@ -842,7 +859,7 @@ class LiveLocationTracker:
                 # Wait for the next interval, compensating for generation time
                 elapsed = (datetime.now() - send_start_time).total_seconds()
                 sleep_time = max(desired_interval_seconds - elapsed, 15)
-                
+
                 # Sleep in 1-second intervals to check for stop request
                 for _ in range(int(sleep_time)):
                     if session_data.stop_requested:

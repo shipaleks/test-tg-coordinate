@@ -1,8 +1,8 @@
 """Async wrapper for database operations to handle both PostgreSQL and SQLite."""
 
-import os
 import logging
-from typing import Optional, List, Dict, Any, Union
+import os
+from typing import Any
 
 from .donors_db import DonorsDatabase
 from .postgres_db import PostgresDatabase, get_postgres_db
@@ -12,14 +12,14 @@ logger = logging.getLogger(__name__)
 
 class AsyncDonorsWrapper:
     """Unified async interface for both PostgreSQL and SQLite databases."""
-    
+
     def __init__(self):
-        self._db: Optional[Union[DonorsDatabase, PostgresDatabase, Any]] = None
+        self._db: DonorsDatabase | PostgresDatabase | Any | None = None
         self._is_postgres = bool(os.environ.get("DATABASE_URL"))
         self._use_firestore = os.environ.get("USE_FIRESTORE_DB", "").lower() == "true"
 
         self._initialized = False
-    
+
     async def _ensure_initialized(self):
         """Ensure database is initialized."""
         if not self._initialized:
@@ -36,19 +36,19 @@ class AsyncDonorsWrapper:
                 self._db = DonorsDatabase()
                 self.db_path = self._db.db_path
             self._initialized = True
-    
+
     async def add_donation(
-        self, 
-        user_id: int, 
-        payment_id: str, 
+        self,
+        user_id: int,
+        payment_id: str,
         stars_amount: int,
-        telegram_username: Optional[str] = None,
-        first_name: Optional[str] = None,
-        invoice_payload: Optional[str] = None
+        telegram_username: str | None = None,
+        first_name: str | None = None,
+        invoice_payload: str | None = None
     ) -> bool:
         """Add donation (async)."""
         await self._ensure_initialized()
-        
+
         if self._use_firestore or self._is_postgres:
             return await self._db.add_donation(
                 user_id, payment_id, stars_amount,
@@ -59,61 +59,61 @@ class AsyncDonorsWrapper:
                 user_id, payment_id, stars_amount,
                 telegram_username, first_name, invoice_payload
             )
-    
+
     async def is_premium_user(self, user_id: int) -> bool:
         """Check premium status (async)."""
         await self._ensure_initialized()
-        
+
         if self._is_postgres:
             return await self._db.is_premium_user(user_id)
         else:
             return self._db.is_premium_user(user_id)
-    
-    async def get_donor_info(self, user_id: int) -> Optional[Dict[str, Any]]:
+
+    async def get_donor_info(self, user_id: int) -> dict[str, Any] | None:
         """Get donor info (async)."""
         await self._ensure_initialized()
-        
+
         if self._is_postgres:
             return await self._db.get_donor_info(user_id)
         else:
             return self._db.get_donor_info(user_id)
-    
-    async def get_donation_history(self, user_id: int) -> List[Dict[str, Any]]:
+
+    async def get_donation_history(self, user_id: int) -> list[dict[str, Any]]:
         """Get donation history (async)."""
         await self._ensure_initialized()
-        
+
         if self._is_postgres:
             return await self._db.get_donation_history(user_id)
         else:
             return self._db.get_donation_history(user_id)
-    
-    async def get_stats(self) -> Dict[str, Any]:
+
+    async def get_stats(self) -> dict[str, Any]:
         """Get statistics (async)."""
         await self._ensure_initialized()
-        
+
         if self._is_postgres:
             return await self._db.get_stats()
         else:
             return self._db.get_stats()
-    
+
     async def get_user_language(self, user_id: int) -> str:
         """Get user language (async)."""
         await self._ensure_initialized()
-        
+
         if self._is_postgres:
             return await self._db.get_user_language(user_id)
         else:
             return self._db.get_user_language(user_id)
-    
+
     async def set_user_language(self, user_id: int, language: str) -> bool:
         """Set user language (async)."""
         await self._ensure_initialized()
-        
+
         if self._is_postgres:
             return await self._db.set_user_language(user_id, language)
         else:
             return self._db.set_user_language(user_id, language)
-    
+
     async def has_language_set(self, user_id: int) -> bool:
         """Check if language is set (async)."""
         await self._ensure_initialized()
@@ -126,7 +126,7 @@ class AsyncDonorsWrapper:
                 return False
         else:
             return self._db.has_language_set(user_id)  # type: ignore[attr-defined]
-    
+
     async def reset_user_language(self, user_id: int) -> bool:
         """Reset language (async)."""
         await self._ensure_initialized()
@@ -148,7 +148,7 @@ class AsyncDonorsWrapper:
             level = await self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
         else:
             level = self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
-        
+
         # Map legacy reasoning levels (for backward compatibility)
         REASONING_MAPPING = {
             "minimal": "low",  # Legacy minimal → low
@@ -159,7 +159,7 @@ class AsyncDonorsWrapper:
             "high": "high",
         }
         mapped_level = REASONING_MAPPING.get(level, level)
-        
+
         # BONUS: Auto-upgrade donors from 'none' to 'low' (hidden reward)
         if mapped_level == "none":
             try:
@@ -168,7 +168,7 @@ class AsyncDonorsWrapper:
                     return "low"  # Donors get better reasoning automatically
             except Exception:
                 pass
-        
+
         return mapped_level
 
     async def set_user_reasoning(self, user_id: int, level: str) -> bool:
@@ -185,14 +185,17 @@ class AsyncDonorsWrapper:
             model = await self._db.get_user_model(user_id)  # type: ignore[attr-defined]
         else:
             model = self._db.get_user_model(user_id)  # type: ignore[attr-defined]
-        
-        # Map legacy model names to current versions (future-proof)
+
+        # Map legacy model names to Claude models
         MODEL_MAPPING = {
-            "gpt-5": "gpt-5.1",
-            "gpt-5-mini": "gpt-5.1",  # Map mini → full (mini has access issues)
-            "gpt-5.1-mini": "gpt-5.1",  # Map mini → full (mini has access issues)
-            # Future mappings can be added here:
-            # "gpt-5.1": "gpt-5.2" (when available)
+            # Legacy OpenAI models → Claude Opus
+            "gpt-5": "claude-opus-4-5-20251101",
+            "gpt-5.1": "claude-opus-4-5-20251101",
+            "gpt-5-mini": "claude-opus-4-5-20251101",
+            "gpt-5.1-mini": "claude-sonnet-4-20250514",
+            # Claude model aliases
+            "claude-opus": "claude-opus-4-5-20251101",
+            "claude-sonnet": "claude-sonnet-4-20250514",
         }
         return MODEL_MAPPING.get(model, model)  # Return mapped or original
 
@@ -205,7 +208,7 @@ class AsyncDonorsWrapper:
 
 
 # Global instance
-_async_db: Optional[AsyncDonorsWrapper] = None
+_async_db: AsyncDonorsWrapper | None = None
 
 
 async def get_async_donors_db() -> AsyncDonorsWrapper:

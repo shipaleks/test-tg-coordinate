@@ -5,14 +5,14 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class DonorsDatabase:
     """SQLite database for managing donors and their premium access."""
-    
+
     def __init__(self, db_path: str = None):
         """Initialize the donors database.
         
@@ -22,7 +22,7 @@ class DonorsDatabase:
         if db_path is None:
             # Use Railway volume path if available, otherwise default
             import os
-            
+
             # Check if we're running on Railway (multiple detection methods)
             is_railway = (
                 os.environ.get("RAILWAY_ENVIRONMENT") is not None or
@@ -31,20 +31,20 @@ class DonorsDatabase:
                 os.environ.get("RAILWAY_SERVICE_ID") is not None or
                 os.environ.get("RAILWAY_VOLUME_ID") is not None
             )
-            
+
             # Allow forcing volume path via environment variable
             force_volume = os.environ.get("FORCE_VOLUME_PATH", "").lower() == "true"
-            
+
             # Check for custom volume path from environment variable
             # Use Railway's official volume mount path first, then fallback to custom or default
             volume_path = (
-                os.environ.get("RAILWAY_VOLUME_MOUNT_PATH") or 
-                os.environ.get("VOLUME_PATH") or 
+                os.environ.get("RAILWAY_VOLUME_MOUNT_PATH") or
+                os.environ.get("VOLUME_PATH") or
                 "/data"
             )
-            
+
             logger.info(f"Detected volume path: {volume_path}")
-            
+
             # Simplified path selection logic
             if is_railway:
                 # On Railway, try volume path first, then fallback to writable app directory
@@ -59,7 +59,7 @@ class DonorsDatabase:
                             import subprocess
                             subprocess.run(['mkdir', '-p', f'{volume_path}/appdata'], check=False)
                             subprocess.run(['chmod', '777', f'{volume_path}/appdata'], check=False)
-                            
+
                             app_volume_dir = os.path.join(volume_path, "appdata")
                             if os.path.exists(app_volume_dir):
                                 db_path = os.path.join(app_volume_dir, "donors.db")
@@ -70,7 +70,7 @@ class DonorsDatabase:
                             logger.warning(f"Could not create volume subdirectory: {subdir_error}")
                             # Fallback to /tmp (temporary but writable)
                             app_data_dir = "/tmp/railway_data"
-                            os.makedirs(app_data_dir, exist_ok=True) 
+                            os.makedirs(app_data_dir, exist_ok=True)
                             db_path = os.path.join(app_data_dir, "donors.db")
                             logger.warning(f"Using temporary /tmp directory: {db_path} (NOT PERSISTENT!)")
                     else:
@@ -86,7 +86,7 @@ class DonorsDatabase:
         self.db_path = Path(db_path)
         self._lock = threading.Lock()
         self._init_database()
-        
+
     def _init_database(self):
         """Initialize the database schema."""
         try:
@@ -106,7 +106,7 @@ class DonorsDatabase:
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
                         """)
-                    
+
                         conn.execute("""
                             CREATE TABLE IF NOT EXISTS donations (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,7 +118,7 @@ class DonorsDatabase:
                             FOREIGN KEY (user_id) REFERENCES donors (user_id)
                         )
                         """)
-                    
+
                         # User preferences table for language settings
                         conn.execute("""
                             CREATE TABLE IF NOT EXISTS user_preferences (
@@ -130,24 +130,24 @@ class DonorsDatabase:
                             updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
                         """)
-                    
+
                         # Create indexes for better performance
                         conn.execute("CREATE INDEX IF NOT EXISTS idx_donors_user_id ON donors (user_id)")
                         conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_user_id ON donations (user_id)")
                         conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_payment_id ON donations (payment_id)")
                         conn.execute("CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences (user_id)")
-                        
+
                         conn.commit()
                         logger.info("Donors database initialized successfully")
-                        
+
                 except Exception as volume_error:
                     logger.error(f"Failed to initialize database at {self.db_path}: {volume_error}")
-                    
+
                     # If we were trying to use volume but failed, fallback to local database
                     if "/data" in str(self.db_path):
                         logger.info("Falling back to local database due to volume error")
                         self.db_path = Path("donors.db")
-                        
+
                         # Retry with local database
                         with sqlite3.connect(self.db_path) as conn:
                             conn.execute("""
@@ -162,7 +162,7 @@ class DonorsDatabase:
                                     created_at INTEGER DEFAULT CURRENT_TIMESTAMP
                                 )
                             """)
-                            
+
                             conn.execute("""
                                 CREATE TABLE IF NOT EXISTS donations (
                                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,7 +174,7 @@ class DonorsDatabase:
                                     FOREIGN KEY (user_id) REFERENCES donors (user_id)
                                 )
                             """)
-                            
+
                             conn.execute("""
                                 CREATE TABLE IF NOT EXISTS user_preferences (
                                     user_id INTEGER PRIMARY KEY,
@@ -185,30 +185,30 @@ class DonorsDatabase:
                                     updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                                 )
                             """)
-                            
+
                             # Create indexes
                             conn.execute("CREATE INDEX IF NOT EXISTS idx_donors_user_id ON donors (user_id)")
                             conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_user_id ON donations (user_id)")
                             conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_payment_id ON donations (payment_id)")
                             conn.execute("CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences (user_id)")
-                            
+
                             conn.commit()
                             logger.info("Fallback local database initialized successfully")
                     else:
                         raise volume_error
-                        
+
         except Exception as e:
             logger.error(f"Failed to initialize donors database: {e}")
             raise
-    
+
     def add_donation(
-        self, 
-        user_id: int, 
-        payment_id: str, 
+        self,
+        user_id: int,
+        payment_id: str,
         stars_amount: int,
-        telegram_username: Optional[str] = None,
-        first_name: Optional[str] = None,
-        invoice_payload: Optional[str] = None
+        telegram_username: str | None = None,
+        first_name: str | None = None,
+        invoice_payload: str | None = None
     ) -> bool:
         """Add a new donation and update donor status.
         
@@ -225,31 +225,31 @@ class DonorsDatabase:
         """
         try:
             current_time = int(time.time())
-            
+
             with self._lock:
                 with sqlite3.connect(self.db_path) as conn:
                     # Check if payment already exists (prevent double processing)
                     existing = conn.execute(
-                        "SELECT id FROM donations WHERE payment_id = ?", 
+                        "SELECT id FROM donations WHERE payment_id = ?",
                         (payment_id,)
                     ).fetchone()
-                    
+
                     if existing:
                         logger.warning(f"Payment {payment_id} already exists in database")
                         return False
-                    
+
                     # Add donation record
                     conn.execute("""
                         INSERT INTO donations (user_id, payment_id, stars_amount, payment_date, invoice_payload)
                         VALUES (?, ?, ?, ?, ?)
                     """, (user_id, payment_id, stars_amount, current_time, invoice_payload))
-                    
+
                     # Update or create donor record
                     donor = conn.execute(
                         "SELECT total_stars, first_donation_date FROM donors WHERE user_id = ?",
                         (user_id,)
                     ).fetchone()
-                    
+
                     if donor:
                         # Update existing donor
                         new_total = donor[0] + stars_amount
@@ -265,18 +265,18 @@ class DonorsDatabase:
                             (user_id, telegram_username, first_name, total_stars, first_donation_date, last_donation_date)
                             VALUES (?, ?, ?, ?, ?, ?)
                         """, (user_id, telegram_username, first_name, stars_amount, current_time, current_time))
-                    
+
                     # Calculate and update premium expiration
                     self._update_premium_status(conn, user_id, stars_amount)
-                    
+
                     conn.commit()
                     logger.info(f"Added donation: user_id={user_id}, stars={stars_amount}, payment_id={payment_id}")
                     return True
-                    
+
         except Exception as e:
             logger.error(f"Failed to add donation: {e}")
             return False
-    
+
     def _update_premium_status(self, conn: sqlite3.Connection, user_id: int, stars_amount: int):
         """Update premium status based on donation amount.
         
@@ -288,14 +288,14 @@ class DonorsDatabase:
         # Set permanent premium status for any donor (hidden bonus)
         # Using a far future timestamp (year 2050) to indicate permanent status
         permanent_expires = int(time.time()) + (25 * 365 * 24 * 60 * 60)  # 25 years from now
-        
+
         conn.execute(
             "UPDATE donors SET premium_expires = ? WHERE user_id = ?",
             (permanent_expires, user_id)
         )
-        
+
         logger.info(f"Granted permanent enhanced access for donor {user_id} (hidden bonus)")
-    
+
     def is_premium_user(self, user_id: int) -> bool:
         """Check if user has active premium status.
         
@@ -307,21 +307,21 @@ class DonorsDatabase:
         """
         try:
             current_time = int(time.time())
-            
+
             with self._lock:
                 with sqlite3.connect(self.db_path) as conn:
                     result = conn.execute(
                         "SELECT premium_expires FROM donors WHERE user_id = ? AND premium_expires > ?",
                         (user_id, current_time)
                     ).fetchone()
-                    
+
                     return result is not None
-                    
+
         except Exception as e:
             logger.error(f"Failed to check premium status for user {user_id}: {e}")
             return False
-    
-    def get_donor_info(self, user_id: int) -> Optional[Dict[str, Any]]:
+
+    def get_donor_info(self, user_id: int) -> dict[str, Any] | None:
         """Get donor information.
         
         Args:
@@ -339,16 +339,16 @@ class DonorsDatabase:
                                first_donation_date, last_donation_date, premium_expires
                         FROM donors WHERE user_id = ?
                     """, (user_id,)).fetchone()
-                    
+
                     if result:
                         return dict(result)
                     return None
-                    
+
         except Exception as e:
             logger.error(f"Failed to get donor info for user {user_id}: {e}")
             return None
-    
-    def get_donation_history(self, user_id: int) -> List[Dict[str, Any]]:
+
+    def get_donation_history(self, user_id: int) -> list[dict[str, Any]]:
         """Get donation history for a user.
         
         Args:
@@ -367,14 +367,14 @@ class DonorsDatabase:
                         WHERE user_id = ?
                         ORDER BY payment_date DESC
                     """, (user_id,)).fetchall()
-                    
+
                     return [dict(row) for row in results]
-                    
+
         except Exception as e:
             logger.error(f"Failed to get donation history for user {user_id}: {e}")
             return []
-    
-    def get_stats(self) -> Dict[str, Any]:
+
+    def get_stats(self) -> dict[str, Any]:
         """Get database statistics.
         
         Returns:
@@ -382,27 +382,27 @@ class DonorsDatabase:
         """
         try:
             current_time = int(time.time())
-            
+
             with self._lock:
                 with sqlite3.connect(self.db_path) as conn:
                     # Total donors
                     total_donors = conn.execute("SELECT COUNT(*) FROM donors").fetchone()[0]
-                    
+
                     # Total donations
                     total_donations = conn.execute("SELECT COUNT(*) FROM donations").fetchone()[0]
-                    
+
                     # Total stars collected
                     total_stars = conn.execute("SELECT SUM(stars_amount) FROM donations").fetchone()[0] or 0
-                    
+
                     # Active premium users
                     active_premium = conn.execute(
                         "SELECT COUNT(*) FROM donors WHERE premium_expires > ?",
                         (current_time,)
                     ).fetchone()[0]
-                    
+
                     # Total users with language preferences
                     users_with_language = conn.execute("SELECT COUNT(*) FROM user_preferences").fetchone()[0]
-                    
+
                     return {
                         "total_donors": total_donors,
                         "total_donations": total_donations,
@@ -410,11 +410,11 @@ class DonorsDatabase:
                         "active_premium": active_premium,
                         "users_with_language": users_with_language
                     }
-                    
+
         except Exception as e:
             logger.error(f"Failed to get database stats: {e}")
             return {}
-    
+
     def get_user_language(self, user_id: int) -> str:
         """Get user's preferred language.
         
@@ -431,16 +431,16 @@ class DonorsDatabase:
                         "SELECT language FROM user_preferences WHERE user_id = ?",
                         (user_id,)
                     ).fetchone()
-                    
+
                     if result:
                         return result[0]
                     # Default to Russian so that first-time users see language selection (wrapper checks ru)
                     return "ru"
-                    
+
         except Exception as e:
             logger.error(f"Failed to get user language for user {user_id}: {e}")
             return "ru"  # Default fallback
-    
+
     def set_user_language(self, user_id: int, language: str) -> bool:
         """Set user's preferred language.
         
@@ -453,7 +453,7 @@ class DonorsDatabase:
         """
         try:
             current_time = int(time.time())
-            
+
             with self._lock:
                 with sqlite3.connect(self.db_path) as conn:
                     # Use INSERT OR REPLACE to handle both new and existing users
@@ -463,15 +463,15 @@ class DonorsDatabase:
                         VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'none'), COALESCE((SELECT model FROM user_preferences WHERE user_id = ?), 'gpt-5.1'), ?)
                         ON CONFLICT(user_id) DO UPDATE SET language=excluded.language, updated_at=excluded.updated_at
                     """, (user_id, language, user_id, user_id, current_time))
-                    
+
                     conn.commit()
                     logger.info(f"Set language {language} for user {user_id}")
                     return True
-                    
+
         except Exception as e:
             logger.error(f"Failed to set language for user {user_id}: {e}")
             return False
-    
+
     def has_language_set(self, user_id: int) -> bool:
         """Check if user has a language preference set.
         
@@ -488,13 +488,13 @@ class DonorsDatabase:
                         "SELECT 1 FROM user_preferences WHERE user_id = ?",
                         (user_id,)
                     ).fetchone()
-                    
+
                     return result is not None
-                    
+
         except Exception as e:
             logger.error(f"Failed to check language status for user {user_id}: {e}")
             return False
-    
+
     def reset_user_language(self, user_id: int) -> bool:
         """Reset user's language preference (delete from database).
         
@@ -590,7 +590,7 @@ class DonorsDatabase:
 
 
 # Global database instance - will be initialized lazily
-_donors_db: Optional[DonorsDatabase] = None
+_donors_db: DonorsDatabase | None = None
 
 
 def get_donors_db() -> DonorsDatabase:
@@ -598,14 +598,14 @@ def get_donors_db() -> DonorsDatabase:
     global _donors_db
     if _donors_db is None:
         import os
-        
+
         # Check for PostgreSQL database URL (Railway provides this)
         if os.environ.get("DATABASE_URL"):
             # Use PostgreSQL for production
             from .postgres_wrapper import PostgresSyncWrapper
             logger.info("Using PostgreSQL database (DATABASE_URL detected)")
             _donors_db = PostgresSyncWrapper()
-        
+
         # Check if we should use environment-based database
         elif os.environ.get("USE_ENV_DB", "").lower() == "true":
             # Use simple environment variable database for Railway
@@ -616,17 +616,17 @@ def get_donors_db() -> DonorsDatabase:
                 def __init__(self):
                     self.env_db = EnvDatabase()
                     self.db_path = "env://DONORS_DATA"
-                
+
                 def add_donation(self, *args, **kwargs):
                     return self.env_db.add_donation(*args, **kwargs)
-                
+
                 def is_premium_user(self, user_id: int) -> bool:
                     return self.env_db.is_premium_user(user_id)
-                
+
                 def get_donor_info(self, user_id: int):
                     return self.env_db.get_donor_info(user_id)
-                
-                def get_donation_history(self, user_id: int) -> List[Dict[str, Any]]:
+
+                def get_donation_history(self, user_id: int) -> list[dict[str, Any]]:
                     # Filter donations for this user
                     try:
                         user_donations = [
@@ -636,22 +636,22 @@ def get_donors_db() -> DonorsDatabase:
                         return sorted(user_donations, key=lambda x: x["payment_date"], reverse=True)
                     except:
                         return []
-                
+
                 def get_stats(self):
                     return self.env_db.get_stats()
-                
+
                 def get_user_language(self, user_id: int) -> str:
                     return "ru"  # Default to Russian
-                
+
                 def set_user_language(self, user_id: int, language: str) -> bool:
                     return True  # Ignore language settings in env db
-                
+
                 def has_language_set(self, user_id: int) -> bool:
                     return False
-                
+
                 def reset_user_language(self, user_id: int) -> bool:
                     return True
-            
+
             _donors_db = EnvDatabaseWrapper()
         else:
             # Use SQLite for local development

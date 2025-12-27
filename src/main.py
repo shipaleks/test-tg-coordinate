@@ -2,6 +2,7 @@
 
 import logging
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from telegram import KeyboardButton, ReplyKeyboardMarkup, Update
@@ -15,30 +16,29 @@ from telegram.ext import (
     filters,
 )
 
-from src.handlers.location import (
-    handle_edited_location,
-    handle_interval_callback,
-    handle_location,
-)
 from src.handlers.donations import (
+    dbtest_command,
     donate_command,
     handle_donation_callback,
     handle_pre_checkout_query,
     handle_successful_payment,
     stats_command,
-    dbtest_command,
 )
 from src.handlers.language_selection import (
-    show_language_selection,
-    handle_language_selection,
     handle_custom_language_input,
-    reset_language_command,
-    reason_command,
+    handle_language_selection,
     handle_reason_model_callback,
+    reason_command,
+    reset_language_command,
+    show_language_selection,
 )
-from src.services.firebase_stats import ensure_user as fb_ensure_user
+from src.handlers.location import (
+    handle_edited_location,
+    handle_interval_callback,
+    handle_location,
+)
 from src.services.async_donors_wrapper import get_async_donors_db
-from pathlib import Path
+from src.services.firebase_stats import ensure_user as fb_ensure_user
 
 # Load environment variables from .env file
 load_dotenv()
@@ -136,13 +136,13 @@ async def send_welcome_message(user_id: int, chat_id: int, bot, language: str = 
         from src.services.async_donors_wrapper import get_async_donors_db
         donors_db = await get_async_donors_db()
         language = await donors_db.get_user_language(user_id)
-    
+
     # Get localized messages (default to English)
     messages = LOCALIZED_MESSAGES.get(language, LOCALIZED_MESSAGES['en'])
-    
+
     welcome_text = messages['welcome']
     buttons = messages['buttons']
-    
+
     # Create keyboard with localized buttons
     # Focus on Live Location, but include one-time location for convenience
     keyboard = [
@@ -167,13 +167,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user = update.effective_user
     chat_id = update.effective_chat.id
     logger.info(f"/start received from user {user.id}")
-    
+
     # FIRST: Always respond immediately to avoid hanging
     try:
         await update.message.reply_text("⏳ Processing...")
     except Exception as e:
         logger.error(f"Failed to send initial response: {e}")
-    
+
     # Safety: cancel any existing live session for this user
     try:
         from src.services.live_location_tracker import get_live_location_tracker
@@ -191,13 +191,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             logger.info(f"/start: stopped existing live session for user {user.id}")
     except Exception as e:
         logger.warning(f"/start: failed to stop existing session for user {user.id}: {e}")
-    
+
     # Best-effort: register user in Firestore (non-blocking failure)
     try:
         await fb_ensure_user(user.id, user.username, user.first_name)
     except Exception:
         pass
-    
+
     # Get donors_db AFTER stopping sessions
     try:
         donors_db = await get_async_donors_db()
@@ -205,18 +205,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         logger.error(f"Failed to get donors_db: {e}")
         await context.bot.send_message(chat_id=chat_id, text="❌ Initialization error. Please try again.")
         return
-    
+
     try:
         # Check if user has language set
         has_lang = await donors_db.has_language_set(user.id)
         logger.info(f"User {user.id} has_language_set: {has_lang}")
-        
+
         if not has_lang:
             # Show language selection for new users
             logger.info(f"Showing language selection for user {user.id}")
             await show_language_selection(update, context)
             return
-        
+
         # User has language set, send welcome message in their language
         logger.info(f"User {user.id} has language, showing welcome")
         await send_welcome_message(user.id, chat_id, context.bot)
@@ -278,14 +278,14 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     step_images = ["IMG_9249.PNG", "IMG_9248.PNG", "IMG_9247.PNG"]
     step_file_ids = [
         os.getenv("HOWTO_STEP1_FILE_ID"),
-        os.getenv("HOWTO_STEP2_FILE_ID"), 
+        os.getenv("HOWTO_STEP2_FILE_ID"),
         os.getenv("HOWTO_STEP3_FILE_ID"),
     ]
 
     for idx in range(1, min(4, len(lang_steps))):
         caption = lang_steps[idx]
         sent_photo = False
-        
+
         # First priority: use file_id from environment (best for Railway)
         file_id = step_file_ids[idx-1]
         if file_id:
@@ -295,12 +295,12 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 sent_photo = True
             except Exception as e:
                 logger.warning(f"Failed to send step {idx} photo via file_id: {e}")
-        
+
         # Second priority: try local file (for local development)
         if not sent_photo:
             image_name = step_images[idx-1]
             image_path = base_path / "docs" / image_name
-            
+
             if image_path.exists():
                 try:
                     with open(image_path, "rb") as f:
@@ -309,7 +309,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     sent_photo = True
                 except Exception as e:
                     logger.warning(f"Failed to send photo {image_path}: {e}")
-        
+
         # Fallback to text-only message
         if not sent_photo:
             await context.bot.send_message(chat_id=chat_id, text=caption)
@@ -326,20 +326,21 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 def main() -> None:
     """Main function to run the bot."""
     logger.info("Starting Bot Voyage...")
-    
+
     # Run database migration if PostgreSQL is configured
     if os.environ.get("DATABASE_URL"):
         logger.info("PostgreSQL detected, checking for migration...")
         try:
             import asyncio
+
             from src.utils.migrate_to_postgres import check_and_migrate
-            
+
             # Create new event loop for migration
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(check_and_migrate())
             loop.close()
-            
+
             # Reset event loop for telegram bot
             asyncio.set_event_loop(asyncio.new_event_loop())
         except Exception as e:
@@ -360,7 +361,7 @@ def main() -> None:
             logger.info("RESET_LANG_ON_DEPLOY executed")
         except Exception as e:
             logger.warning(f"RESET_LANG_ON_DEPLOY failed or unsupported: {e}")
-    
+
     # Optional: migrate model names from gpt-5/gpt-5-mini to gpt-5.1/gpt-5.1-mini
     # NOTE: This is OPTIONAL! OpenAI auto-routes "gpt-5" → "gpt-5.1" via aliases
     # DISABLED: Run migration manually via script instead of blocking startup
@@ -389,23 +390,23 @@ def main() -> None:
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("dbtest", dbtest_command))
     application.add_handler(CommandHandler("reset", reset_language_command))
-    
+
     # Debug command
     async def debuguser_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Debug user state in Firestore."""
         user = update.effective_user
-        
+
         try:
             donors_db = await get_async_donors_db()
-            
+
             # Check if using Firestore
             if hasattr(donors_db, '_use_firestore') and donors_db._use_firestore:
                 from src.services.firebase_client import get_firestore
                 db = get_firestore()
-                
+
                 # Get user document
                 user_doc = db.collection("users").document(str(user.id)).get()
-                
+
                 if user_doc.exists:
                     user_data = user_doc.to_dict()
                     debug_text = f"🔍 User {user.id} Debug Info\n\n"
@@ -416,19 +417,19 @@ def main() -> None:
                     debug_text = f"❌ No Firestore document found for user {user.id}"
             else:
                 debug_text = "Not using Firestore database"
-                
+
             # Also check language settings
             has_lang = await donors_db.has_language_set(user.id)
             current_lang = await donors_db.get_user_language(user.id)
-            debug_text += f"\n\nLanguage Check:\n"
+            debug_text += "\n\nLanguage Check:\n"
             debug_text += f"• has_language_set: {has_lang}\n"
             debug_text += f"• current_language: {current_lang}"
-                
+
             await update.message.reply_text(debug_text)
-            
+
         except Exception as e:
             await update.message.reply_text(f"❌ Debug error: {str(e)}")
-    
+
     application.add_handler(CommandHandler("debuguser", debuguser_command))
     # Hidden command to control reasoning effort per user
     application.add_handler(CommandHandler("reason", reason_command))
@@ -446,7 +447,7 @@ def main() -> None:
         application.add_handler(
             MessageHandler(filters.TEXT & filters.Regex(pattern), info_command)
         )
-    
+
     # Language button patterns
     language_patterns = [
         "^🌐 Язык / Language$",
@@ -457,8 +458,8 @@ def main() -> None:
         application.add_handler(
             MessageHandler(filters.TEXT & filters.Regex(pattern), show_language_selection)
         )
-    
-    # Donate button patterns  
+
+    # Donate button patterns
     donate_patterns = [
         "^⭐💝 Поддержать проект$",
         "^⭐💝 Support project$",
@@ -468,7 +469,7 @@ def main() -> None:
         application.add_handler(
             MessageHandler(filters.TEXT & filters.Regex(pattern), donate_command)
         )
-    
+
     # Add custom language input handler (must be after button handlers)
     application.add_handler(
         MessageHandler(
@@ -494,7 +495,7 @@ def main() -> None:
     application.add_handler(
         CallbackQueryHandler(handle_interval_callback, pattern="^interval_")
     )
-    
+
     # Handler for "show live info" button (after static fact)
     async def show_live_info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show live location info when user clicks upsell button."""
@@ -502,18 +503,18 @@ def main() -> None:
         await query.answer()
         # Reuse existing info_command
         await info_command(update, context)
-    
+
     application.add_handler(
         CallbackQueryHandler(show_live_info_callback, pattern="^show_live_info$")
     )
-    
+
     application.add_handler(
         CallbackQueryHandler(handle_donation_callback, pattern="^donate_")
     )
     application.add_handler(
         CallbackQueryHandler(handle_language_selection, pattern="^lang_")
     )
-    
+
     # Add payment handlers
     application.add_handler(PreCheckoutQueryHandler(handle_pre_checkout_query))
     application.add_handler(
@@ -530,11 +531,11 @@ def main() -> None:
     if webhook_url:
         # Use webhook for production
         logger.info(f"Starting webhook on port {port}")
-        
+
         # Start simple healthcheck server in background thread
         import threading
-        from http.server import HTTPServer, BaseHTTPRequestHandler
-        
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
         class HealthCheckHandler(BaseHTTPRequestHandler):
             def do_GET(self):
                 """Healthcheck endpoint for Koyeb/Railway."""
@@ -546,18 +547,18 @@ def main() -> None:
                 else:
                     self.send_response(404)
                     self.end_headers()
-            
+
             def log_message(self, format, *args):
                 # Suppress HTTP server logs to avoid spam
                 pass
-        
+
         # Run healthcheck on a separate port to avoid conflicts
         health_port = port + 1
         health_server = HTTPServer(("0.0.0.0", health_port), HealthCheckHandler)
         health_thread = threading.Thread(target=health_server.serve_forever, daemon=True)
         health_thread.start()
         logger.info(f"Healthcheck server started on port {health_port} (/, /health, /healthz)")
-        
+
         # Use synchronous run_webhook which handles event loop internally
         application.run_webhook(
             listen="0.0.0.0",

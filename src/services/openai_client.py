@@ -1,8 +1,8 @@
 """OpenAI client for generating location-based facts."""
 
 import asyncio
-import logging
 import hashlib
+import logging
 import os
 import re
 import time
@@ -212,9 +212,9 @@ Write your response in {user_language}.
                     if place_name:
                         place_names.append(place_name)
                 fact_entries.append(f"- {entry}")
-            
+
             prev_text = "\n".join(fact_entries)
-            
+
             # Build explicit forbidden places list
             if place_names:
                 places_list = ", ".join([f'"{p}"' for p in place_names])
@@ -837,7 +837,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 "high": "high",
             }
             api_effort = level_map.get(reasoning_level or "medium", "medium")
-            
+
             # For "none" reasoning, don't pass reasoning parameter at all (per API docs)
             if api_effort == "none":
                 reasoning = None
@@ -859,7 +859,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             forced_tool_choice = "auto"
 
             logger.info(f"GPT-5.1 Responses: sending request (model={user_model}, reasoning={api_effort if reasoning else 'none'}, tool_choice=auto)")
-            
+
             # Build request kwargs
             request_kwargs = {
                 "model": user_model,
@@ -867,21 +867,21 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 "tools": tools,
                 "tool_choice": forced_tool_choice,
             }
-            
+
             # Only add reasoning parameter if not None
             if reasoning is not None:
                 request_kwargs["reasoning"] = reasoning
-            
+
             async with self._api_semaphore:
                 response = await self.client.responses.create(**request_kwargs)
 
             # Debug: log response structure to understand format
             logger.info(f"GPT-5.1 Responses: received response type={type(response).__name__}")
-            
+
             # Log all available attributes (non-private)
             attrs = [attr for attr in dir(response) if not attr.startswith('_')]
             logger.info(f"GPT-5.1 Responses: available attributes={attrs}")
-            
+
             # Try to log response as dict if possible
             try:
                 if hasattr(response, "model_dump"):
@@ -892,33 +892,33 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     logger.info(f"GPT-5.1 Responses: dict keys={list(dump.keys())}")
             except Exception as e:
                 logger.debug(f"Could not dump response: {e}")
-            
+
             # Try multiple ways to extract content from new SDK format
             content = None
-            
+
             # Method 1: Check response.output FIRST (most likely location for actual text)
             if hasattr(response, "output"):
                 try:
                     outputs = response.output
                     logger.info(f"GPT-5.1 Responses: output type={type(outputs).__name__}")
-                    
+
                     # If output is a list (Responses API with tool calls returns list of items)
                     if isinstance(outputs, list) and len(outputs) > 0:
                         logger.info(f"GPT-5.1 Responses: output is list with {len(outputs)} items")
-                        
+
                         # Iterate through all items to find the one with type='text' or 'output_text'
                         for idx, item in enumerate(outputs):
                             # Log first 3 and last 3 items to debug
                             if idx < 3 or idx >= len(outputs) - 3:
                                 item_type = type(item).__name__
                                 logger.info(f"GPT-5.1 Responses: output[{idx}] type={item_type}")
-                                
+
                                 # Try to log item structure
                                 if hasattr(item, "type"):
                                     logger.info(f"GPT-5.1 Responses: output[{idx}].type={item.type}")
                                 elif isinstance(item, dict):
                                     logger.info(f"GPT-5.1 Responses: output[{idx}] dict keys={list(item.keys())}")
-                            
+
                             # Check if item has type='text' or 'output_text' (pydantic object)
                             if hasattr(item, "type"):
                                 item_type_val = item.type
@@ -950,7 +950,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                                                     break
                                         if content:
                                             break
-                            
+
                             # Check if item is dict with type='text' or 'output_text'
                             elif isinstance(item, dict):
                                 item_type_val = item.get("type")
@@ -960,29 +960,29 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                                         content = text
                                         logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}]['text'] (dict, type={item_type_val}, length={len(content)})")
                                         break
-                    
+
                 except Exception as e:
                     logger.warning(f"Failed to parse output structure: {e}")
                     logger.exception("Full traceback:")
                     content = None
-            
+
             # Method 2: Direct text attribute (might be config object, not text)
             if not content and hasattr(response, "text"):
                 text_obj = response.text
                 logger.info(f"GPT-5.1 Responses: .text type={type(text_obj).__name__}")
-                
+
                 # Only use if it's actually a string
                 if isinstance(text_obj, str):
                     content = text_obj
                     logger.info(f"GPT-5.1 Responses: extracted text string (length={len(content)})")
-            
+
             # Method 3: output_text convenience accessor
             if not content and hasattr(response, "output_text"):
                 text_val = response.output_text
                 if isinstance(text_val, str):
                     content = text_val
                     logger.info(f"GPT-5.1 Responses: extracted via .output_text (length={len(content)})")
-            
+
             # Method 5: Try to get content from choices (like chat completions)
             if not content and hasattr(response, "choices") and response.choices:
                 try:
@@ -990,7 +990,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     logger.info("GPT-5.1 Responses: extracted from choices (chat format)")
                 except Exception:
                     pass
-            
+
             if not content:
                 logger.warning(f"GPT-5.1 Responses: could not extract content from response, available attributes: {[attr for attr in dir(response) if not attr.startswith('_')]}")
                 content = None
@@ -1091,7 +1091,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         """
         # Try multiple search strategies
         search_strategies = []
-        
+
         # Base parameters for all strategies
         base_params = {
             "format": "json",
@@ -1099,7 +1099,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             "addressdetails": 1,
             "namedetails": 1,
         }
-        
+
         # Add viewbox if user coordinates are provided to prioritize nearby results
         if user_lat is not None and user_lon is not None:
             # Create a viewbox of ~2km around user location
@@ -1107,7 +1107,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 "viewbox": f"{user_lon-0.02},{user_lat-0.02},{user_lon+0.02},{user_lat+0.02}",
                 "bounded": "0"  # Don't restrict to viewbox, just prioritize
             })
-        
+
         # Strategy 1: Try exact search first
         search_strategies.append({
             **base_params,
@@ -1115,7 +1115,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             "extratags": 1,
             "accept-language": "fr,en,ru",  # Multi-language support
         })
-        
+
         # Strategy 2: Try structured search if comma-separated
         if "," in place_name:
             parts = [p.strip() for p in place_name.split(",")]
@@ -1127,7 +1127,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     "addressdetails": 1,
                     "namedetails": 1,
                 }
-                
+
                 # Detect what each part might be
                 if len(parts) == 3:  # Place, Street, City
                     structured_params["amenity"] = parts[0]
@@ -1142,9 +1142,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     else:
                         structured_params["amenity"] = parts[0]
                         structured_params["city"] = parts[1]
-                
+
                 search_strategies.append(structured_params)
-        
+
         # Strategy 3: If it's a street address, try parsing it
         street_match = re.search(r'(\d+)\s+(.+)', place_name)
         if street_match:
@@ -1159,17 +1159,17 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     "street": f"{number} {street_parts[0].strip()}",
                     "city": street_parts[-1].strip() if len(street_parts) > 1 else "Paris"
                 })
-        
+
         url = "https://nominatim.openstreetmap.org/search"
         headers = {"User-Agent": "BotVoyage/1.0 (Educational Project)"}
-        
+
         # Try each strategy
         async with aiohttp.ClientSession() as session:
             for i, params in enumerate(search_strategies):
                 try:
                     logger.debug(f"Trying Nominatim strategy {i+1}/{len(search_strategies)} for: {place_name}")
                     logger.debug(f"Parameters: {params}")
-                    
+
                     async with session.get(
                         url, params=params, headers=headers, timeout=5
                     ) as response:
@@ -1179,12 +1179,12 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                                 # Try to find best match from results
                                 best_result = None
                                 best_score = -1
-                                
+
                                 for result in data:
                                     score = 0
                                     result_type = result.get('type', '')
                                     result_class = result.get('class', '')
-                                    
+
                                     # Prefer certain types
                                     if result_type in ['building', 'house', 'amenity', 'historic']:
                                         score += 3
@@ -1192,37 +1192,37 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                                         score += 2
                                     elif result_type in ['suburb', 'neighbourhood']:
                                         score += 1
-                                    
+
                                     # Check if result is in expected city
                                     display_name = result.get('display_name', '').lower()
                                     if 'paris' in place_name.lower() and 'paris' in display_name:
                                         score += 5
                                     elif 'москва' in place_name.lower() and 'москва' in display_name:
                                         score += 5
-                                    
+
                                     # Prefer results with better importance score
                                     importance = result.get('importance', 0)
                                     score += importance
-                                    
+
                                     if score > best_score:
                                         best_score = score
                                         best_result = result
-                                
+
                                 if best_result:
                                     lat = float(best_result["lat"])
                                     lon = float(best_result["lon"])
-                                    
+
                                     if -90 <= lat <= 90 and -180 <= lon <= 180:
                                         logger.info(
                                             f"Found Nominatim coordinates for '{place_name}': {lat}, {lon}"
                                         )
                                         logger.debug(f"Best result: {best_result.get('display_name')}")
                                         return lat, lon
-                                    
+
                 except Exception as e:
                     logger.debug(f"Strategy {i+1} failed: {e}")
                     continue
-        
+
         logger.debug(f"No coordinates found in Nominatim for: {place_name}")
         return None
 
@@ -1325,16 +1325,16 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             Tuple of (latitude, longitude) if found, None otherwise
         """
         logger.info(f"Searching coordinates for keywords: {search_keywords}")
-        
+
         # Clean search keywords for better results
         # Remove quotes and extra spaces
         clean_keywords = search_keywords.replace('"', '').replace("'", '').strip()
-        
+
         # Extract city name from keywords for validation
         city_name = None
         common_cities = {
             "Paris": (48.8566, 2.3522, 15),  # lat, lon, radius_km
-            "Москва": (55.7558, 37.6173, 30), 
+            "Москва": (55.7558, 37.6173, 30),
             "Moscow": (55.7558, 37.6173, 30),
             "London": (51.5074, -0.1278, 20),
             "New York": (40.7128, -74.0060, 25),
@@ -1342,7 +1342,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             "Saint Petersburg": (59.9311, 30.3609, 20),
             "St Petersburg": (59.9311, 30.3609, 20)
         }
-        
+
         for city, (city_lat, city_lon, radius) in common_cities.items():
             if city in clean_keywords:
                 city_name = city
@@ -1362,7 +1362,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
         # Try multiple fallback patterns for better search coverage
         fallback_patterns = []
-        
+
         # SMART FALLBACK STRATEGY 1: If we have a street address, try just the street
         # Example: "Couvent des Capucins, Rue Boissonade, Paris" -> "Rue Boissonade, Paris"
         if "," in search_keywords:
@@ -1380,12 +1380,12 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         if re.search(r'\d+', part):
                             fallback_patterns.append(part)
                         break
-        
+
         # SMART FALLBACK STRATEGY 2: For specific places, try without the descriptor
         # Example: "Couvent des Capucins" -> "Capucins" + city
         if city_name:
             # Remove common descriptors
-            descriptors = ['couvent', 'église', 'temple', 'monastery', 'convent', 'church', 
+            descriptors = ['couvent', 'église', 'temple', 'monastery', 'convent', 'church',
                           'prison', 'hôpital', 'hospital', 'école', 'school', 'musée', 'museum']
             first_part = search_keywords.split(",")[0] if "," in search_keywords else search_keywords
             for descriptor in descriptors:
@@ -1396,7 +1396,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     if simplified and len(simplified) > 2:
                         fallback_patterns.append(f"{simplified}, {city_name}")
                     break
-        
+
         # For metro/subway stations, try different formats
         if "metro" in search_keywords.lower() or "метро" in search_keywords.lower():
             # Extract station name and try different combinations
@@ -1424,12 +1424,12 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             main_place = words[0]
             if words[1] and words[1].lower() not in ['de', 'la', 'du', 'le', 'des', 'of', 'the']:
                 main_place = f"{words[0]} {words[1]}"
-            
+
             fallback_patterns.extend([
                 f"{main_place} {city_name}",  # Main place + city
                 f"{' '.join(words[-3:])}" if len(words) > 3 else "",  # Last 3 words (usually street + city)
             ])
-        
+
         # For addresses, try street + city
         street_indicators = ['rue', 'boulevard', 'avenue', 'street', 'road', 'улица', 'проспект', 'переулок']
         for i, word in enumerate(words):
@@ -1442,7 +1442,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         # Remove empty patterns and duplicates
         fallback_patterns = [p.strip() for p in fallback_patterns if p and p.strip()]
         fallback_patterns = list(dict.fromkeys(fallback_patterns))  # Remove duplicates while preserving order
-        
+
         # Note: We intentionally don't add city center as fallback
         # Better to not send coordinates than to send wrong ones
 
@@ -1459,14 +1459,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                                 logger.warning(f"Fallback coordinates {coords} for '{pattern}' are not in {city_name}, allowing due to relaxed validation for fallbacks")
                         except Exception:
                             pass
-                    
+
                     # If we have user coordinates, check distance (should be within reasonable range)
                     if user_lat and user_lon:
                         distance = self._calculate_distance(user_lat, user_lon, coords[0], coords[1])
                         if distance > 50:  # More than 50km away
                             logger.warning(f"Fallback coordinates {coords} are {distance:.1f}km from user, skipping")
                             continue
-                    
+
                     logger.info(f"Found coordinates with fallback search '{pattern}': {coords}")
                     return coords
 
@@ -1796,18 +1796,18 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             items = []
             try:
                 geosearch_results = data.get('query', {}).get('geosearch', [])
-                
+
                 for item in geosearch_results:
                     title = item.get('title')
                     if not title or not title.startswith('File:'):
                         continue
                     filename = title.split(':', 1)[-1]
-                    
+
                     # Skip generic file names that tend to be repeated
                     lower_filename = filename.lower()
                     if any(skip in lower_filename for skip in ['logo', 'emblem', 'coat_of_arms', 'flag']):
                         continue
-                        
+
                     ii = await _imageinfo_for_filename(session, filename)
                     if ii:
                         # Attach distance if present
@@ -1866,7 +1866,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 return (token_bonus + dist_bonus, landscape, width)
 
             infos_sorted = sorted(infos, key=score, reverse=True)
-            
+
             # Filter out duplicates and near-duplicates by filename similarity
             seen_bases = set()
             filtered_infos = []
@@ -1881,11 +1881,11 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 # Remove size markers like -1600px-, _thumb_, etc
                 base = re.sub(r'[-_]\d+px[-_]|_thumb_?|\.thumb\.|/thumb/', '', filename.lower())
                 base = re.sub(r'\.(jpg|jpeg|png|svg|webp).*', '', base)
-                
+
                 if base not in seen_bases:
                     seen_bases.add(base)
                     filtered_infos.append(ii)
-                    
+
             # Take URLs from filtered list
             urls: list[str] = []
             for ii in filtered_infos:
@@ -1894,7 +1894,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     urls.append(url)
                 if len(urls) >= need:
                     break
-                    
+
             # If we have fewer images than needed, add some variety by taking lower-scored images
             if len(urls) < need and len(filtered_infos) > len(urls):
                 for ii in filtered_infos[len(urls):]:
@@ -1903,7 +1903,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         urls.append(url)
                     if len(urls) >= need:
                         break
-                        
+
             return urls
 
         results: list[str] = []
@@ -1963,7 +1963,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 # First try: use provided POI coordinates (from Coordinates field in answer)
                 if lat is not None and lon is not None:
                     tasks.append(_commons_geosearch(session, lat, lon, limit=max(6, max_images)))
-                # Second try: derive POI coordinates from Search keywords  
+                # Second try: derive POI coordinates from Search keywords
                 elif len(infos) < max_images and clean_keywords:
                     try:
                         poi_coords = await self.get_coordinates_from_search_keywords(clean_keywords)
@@ -2236,7 +2236,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             logger.info(f"Static location cache after add: {stats['locations']} locations, {stats['total_facts']} total facts")
 
         return fact_response
-    
+
     def _validate_city_coordinates(self, lat: float, lon: float, city_name: str) -> bool:
         """Validate that coordinates are within expected city bounds.
         
@@ -2250,7 +2250,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         """
         city_bounds = {
             "Paris": (48.8566, 2.3522, 15),  # center_lat, center_lon, radius_km
-            "Москва": (55.7558, 37.6173, 30), 
+            "Москва": (55.7558, 37.6173, 30),
             "Moscow": (55.7558, 37.6173, 30),
             "London": (51.5074, -0.1278, 20),
             "New York": (40.7128, -74.0060, 25),
@@ -2258,15 +2258,15 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             "Saint Petersburg": (59.9311, 30.3609, 20),
             "St Petersburg": (59.9311, 30.3609, 20)
         }
-        
+
         if city_name not in city_bounds:
             return True  # Can't validate unknown cities
-            
+
         center_lat, center_lon, radius_km = city_bounds[city_name]
         distance = self._calculate_distance(lat, lon, center_lat, center_lon)
-        
+
         return distance <= radius_km
-    
+
     def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """Calculate distance between two coordinates in kilometers.
         
@@ -2277,18 +2277,18 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         Returns:
             Distance in kilometers
         """
-        from math import radians, cos, sin, asin, sqrt
-        
+        from math import asin, cos, radians, sin, sqrt
+
         # Convert to radians
         lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-        
+
         # Haversine formula
         dlat = lat2 - lat1
         dlon = lon2 - lon1
         a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
         c = 2 * asin(sqrt(a))
         r = 6371  # Earth radius in kilometers
-        
+
         return r * c
 
 

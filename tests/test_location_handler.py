@@ -156,7 +156,7 @@ def test_handle_location_static_success(mock_update, mock_context):
             )
             # Mock image search to return empty list so it falls back to text
             mock_client.get_wikipedia_images = AsyncMock(return_value=[])
-            
+
             mock_get_client.return_value = mock_client
 
             # Call handler
@@ -178,17 +178,17 @@ def test_handle_location_static_success(mock_update, mock_context):
 
             # Check the content of the sent messages
             # The handler sends the fact via send_message and the upsell via reply_text
-            
+
             # Verify fact message (sent via reply_text in fallback mode)
             assert mock_update.message.reply_text.called
             fact_calls = mock_update.message.reply_text.call_args_list
             fact_texts = [call.kwargs.get('text', '') or call.args[0] for call in fact_calls]
             combined_fact_text = " ".join(fact_texts)
-            
+
             assert "📍 *Место:* Красная площадь" in combined_fact_text
             assert "💡 *Факт:* Красная площадь" in combined_fact_text
             assert "🔴" not in combined_fact_text
-            
+
             # Verify upsell message (sent via bot.send_message)
             assert mock_context.bot.send_message.called
             upsell_calls = mock_context.bot.send_message.call_args_list
@@ -353,7 +353,7 @@ def test_handle_location_openai_error(mock_update, mock_context):
             # src/handlers/location.py: handle_location calls reply_text on exception?
             # Actually no, it might use context.bot.send_message or similar.
             # Checking implementation: it calls `await update.message.reply_text`
-            
+
             mock_update.message.reply_text.assert_called()
             call_args = mock_update.message.reply_text.call_args
             assert "😔 *Упс!*" in call_args[1]["text"]
@@ -381,12 +381,12 @@ def test_handle_location_parsing_fallback(mock_update, mock_context):
 
             # Verify reply was sent (fallback formatting)
             assert mock_update.message.reply_text.called
-            
+
             # Check calls to reply_text
             fact_calls = mock_update.message.reply_text.call_args_list
             fact_texts = [call.kwargs.get('text', '') or call.args[0] for call in fact_calls]
             combined_text = " ".join(fact_texts)
-            
+
             # Since parsing fails, it might default to some fallback or just print the text.
             assert "This is an unparseable response without proper formatting" in combined_text
 
