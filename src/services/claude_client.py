@@ -87,9 +87,7 @@ class StaticLocationHistory:
         # Limit cache size
         if len(self._cache) > self._max_entries:
             # Remove oldest entries
-            sorted_items = sorted(
-                self._cache.items(), key=lambda x: x[1]["timestamp"]
-            )
+            sorted_items = sorted(self._cache.items(), key=lambda x: x[1]["timestamp"])
             keys_to_remove = [
                 item[0] for item in sorted_items[: len(self._cache) - self._max_entries]
             ]
@@ -123,9 +121,7 @@ class ClaudeClient:
         Args:
             api_key: Anthropic API key. If None, will use ANTHROPIC_API_KEY env var.
         """
-        self.client = AsyncAnthropic(
-            api_key=api_key or os.getenv("ANTHROPIC_API_KEY")
-        )
+        self.client = AsyncAnthropic(api_key=api_key or os.getenv("ANTHROPIC_API_KEY"))
         self.web_search = get_web_search_service()
         self.static_history = StaticLocationHistory()
         # Lightweight caches for Wikimedia pipeline
@@ -275,7 +271,9 @@ class ClaudeClient:
 {self._get_russian_style_instructions()}"""
 
         if is_live_location:
-            return base_rules + """
+            return (
+                base_rules
+                + """
 
 ФОРМАТ ОТВЕТА (живая локация, 100-120 слов):
 <answer>
@@ -289,8 +287,11 @@ Interesting fact: [Удивительное начало → История с �
 </answer>
 
 ПРОВЕРЬ ПЕРЕД ОТПРАВКОЙ: Каждый URL в Источниках есть в РЕЗУЛЬТАТАХ ПОИСКА выше? Если хоть один URL выдуман - это КРИТИЧЕСКАЯ ОШИБКА!"""
+            )
         else:
-            return base_rules + """
+            return (
+                base_rules
+                + """
 
 ФОРМАТ ОТВЕТА (статичная локация, 60-80 слов):
 <answer>
@@ -304,6 +305,7 @@ Interesting fact: [Удивительная деталь → Краткий ко
 </answer>
 
 ПРОВЕРЬ ПЕРЕД ОТПРАВКОЙ: Каждый URL в Источниках есть в РЕЗУЛЬТАТАХ ПОИСКА выше? Если хоть один URL выдуман - это КРИТИЧЕСКАЯ ОШИБКА!"""
+            )
 
     def _build_system_prompt_english(
         self,
@@ -407,7 +409,9 @@ FORBIDDEN PHRASES (NEVER USE):
 IF YOU CANNOT FIND A FACT: Return ONLY "[[NO_POI_FOUND]]" - nothing else. Do NOT apologize or explain."""
 
         if is_live_location:
-            return base_rules + f"""
+            return (
+                base_rules
+                + f"""
 
 OUTPUT FORMAT (live location, 100-120 words):
 <answer>
@@ -423,8 +427,11 @@ Sources:
 VERIFY BEFORE SENDING: Is each URL in Sources present in WEB SEARCH RESULTS above? If even one URL is invented - this is a CRITICAL ERROR!
 
 Write in {user_language}."""
+            )
         else:
-            return base_rules + f"""
+            return (
+                base_rules
+                + f"""
 
 OUTPUT FORMAT (static location, 60-80 words):
 <answer>
@@ -440,6 +447,7 @@ Sources:
 VERIFY BEFORE SENDING: Is each URL in Sources present in WEB SEARCH RESULTS above? If even one URL is invented - this is a CRITICAL ERROR!
 
 Write in {user_language}."""
+            )
 
     def _build_user_prompt(
         self,
@@ -628,21 +636,31 @@ Sources:
         try:
             # Get user preferences
             user_language = "ru"  # Default to Russian
-            user_model = self.MODEL_SONNET  # Default model (Sonnet 4.5 with low reasoning)
+            user_model = self.MODEL_SONNET  # Default model (Sonnet 4.5)
+            user_reasoning = "low"  # Default reasoning level
 
             if user_id:
                 try:
                     from .async_donors_wrapper import get_async_donors_db
+
                     donors_db = await get_async_donors_db()
                     user_language = await donors_db.get_user_language(user_id)
 
                     # Check user model preference
                     stored_model = await donors_db.get_user_model(user_id)
-                    if stored_model == self.MODEL_SONNET:
-                        user_model = self.MODEL_SONNET
-                    elif stored_model == self.MODEL_HAIKU:
-                        user_model = self.MODEL_HAIKU
-                    # else: defaults to MODEL_OPUS
+                    if stored_model:
+                        # Use stored model if it matches our known models
+                        if stored_model in [
+                            self.MODEL_OPUS,
+                            self.MODEL_SONNET,
+                            self.MODEL_HAIKU,
+                        ]:
+                            user_model = stored_model
+
+                    # Check user reasoning preference
+                    stored_reasoning = await donors_db.get_user_reasoning(user_id)
+                    if stored_reasoning:
+                        user_reasoning = stored_reasoning
                 except Exception as e:
                     logger.warning(f"Failed to get user preferences: {e}")
 
@@ -668,6 +686,7 @@ Sources:
                 road = ""
 
                 import httpx
+
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     response = await client.get(
                         "https://nominatim.openstreetmap.org/reverse",
@@ -697,17 +716,51 @@ Sources:
                             location_name = f"{road}, {city}"
 
                 # Determine local language based on country
-                local_lang = None
                 local_queries_map = {
-                    "France": ("fr", "histoire", "bâtiment historique", "lieux insolites"),
-                    "Deutschland": ("de", "Geschichte", "historisches Gebäude", "ungewöhnliche Orte"),
-                    "Germany": ("de", "Geschichte", "historisches Gebäude", "ungewöhnliche Orte"),
-                    "España": ("es", "historia", "edificio histórico", "lugares inusuales"),
-                    "Spain": ("es", "historia", "edificio histórico", "lugares inusuales"),
+                    "France": (
+                        "fr",
+                        "histoire",
+                        "bâtiment historique",
+                        "lieux insolites",
+                    ),
+                    "Deutschland": (
+                        "de",
+                        "Geschichte",
+                        "historisches Gebäude",
+                        "ungewöhnliche Orte",
+                    ),
+                    "Germany": (
+                        "de",
+                        "Geschichte",
+                        "historisches Gebäude",
+                        "ungewöhnliche Orte",
+                    ),
+                    "España": (
+                        "es",
+                        "historia",
+                        "edificio histórico",
+                        "lugares inusuales",
+                    ),
+                    "Spain": (
+                        "es",
+                        "historia",
+                        "edificio histórico",
+                        "lugares inusuales",
+                    ),
                     "Italia": ("it", "storia", "edificio storico", "luoghi insoliti"),
                     "Italy": ("it", "storia", "edificio storico", "luoghi insoliti"),
-                    "Россия": ("ru", "история", "историческое здание", "необычные места"),
-                    "Russia": ("ru", "история", "историческое здание", "необычные места"),
+                    "Россия": (
+                        "ru",
+                        "история",
+                        "историческое здание",
+                        "необычные места",
+                    ),
+                    "Russia": (
+                        "ru",
+                        "история",
+                        "историческое здание",
+                        "необычные места",
+                    ),
                 }
 
                 local_terms = None
@@ -740,13 +793,19 @@ Sources:
 
                         # Add local language searches for better "local knowledge"
                         if local_terms:
-                            lang_code, hist_term, building_term, unusual_term = local_terms
-                            search_queries.extend([
-                                f'"{street}" {city_name} {hist_term}',
-                                f'"{street}" {city_name} {building_term}',
-                            ])
+                            lang_code, hist_term, building_term, unusual_term = (
+                                local_terms
+                            )
+                            search_queries.extend(
+                                [
+                                    f'"{street}" {city_name} {hist_term}',
+                                    f'"{street}" {city_name} {building_term}',
+                                ]
+                            )
 
-                        logger.info(f"Search with local language: {local_terms[0] if local_terms else 'en'}")
+                        logger.info(
+                            f"Search with local language: {local_terms[0] if local_terms else 'en'}"
+                        )
                     else:
                         # Fallback to city-based search
                         search_queries = [
@@ -763,7 +822,9 @@ Sources:
 
                         # Add local language queries
                         if local_terms:
-                            lang_code, hist_term, building_term, unusual_term = local_terms
+                            lang_code, hist_term, building_term, unusual_term = (
+                                local_terms
+                            )
                             search_queries.append(f'"{road}" {city} {hist_term}')
 
                         search_queries.append(f"{city} {suburb} unusual hidden places")
@@ -774,7 +835,9 @@ Sources:
                         ]
 
                         if local_terms:
-                            lang_code, hist_term, building_term, unusual_term = local_terms
+                            lang_code, hist_term, building_term, unusual_term = (
+                                local_terms
+                            )
                             search_queries.append(f"{city} {unusual_term}")
                     else:
                         # Last resort: coordinate-based search
@@ -794,9 +857,13 @@ Sources:
                     )
                     logger.info(f"Web search returned {len(all_results)} results")
                 else:
-                    logger.warning("Web search returned 0 results - will use fallback mode without strict verification")
+                    logger.warning(
+                        "Web search returned 0 results - will use fallback mode without strict verification"
+                    )
             except Exception as e:
-                logger.warning(f"Web search failed: {e} - will use fallback mode without strict verification")
+                logger.warning(
+                    f"Web search failed: {e} - will use fallback mode without strict verification"
+                )
 
             # Build prompts based on language
             if user_language == "ru":
@@ -813,7 +880,18 @@ Sources:
             )
 
             # Call Claude API
-            logger.info(f"Calling Claude API (model={user_model})")
+            logger.info(
+                f"Calling Claude API (model={user_model}, reasoning={user_reasoning})"
+            )
+
+            # Map reasoning level to budget tokens
+            reasoning_budget_map = {
+                "none": 0,  # No extended thinking
+                "low": 1000,  # Quick reasoning
+                "medium": 3000,  # Thorough analysis
+                "high": 8000,  # Deep analysis
+            }
+            budget_tokens = reasoning_budget_map.get(user_reasoning, 1000)
 
             # Prepare API parameters
             api_params = {
@@ -823,11 +901,11 @@ Sources:
                 "messages": [{"role": "user", "content": user_prompt}],
             }
 
-            # Add extended thinking for Sonnet (low reasoning by default)
-            if user_model == self.MODEL_SONNET:
+            # Add extended thinking for Opus and Sonnet (based on user preference)
+            if user_model in [self.MODEL_OPUS, self.MODEL_SONNET] and budget_tokens > 0:
                 api_params["thinking"] = {
                     "type": "enabled",
-                    "budget_tokens": 1000  # Low reasoning budget
+                    "budget_tokens": budget_tokens,
                 }
 
             async with self._api_semaphore:
@@ -849,7 +927,13 @@ Sources:
                 logger.info("NO_POI_FOUND detected, retrying with expanded search")
 
                 # Try with expanded search prompt
-                expanded_prompt = user_prompt + "\n\nПРИМЕЧАНИЕ: Расширь радиус поиска до 1500м. Найди ЛЮБОЙ интересный исторический объект поблизости." if user_language == "ru" else user_prompt + "\n\nNOTE: Expand search radius to 1500m. Find ANY interesting historical object nearby."
+                expanded_prompt = (
+                    user_prompt
+                    + "\n\nПРИМЕЧАНИЕ: Расширь радиус поиска до 1500м. Найди ЛЮБОЙ интересный исторический объект поблизости."
+                    if user_language == "ru"
+                    else user_prompt
+                    + "\n\nNOTE: Expand search radius to 1500m. Find ANY interesting historical object nearby."
+                )
 
                 # Prepare retry parameters (reuse thinking config if applicable)
                 retry_params = {
@@ -858,10 +942,14 @@ Sources:
                     "system": system_prompt,
                     "messages": [{"role": "user", "content": expanded_prompt}],
                 }
-                if user_model == self.MODEL_SONNET:
+                # Apply same reasoning budget for retry
+                if (
+                    user_model in [self.MODEL_OPUS, self.MODEL_SONNET]
+                    and budget_tokens > 0
+                ):
                     retry_params["thinking"] = {
                         "type": "enabled",
-                        "budget_tokens": 1000
+                        "budget_tokens": budget_tokens,
                     }
 
                 async with self._api_semaphore:
@@ -975,9 +1063,11 @@ Sources:
                         "limit": 5,
                         "addressdetails": 1,
                         "street": f"{number} {street_parts[0].strip()}",
-                        "city": street_parts[-1].strip()
-                        if len(street_parts) > 1
-                        else "Paris",
+                        "city": (
+                            street_parts[-1].strip()
+                            if len(street_parts) > 1
+                            else "Paris"
+                        ),
                     }
                 )
 
@@ -1016,7 +1106,9 @@ Sources:
                                     elif result_type in ["suburb", "neighbourhood"]:
                                         score += 1
 
-                                    display_name = result.get("display_name", "").lower()
+                                    display_name = result.get(
+                                        "display_name", ""
+                                    ).lower()
                                     if (
                                         "paris" in place_name.lower()
                                         and "paris" in display_name
@@ -1081,7 +1173,7 @@ Sources:
             "St Petersburg": (59.9311, 30.3609, 20),
         }
 
-        for city, (city_lat, city_lon, radius) in common_cities.items():
+        for city, (_city_lat, _city_lon, _radius) in common_cities.items():
             if city in clean_keywords:
                 city_name = city
                 break
@@ -1148,7 +1240,9 @@ Sources:
                             )
                             continue
 
-                    logger.info(f"Found coordinates with fallback '{pattern}': {coords}")
+                    logger.info(
+                        f"Found coordinates with fallback '{pattern}': {coords}"
+                    )
                     return coords
 
         logger.warning(f"No coordinates found for keywords: {search_keywords}")
@@ -1180,8 +1274,7 @@ Sources:
                 # PRIORITY 1: Parse Coordinates: field directly
                 # This is what Claude explicitly provides - use it first!
                 coordinates_match = re.search(
-                    r"Coordinates:\s*([\d.]+),\s*([\d.]+)",
-                    answer_content
+                    r"Coordinates:\s*([\d.]+),\s*([\d.]+)", answer_content
                 )
                 if coordinates_match:
                     try:
@@ -1209,7 +1302,9 @@ Sources:
                                     )
                                     return (lat, lon)
                             else:
-                                logger.info(f"Using coordinates directly from Claude: {lat}, {lon}")
+                                logger.info(
+                                    f"Using coordinates directly from Claude: {lat}, {lon}"
+                                )
                                 return (lat, lon)
                     except (ValueError, IndexError) as e:
                         logger.warning(f"Failed to parse Coordinates field: {e}")
@@ -1218,7 +1313,9 @@ Sources:
                 search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
                 if search_match:
                     search_keywords = search_match.group(1).strip()
-                    logger.info(f"Fallback: using search keywords via Nominatim: {search_keywords}")
+                    logger.info(
+                        f"Fallback: using search keywords via Nominatim: {search_keywords}"
+                    )
 
                     coords = await self.get_coordinates_from_search_keywords(
                         search_keywords, user_lat, user_lon
@@ -1227,12 +1324,12 @@ Sources:
                         return coords
 
                 # PRIORITY 3: Fallback to Location: name via Nominatim
-                location_match = re.search(
-                    r"Location:\s*(.+?)(?:\n|$)", answer_content
-                )
+                location_match = re.search(r"Location:\s*(.+?)(?:\n|$)", answer_content)
                 if location_match:
                     place_name = location_match.group(1).strip()
-                    logger.info(f"Fallback: using location name via Nominatim: {place_name}")
+                    logger.info(
+                        f"Fallback: using location name via Nominatim: {place_name}"
+                    )
 
                     coords = await self.get_coordinates_from_search_keywords(
                         place_name, user_lat, user_lon
@@ -1259,7 +1356,9 @@ Sources:
                     if coords:
                         return coords
 
-            logger.debug("No coordinates, search keywords, or location name found in response")
+            logger.debug(
+                "No coordinates, search keywords, or location name found in response"
+            )
             return None
 
         except (ValueError, AttributeError) as e:
@@ -1286,11 +1385,17 @@ Sources:
             yandex_api_key = os.getenv("YANDEX_API_KEY")
             yandex_folder_id = os.getenv("YANDEX_FOLDER_ID")
             if yandex_api_key and yandex_folder_id:
-                logger.info(f"Attempting Yandex image search for: {place_hint or search_keywords}")
+                logger.info(
+                    f"Attempting Yandex image search for: {place_hint or search_keywords}"
+                )
                 from .yandex_image_search import YandexImageSearch
 
-                async with YandexImageSearch(yandex_api_key, yandex_folder_id) as yandex:
-                    base_query = (place_hint or search_keywords or "").strip() or search_keywords
+                async with YandexImageSearch(
+                    yandex_api_key, yandex_folder_id
+                ) as yandex:
+                    base_query = (
+                        place_hint or search_keywords or ""
+                    ).strip() or search_keywords
                     variants = yandex.build_query_variants(
                         base_query=base_query,
                         fact_text=fact_text,
@@ -1316,11 +1421,15 @@ Sources:
             logger.warning(f"Yandex image search failed: {e}")
 
         # Fallback to Wikipedia/Wikimedia Commons
-        clean_keywords = (search_keywords or "").replace(" + ", " ").replace("+", " ").strip()
+        clean_keywords = (
+            (search_keywords or "").replace(" + ", " ").replace("+", " ").strip()
+        )
 
         if clean_keywords and lat is None and lon is None and not place_hint:
             try:
-                quick = await self._search_wikipedia_images(clean_keywords, "en", max_images)
+                quick = await self._search_wikipedia_images(
+                    clean_keywords, "en", max_images
+                )
                 if quick:
                     return quick
             except Exception:
@@ -1487,7 +1596,9 @@ Sources:
         if cache_key:
             previous_facts = self.static_history.get_previous_facts(cache_key)
             if previous_facts:
-                logger.info(f"Found {len(previous_facts)} previous facts for {cache_key}")
+                logger.info(
+                    f"Found {len(previous_facts)} previous facts for {cache_key}"
+                )
 
         fact_response = await self.get_nearby_fact(
             lat,

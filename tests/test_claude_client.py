@@ -107,8 +107,8 @@ def test_get_nearby_fact_prompt_format(claude_client):
                 call_args = mock_create.call_args
                 kwargs = call_args.kwargs
 
-                # Check model parameter (default is now Haiku 4.5)
-                assert kwargs["model"] == "claude-haiku-4-5-20251001"
+                # Check model parameter (default is now Sonnet 4.5)
+                assert kwargs["model"] == "claude-sonnet-4-5-20250929"
 
                 # Check max_tokens
                 assert "max_tokens" in kwargs
