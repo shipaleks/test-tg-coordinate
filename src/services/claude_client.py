@@ -191,9 +191,17 @@ class ClaudeClient:
 {web_context}
 
 МЕТОД РАБОТЫ:
-1) Локация: Найди реальное здание/памятник/место (не пустую точку). Точный адрес с номером дома. Расстояние: предпочтительно до 400м, хорошо до 800м, максимум 1200м если нужно.
-2) Исследование: A) конкретное здание/место в точке B) непосредственная близость (<200м) C) ближайший район (200-800м).
+1) Локация: Найди реальное здание/памятник/место (не пустую точку). Точный адрес с номером дома.
+   **СТРОГОЕ ПРАВИЛО ДИСТАНЦИИ**: настоятельно предпочтительно в пределах 200м, приемлемо до 400м,
+   абсолютный максимум 600м ТОЛЬКО если ничего ближе не существует.
+2) Исследование: A) конкретное здание/место в точке B) непосредственная близость (<100м) C) ближайший район (100-400м) ТОЛЬКО если A/B не имеют интересных фактов.
 3) Видно сегодня: конкретные детали, которые посетитель может увидеть (никаких воображаемых табличек/надписей/меток).
+
+**ATLAS OBSCURA СТИЛЬ - ФОКУС НА НЕОБЫЧНОМ:**
+- Ищи СКРЫТЫЕ, ЗАБЫТЫЕ, ПРОТИВОРЕЧАЩИЕ ИНТУИЦИИ детали, о которых местные жители НЕ знают
+- НЕ пиши про известные туристические достопримечательности (Эйфелева башня, Лувр, Нотр-Дам)
+- Ищи необычные дома, секретные проходы, забытые мемориалы, странные архитектурные детали
+- ПЛАНКА КАЧЕСТВА: Заставит ли этот факт человека остановиться и посмотреть внимательнее? Если нет - копай глубже.
 
 КРИТИЧЕСКОЕ ТРЕБОВАНИЕ - ВЕРИФИКАЦИЯ ФАКТОВ:
 - КАЖДЫЙ факт ДОЛЖЕН быть подтвержден надежным источником из веб-поиска
@@ -209,12 +217,14 @@ class ClaudeClient:
 - ПРОВЕРЬ: расстояние от пользователя должно быть <2км (иначе это явно неправильное место!)
 
 СТРОГО ЗАПРЕЩЕНО:
+- **ПОПСОВЫЕ ТУРИСТИЧЕСКИЕ МЕСТА**: Собор Парижской Богоматери, Пантеон, Эйфелева башня, Лувр, Триумфальная арка, Сакре-Кёр - НЕТ!
 - Мета-факты о координатах как "безымянных"/"пустых"
 - Упоминание технических инструментов (Nominatim, Overpass, геокодирование, панорамы, API)
 - Факты о процессе поиска
 - Неправильные даты, ложные атрибуции, выдуманные детали
 - ЛЮБЫЕ извинения или просьбы о разрешении ("Извините", "могу проверить", "нужна проверка")
 - Временные заглушки типа "рядом с вами" без конкретного адреса
+- Факты, которые можно найти в любом туристическом путеводителе
 
 ЗАПРЕЩЁННЫЕ ФРАЗЫ (НИКОГДА НЕ ИСПОЛЬЗОВАТЬ):
 - "Извините — не удалось..."
@@ -279,9 +289,17 @@ YOU ARE A FACT WRITER, NOT A SEARCH ASSISTANT. Never apologize, never ask permis
 LANGUAGE: Write your response entirely in {user_language}.
 
 METHOD:
-1) Location: Find a real building/monument/place (not empty point). Exact address with house number. Distance: prefer within 400m, good up to 800m, max 1200m if needed.
-2) Research: A) specific building/place at exact spot B) immediate vicinity (<200m) C) nearby area (200-800m).
+1) Location: Find a real building/monument/place (not empty point). Exact address with house number.
+   **STRICT DISTANCE RULE**: strongly prefer within 200m, acceptable up to 400m,
+   absolute max 600m ONLY if nothing closer exists.
+2) Research: A) specific building/place at exact spot B) immediate vicinity (<100m) C) nearby area (100-400m) ONLY if A/B have no interesting facts.
 3) Visible today: concrete details a visitor can see (no imaginary plaques/signatures/marks).
+
+**ATLAS OBSCURA STYLE - FOCUS ON UNUSUAL:**
+- Seek HIDDEN, FORGOTTEN, COUNTERINTUITIVE details that locals don't know
+- DO NOT write about famous tourist landmarks (Eiffel Tower, Louvre, Notre-Dame)
+- Look for unusual houses, secret passages, forgotten memorials, strange architectural details
+- QUALITY BAR: Would this fact make someone stop walking and look closer? If not, dig deeper.
 
 CRITICAL REQUIREMENT - FACT VERIFICATION:
 - EVERY fact MUST be confirmed by reliable sources from web search
@@ -304,12 +322,14 @@ WRITING STYLE (Atlas Obscura):
 - QUALITY BAR: Would this fact make someone stop walking and look closer?
 
 STRICTLY FORBIDDEN:
+- **TOURIST TRAP LANDMARKS**: Notre-Dame Cathedral, Pantheon, Eiffel Tower, Louvre, Arc de Triomphe, Sacré-Cœur - NO!
 - Meta-facts about coordinates being "unnamed"/"empty"
 - Mentioning technical tools (Nominatim, Overpass, reverse geocoding, API)
 - Facts about the search process itself
 - Wrong dates, false attributions, invented details
 - ANY form of apologies or meta-commentary
 - Temporary placeholders like "near you" without specific address
+- Facts you can find in any tourist guidebook
 
 IF YOU CANNOT FIND A FACT: Return ONLY "[[NO_POI_FOUND]]" - nothing else."""
 
@@ -491,15 +511,17 @@ If you cannot find any real place (building/POI) within 1200m with a verifiable 
             # Perform web search for context
             web_search_results = ""
             try:
-                # Determine search query based on coordinates
+                # Search for UNUSUAL, HIDDEN places (not tourist landmarks!)
+                # Atlas Obscura style: forgotten, counterintuitive, locals don't know
                 search_queries = [
-                    f"landmarks near {lat},{lon}",
-                    f"historical places coordinates {lat} {lon}",
+                    f"hidden gems unusual places {lat},{lon}",
+                    f"obscure historical sites secrets {lat} {lon}",
+                    f"forgotten places Atlas Obscura {lat},{lon}",
                 ]
 
                 all_results = []
-                for query in search_queries[:2]:
-                    results = await self.web_search.search(query, count=3)
+                for query in search_queries[:3]:
+                    results = await self.web_search.search(query, count=2)
                     all_results.extend(results)
 
                 if all_results:
