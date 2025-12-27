@@ -8,7 +8,7 @@ import pytest
 from src.services.live_location_tracker import LiveLocationTracker
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_live_location_stops_on_silence():
     """Test that live location session stops when updates stop coming."""
     tracker = LiveLocationTracker()
@@ -62,7 +62,7 @@ async def test_live_location_stops_on_silence():
     )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_health_monitor_runs_independently():
     """Test that health monitor runs independently of fact sending."""
     tracker = LiveLocationTracker()
@@ -112,7 +112,7 @@ async def test_health_monitor_runs_independently():
         await tracker.stop_live_location(456)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_normal_operation_not_affected():
     """Test that normal operation continues when updates are received."""
     tracker = LiveLocationTracker()

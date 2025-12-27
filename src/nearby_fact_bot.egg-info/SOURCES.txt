@@ -24,6 +24,7 @@ src/services/postgres_db.py
 src/services/postgres_wrapper.py
 src/services/web_search.py
 src/services/yandex_image_search.py
+src/services/yandex_web_search.py
 src/utils/formatting_utils.py
 src/utils/migrate_to_postgres.py
 tests/test_claude_client.py

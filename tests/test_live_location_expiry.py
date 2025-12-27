@@ -13,7 +13,7 @@ from src.services.live_location_tracker import (
 from telegram import Bot, Location, Message, Update, User
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_live_location_expires_after_period():
     """Test that live location sessions expire after the specified period."""
     # Create mock objects
@@ -61,7 +61,7 @@ async def test_live_location_expires_after_period():
     assert task.done()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_live_location_stop_signal():
     """Test that receiving a regular location while live tracking stops the session."""
     # Create mock objects
@@ -118,7 +118,7 @@ async def test_live_location_stop_signal():
     )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_live_location_continues_within_period():
     """Test that live location continues sending facts within the period."""
     # Create mock objects
