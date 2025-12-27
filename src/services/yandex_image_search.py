@@ -89,7 +89,9 @@ class YandexImageSearch:
             List of direct image URLs (best-effort).
         """
         if not self.session:
-            raise RuntimeError("YandexImageSearch must be used as an async context manager")
+            raise RuntimeError(
+                "YandexImageSearch must be used as an async context manager"
+            )
 
         max_images = max(1, min(max_images, 20))
         cache_key = self._cache_key(query, region)
@@ -144,7 +146,9 @@ class YandexImageSearch:
         data = None
         for variant in payload_variants:
             try:
-                async with self.session.post(self.BASE_URL, headers=headers, json=variant, timeout=timeout) as resp:
+                async with self.session.post(
+                    self.BASE_URL, headers=headers, json=variant, timeout=timeout
+                ) as resp:
                     content_type = resp.headers.get("Content-Type", "")
                     if resp.status != 200:
                         # Keep body for diagnostics and to decide retry
@@ -166,13 +170,21 @@ class YandexImageSearch:
                         try:
                             data = await resp.json()
                         except Exception:
-                            logger.warning("YandexImageSearch: non-JSON response: %s", content_type)
+                            logger.warning(
+                                "YandexImageSearch: non-JSON response: %s", content_type
+                            )
                             data = None
                     if data is not None:
                         # High-level diagnostics to adjust parsing in production
                         try:
-                            top_keys = list(data.keys())[:10] if isinstance(data, dict) else type(data).__name__
-                            logger.info(f"Yandex response OK; top-level keys: {top_keys}")
+                            top_keys = (
+                                list(data.keys())[:10]
+                                if isinstance(data, dict)
+                                else type(data).__name__
+                            )
+                            logger.info(
+                                f"Yandex response OK; top-level keys: {top_keys}"
+                            )
                         except Exception:
                             pass
                         break
@@ -183,7 +195,10 @@ class YandexImageSearch:
 
         if data is None:
             if last_error_text:
-                logger.warning("YandexImageSearch exhausted payload variants; last error: %s", str(last_error_text)[:200])
+                logger.warning(
+                    "YandexImageSearch exhausted payload variants; last error: %s",
+                    str(last_error_text)[:200],
+                )
             return []
 
         images = self._extract_images(data, max_images * 3)
@@ -208,13 +223,18 @@ class YandexImageSearch:
             # Try JSON first
             try:
                 import json as _json
+
                 raw_obj = _json.loads(raw)
                 if isinstance(raw_obj, dict):
                     try:
-                        logger.info(f"Yandex rawData JSON object; keys: {list(raw_obj.keys())[:10]}")
+                        logger.info(
+                            f"Yandex rawData JSON object; keys: {list(raw_obj.keys())[:10]}"
+                        )
                     except Exception:
                         pass
-                    images.extend(self._find_image_urls_anywhere(raw_obj, need=max_images))
+                    images.extend(
+                        self._find_image_urls_anywhere(raw_obj, need=max_images)
+                    )
             except Exception:
                 # Not JSON; try base64-decode -> XML, then regex fallback
                 try:
@@ -226,22 +246,28 @@ class YandexImageSearch:
                 found: list[str] = []
                 try:
                     import base64 as _b64
+
                     decoded = _b64.b64decode(raw, validate=False)
                     text = decoded.decode("utf-8", errors="ignore").strip()
                     if text.startswith("<?xml") or text.startswith("<"):
                         try:
                             import xml.etree.ElementTree as ET
+
                             root = ET.fromstring(text)
                             # Collect URLs from common tags/attributes
                             for elem in root.iter():
                                 # Tag text content
-                                if elem.text and self._looks_like_image_url(elem.text.strip()):
+                                if elem.text and self._looks_like_image_url(
+                                    elem.text.strip()
+                                ):
                                     found.append(elem.text.strip())
                                     if len(found) >= max_images:
                                         break
                                 # Attributes that may hold URLs
-                                for attr_name, attr_val in (elem.attrib or {}).items():
-                                    if isinstance(attr_val, str) and self._looks_like_image_url(attr_val):
+                                for _attr_name, attr_val in (elem.attrib or {}).items():
+                                    if isinstance(
+                                        attr_val, str
+                                    ) and self._looks_like_image_url(attr_val):
                                         found.append(attr_val)
                                         if len(found) >= max_images:
                                             break
@@ -255,9 +281,15 @@ class YandexImageSearch:
                     pass
                 # Fallback to regex over raw text if XML/base64 yielded nothing
                 if len(found) < max_images:
-                    found.extend(self._extract_image_urls_from_text(raw, need=max_images - len(found)))
+                    found.extend(
+                        self._extract_image_urls_from_text(
+                            raw, need=max_images - len(found)
+                        )
+                    )
                 try:
-                    logger.info(f"Yandex rawData text: regex found {len(found)} image URLs")
+                    logger.info(
+                        f"Yandex rawData text: regex found {len(found)} image URLs"
+                    )
                 except Exception:
                     pass
                 images.extend(found)
@@ -309,7 +341,11 @@ class YandexImageSearch:
                     for item in seq:
                         if not isinstance(item, dict):
                             continue
-                        url = item.get("url") or item.get("imageUrl") or item.get("previewUrl")
+                        url = (
+                            item.get("url")
+                            or item.get("imageUrl")
+                            or item.get("previewUrl")
+                        )
                         if not url:
                             img = item.get("image") or {}
                             if isinstance(img, dict):
@@ -324,7 +360,9 @@ class YandexImageSearch:
         # 4) Last resort: traverse structure and pick plausible image URLs
         if len(images) < max_images:
             try:
-                fallback = self._find_image_urls_anywhere(data, need=max_images - len(images))
+                fallback = self._find_image_urls_anywhere(
+                    data, need=max_images - len(images)
+                )
                 images.extend(fallback)
             except Exception:
                 pass
@@ -344,22 +382,24 @@ class YandexImageSearch:
         def extract_base(u: str) -> tuple[str, int]:
             import re as _re
             from urllib.parse import parse_qs, urlparse
+
             # Try to extract canonical commons filename (without 'File:')
             filename = self._extract_commons_filename(u)
             if not filename:
                 # Fallback: last segment
                 from urllib.parse import unquote
-                filename = unquote(u.split('/')[-1])
+
+                filename = unquote(u.split("/")[-1])
             # Strip query string remnants
-            filename = filename.split('?')[0]
+            filename = filename.split("?")[0]
             # Remove size patterns like 120px-, 1600px-, etc from filename
             base = _re.sub(r"(^|[/_-])\d+px[-_/]", r"\\1", filename).lower()
             # Heuristic width from query param or filename
             width = 0
             try:
                 q = parse_qs(urlparse(u).query)
-                if 'width' in q:
-                    width = int(q['width'][0])
+                if "width" in q:
+                    width = int(q["width"][0])
             except Exception:
                 pass
             if width == 0:
@@ -378,7 +418,7 @@ class YandexImageSearch:
 
         selected: list[str] = []
         # Sort each group by width desc, take first; then take groups in insertion order
-        for base, items in groups.items():
+        for _base, items in groups.items():
             items.sort(key=lambda x: x[0], reverse=True)
             best = items[0][1]
             if best not in selected:
@@ -480,7 +520,9 @@ class YandexImageSearch:
             return False
         return True
 
-    def _find_image_urls_anywhere(self, node, need: int = 3, depth: int = 0, max_depth: int = 5) -> list[str]:
+    def _find_image_urls_anywhere(
+        self, node, need: int = 3, depth: int = 0, max_depth: int = 5
+    ) -> list[str]:
         urls: list[str] = []
         if depth > max_depth or need <= 0:
             return urls
@@ -488,7 +530,11 @@ class YandexImageSearch:
             if isinstance(node, dict):
                 # Prefer direct image-looking URLs
                 for k, v in node.items():
-                    if isinstance(v, str) and k.lower() in ("url", "imageurl", "previewurl"):
+                    if isinstance(v, str) and k.lower() in (
+                        "url",
+                        "imageurl",
+                        "previewurl",
+                    ):
                         norm = self._normalize_wikimedia_url(v)
                         # Only accept if it looks like a valid image URL (not wiki page)
                         if self._looks_like_image_url(norm):
@@ -497,12 +543,20 @@ class YandexImageSearch:
                                 return urls
                 # Recurse into children
                 for v in node.values():
-                    urls.extend(self._find_image_urls_anywhere(v, need - len(urls), depth + 1, max_depth))
+                    urls.extend(
+                        self._find_image_urls_anywhere(
+                            v, need - len(urls), depth + 1, max_depth
+                        )
+                    )
                     if len(urls) >= need:
                         return urls
             elif isinstance(node, list):
                 for it in node:
-                    urls.extend(self._find_image_urls_anywhere(it, need - len(urls), depth + 1, max_depth))
+                    urls.extend(
+                        self._find_image_urls_anywhere(
+                            it, need - len(urls), depth + 1, max_depth
+                        )
+                    )
                     if len(urls) >= need:
                         return urls
         except Exception:
@@ -539,6 +593,7 @@ class YandexImageSearch:
     def _extract_image_urls_from_text(self, text: str, need: int = 5) -> list[str]:
         try:
             import re as _re
+
             # Find http(s) URLs ending with image extensions (basic heuristic)
             pattern = r"https?://[^\s'\"]+\.(?:jpg|jpeg|png|webp)"
             matches = _re.findall(pattern, text, flags=_re.IGNORECASE)
@@ -568,8 +623,12 @@ class YandexImageSearch:
         """
         try:
             from urllib.parse import quote
+
             # Convert commons file pages to direct Special:FilePath
-            if "commons.wikimedia.org/wiki/File:" in url or "commons.m.wikimedia.org/wiki/File:" in url:
+            if (
+                "commons.wikimedia.org/wiki/File:" in url
+                or "commons.m.wikimedia.org/wiki/File:" in url
+            ):
                 try:
                     filename = url.split("/wiki/File:", 1)[1]
                     filename = filename.split("?", 1)[0]
@@ -596,7 +655,11 @@ class YandexImageSearch:
                 except Exception:
                     return url
             # Normalize upload.wikimedia originals (non-thumb) to Special:FilePath
-            if "upload.wikimedia.org" in url and "/wikipedia/commons/" in url and "/thumb/" not in url:
+            if (
+                "upload.wikimedia.org" in url
+                and "/wikipedia/commons/" in url
+                and "/thumb/" not in url
+            ):
                 try:
                     # Path like: /wikipedia/commons/a/ab/Filename.jpg
                     path = url.split("/wikipedia/commons/", 1)[1]
@@ -620,6 +683,7 @@ class YandexImageSearch:
         """
         try:
             from urllib.parse import unquote
+
             u = url
             if "Special:FilePath/" in u:
                 part = u.split("Special:FilePath/", 1)[1]
@@ -673,5 +737,3 @@ class YandexImageSearch:
             return 225
         except Exception:
             return None
-
-

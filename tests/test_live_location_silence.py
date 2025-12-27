@@ -24,7 +24,7 @@ async def test_live_location_stops_on_silence():
         longitude=2.3522,
         live_period=3600,  # 1 hour
         bot=bot,
-        fact_interval_minutes=5  # Every 5 minutes
+        fact_interval_minutes=5,  # Every 5 minutes
     )
 
     # Verify session started
@@ -45,7 +45,7 @@ async def test_live_location_stops_on_silence():
     # Wait for the health monitor to detect silence (runs every 30 seconds)
     # In test, we'll wait up to 35 seconds
     max_wait = 35
-    for i in range(max_wait):
+    for _i in range(max_wait):
         if not tracker.is_user_tracking(123):
             break
         await asyncio.sleep(1)
@@ -56,7 +56,10 @@ async def test_live_location_stops_on_silence():
     # Check that manual stop message was sent
     bot.send_message.assert_called()
     call_args = bot.send_message.call_args
-    assert "live_manual_stop" in str(call_args) or "stopped sharing" in call_args[1]["text"].lower()
+    assert (
+        "live_manual_stop" in str(call_args)
+        or "stopped sharing" in call_args[1]["text"].lower()
+    )
 
 
 @pytest.mark.asyncio
@@ -67,7 +70,8 @@ async def test_health_monitor_runs_independently():
 
     # Mock OpenAI client to control fact generation
     from unittest.mock import patch
-    with patch('src.services.live_location_tracker.get_openai_client') as mock_openai:
+
+    with patch("src.services.live_location_tracker.get_openai_client") as mock_openai:
         mock_client = AsyncMock()
         mock_openai.return_value = mock_client
         mock_client.get_nearby_fact = AsyncMock(return_value="Test fact")
@@ -82,7 +86,7 @@ async def test_health_monitor_runs_independently():
             longitude=2.3522,
             live_period=3600,
             bot=bot,
-            fact_interval_minutes=60  # Facts every hour
+            fact_interval_minutes=60,  # Facts every hour
         )
 
         # Verify session started
@@ -96,7 +100,7 @@ async def test_health_monitor_runs_independently():
         # Health monitor should stop session within 35 seconds
         # even though next fact isn't due for 59 more minutes
         max_wait = 35
-        for i in range(max_wait):
+        for _i in range(max_wait):
             if not tracker.is_user_tracking(456):
                 break
             await asyncio.sleep(1)
@@ -121,13 +125,13 @@ async def test_normal_operation_not_affected():
         longitude=2.3522,
         live_period=300,  # 5 minutes
         bot=bot,
-        fact_interval_minutes=1  # Every minute
+        fact_interval_minutes=1,  # Every minute
     )
 
     # Simulate regular updates every 30 seconds
     for i in range(4):
         await asyncio.sleep(0.5)
-        await tracker.update_live_location(789, 48.8566 + i*0.0001, 2.3522)
+        await tracker.update_live_location(789, 48.8566 + i * 0.0001, 2.3522)
 
     # Session should still be active
     assert tracker.is_user_tracking(789)

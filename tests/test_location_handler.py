@@ -182,7 +182,9 @@ def test_handle_location_static_success(mock_update, mock_context):
             # Verify fact message (sent via reply_text in fallback mode)
             assert mock_update.message.reply_text.called
             fact_calls = mock_update.message.reply_text.call_args_list
-            fact_texts = [call.kwargs.get('text', '') or call.args[0] for call in fact_calls]
+            fact_texts = [
+                call.kwargs.get("text", "") or call.args[0] for call in fact_calls
+            ]
             combined_fact_text = " ".join(fact_texts)
 
             assert "📍 *Место:* Красная площадь" in combined_fact_text
@@ -192,7 +194,9 @@ def test_handle_location_static_success(mock_update, mock_context):
             # Verify upsell message (sent via bot.send_message)
             assert mock_context.bot.send_message.called
             upsell_calls = mock_context.bot.send_message.call_args_list
-            upsell_texts = [call.kwargs.get('text', '') or call.args[1] for call in upsell_calls]
+            upsell_texts = [
+                call.kwargs.get("text", "") or call.args[1] for call in upsell_calls
+            ]
             combined_upsell_text = " ".join(upsell_texts)
             assert "💡 *Совет:*" in combined_upsell_text
 
@@ -384,10 +388,15 @@ def test_handle_location_parsing_fallback(mock_update, mock_context):
 
             # Check calls to reply_text
             fact_calls = mock_update.message.reply_text.call_args_list
-            fact_texts = [call.kwargs.get('text', '') or call.args[0] for call in fact_calls]
+            fact_texts = [
+                call.kwargs.get("text", "") or call.args[0] for call in fact_calls
+            ]
             combined_text = " ".join(fact_texts)
 
             # Since parsing fails, it might default to some fallback or just print the text.
-            assert "This is an unparseable response without proper formatting" in combined_text
+            assert (
+                "This is an unparseable response without proper formatting"
+                in combined_text
+            )
 
     anyio.run(_test)

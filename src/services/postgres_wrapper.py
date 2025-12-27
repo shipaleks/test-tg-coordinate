@@ -30,11 +30,13 @@ class PostgresSyncWrapper:
             try:
                 # Check if we're in async context (telegram bot handlers)
                 try:
-                    loop = asyncio.get_running_loop()
+                    asyncio.get_running_loop()
                     # We're in async context, can't use run_until_complete
                     # Mark as initialized and let first operation handle DB init
                     self._initialized = True
-                    logger.info("PostgreSQL wrapper deferred initialization (async context)")
+                    logger.info(
+                        "PostgreSQL wrapper deferred initialization (async context)"
+                    )
                     return
                 except RuntimeError:
                     # No running loop, we can initialize normally
@@ -56,21 +58,24 @@ class PostgresSyncWrapper:
             if self._db is None:
                 # Get database asynchronously if needed
                 import inspect
+
                 if inspect.iscoroutine(coro):
                     # Create a wrapper to initialize DB first
                     async def wrapper():
                         if self._db is None:
                             self._db = await get_postgres_db()
                         return await coro
+
                     coro = wrapper()
 
             # Try to get current event loop
             try:
                 loop = asyncio.get_running_loop()
                 # We're in async context, use create_task
-                task = loop.create_task(coro)
+                loop.create_task(coro)
                 # Use run_in_executor to avoid blocking
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(asyncio.run, coro)
                     return future.result()
@@ -89,13 +94,17 @@ class PostgresSyncWrapper:
         stars_amount: int,
         telegram_username: str | None = None,
         first_name: str | None = None,
-        invoice_payload: str | None = None
+        invoice_payload: str | None = None,
     ) -> bool:
         """Add a new donation (sync)."""
         return self._run_async(
             self._db.add_donation(
-                user_id, payment_id, stars_amount,
-                telegram_username, first_name, invoice_payload
+                user_id,
+                payment_id,
+                stars_amount,
+                telegram_username,
+                first_name,
+                invoice_payload,
             )
         )
 

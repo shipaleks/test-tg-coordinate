@@ -11,7 +11,9 @@ def test_live_location_prompt_contains_key_elements():
     system_prompt = client._build_system_prompt_russian(is_live_location=True)
 
     # Check core rules
-    assert "ТЫ — АВТОР ФАКТОВ" in system_prompt or "YOU ARE A FACT WRITER" in system_prompt
+    assert (
+        "ТЫ — АВТОР ФАКТОВ" in system_prompt or "YOU ARE A FACT WRITER" in system_prompt
+    )
     assert "Atlas Obscura" in system_prompt
 
     # Check forbidden items
@@ -30,7 +32,9 @@ def test_static_location_prompt_contains_key_elements():
     system_prompt = client._build_system_prompt_russian(is_live_location=False)
 
     # Check core rules
-    assert "ТЫ — АВТОР ФАКТОВ" in system_prompt or "YOU ARE A FACT WRITER" in system_prompt
+    assert (
+        "ТЫ — АВТОР ФАКТОВ" in system_prompt or "YOU ARE A FACT WRITER" in system_prompt
+    )
 
     # Check format requirements
     assert "<answer>" in system_prompt
@@ -102,7 +106,8 @@ def test_previous_facts_duplicate_prevention():
     ]
 
     user_prompt = client._build_user_prompt(
-        lat, lon,
+        lat,
+        lon,
         is_live_location=True,
         previous_facts=previous_facts,
         user_language="en",

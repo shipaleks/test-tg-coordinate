@@ -36,7 +36,7 @@ async def test_live_location_expires_after_period():
         last_update=datetime.now() - timedelta(minutes=65),
         live_period=3600,  # 60 minutes in seconds
         fact_interval_minutes=0.01,  # Very short interval for testing (0.6 seconds)
-        session_start=datetime.now() - timedelta(minutes=65)  # Started 65 minutes ago
+        session_start=datetime.now() - timedelta(minutes=65),  # Started 65 minutes ago
     )
 
     # Start the fact sending loop
@@ -52,7 +52,10 @@ async def test_live_location_expires_after_period():
     # Bot should have sent expiry notification
     bot.send_message.assert_called_once()
     call_args = bot.send_message.call_args
-    assert "session ended" in call_args.kwargs["text"] or "завершена" in call_args.kwargs["text"]
+    assert (
+        "session ended" in call_args.kwargs["text"]
+        or "завершена" in call_args.kwargs["text"]
+    )
 
     # Clean up - task should already be done
     assert task.done()
@@ -96,7 +99,7 @@ async def test_live_location_stop_signal():
         longitude=37.6173,
         last_update=datetime.now(),
         live_period=3600,
-        fact_interval_minutes=10
+        fact_interval_minutes=10,
     )
     tracker._active_sessions[user.id] = session_data
 
@@ -109,7 +112,10 @@ async def test_live_location_stop_signal():
     # Stop message should be sent
     message.reply_text.assert_called_once()
     call_args = message.reply_text.call_args
-    assert "stopped" in call_args.kwargs["text"] or "остановлена" in call_args.kwargs["text"]
+    assert (
+        "stopped" in call_args.kwargs["text"]
+        or "остановлена" in call_args.kwargs["text"]
+    )
 
 
 @pytest.mark.asyncio
@@ -128,11 +134,11 @@ async def test_live_location_continues_within_period():
         last_update=datetime.now(),
         live_period=3600,  # 60 minutes
         fact_interval_minutes=0.01,  # 0.6 seconds for testing
-        session_start=datetime.now()
+        session_start=datetime.now(),
     )
 
     # Mock OpenAI response
-    with patch('src.services.live_location_tracker.get_openai_client') as mock_client:
+    with patch("src.services.live_location_tracker.get_openai_client") as mock_client:
         mock_openai = AsyncMock()
         mock_openai.get_nearby_fact = AsyncMock(return_value="Test fact response")
         mock_openai.parse_coordinates_from_response = AsyncMock(return_value=None)

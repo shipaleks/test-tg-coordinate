@@ -29,7 +29,9 @@ def get_firestore() -> Any:
         client_email = os.getenv("FIREBASE_CLIENT_EMAIL")
         private_key = os.getenv("FIREBASE_PRIVATE_KEY", "").replace("\\n", "\n")
         if not (project_id and client_email and private_key):
-            raise RuntimeError("No Firebase credentials provided in environment variables")
+            raise RuntimeError(
+                "No Firebase credentials provided in environment variables"
+            )
         info = {
             "type": "service_account",
             "project_id": project_id,
@@ -44,5 +46,3 @@ def get_firestore() -> Any:
     # Use Admin SDK's Firestore client so it leverages the provided credentials
     _firestore = admin_firestore.client()
     return _firestore
-
-

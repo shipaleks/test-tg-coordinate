@@ -14,7 +14,6 @@ import hashlib
 import logging
 import os
 import time
-from typing import Optional
 
 import aiohttp
 
@@ -41,7 +40,9 @@ class YandexWebSearch:
         self.folder_id = folder_id or os.getenv("YANDEX_FOLDER_ID")
 
         if not self.api_key or not self.folder_id:
-            logger.warning("Yandex Web Search not configured (missing API_KEY or FOLDER_ID)")
+            logger.warning(
+                "Yandex Web Search not configured (missing API_KEY or FOLDER_ID)"
+            )
             self.enabled = False
         else:
             self.enabled = True
@@ -145,14 +146,18 @@ class YandexWebSearch:
                         base_url, headers=headers, json=variant, timeout=timeout
                     ) as resp:
                         if resp.status != 200:
-                            logger.debug(f"Yandex Web Search: {base_url} returned {resp.status}")
+                            logger.debug(
+                                f"Yandex Web Search: {base_url} returned {resp.status}"
+                            )
                             continue
 
                         data = await resp.json()
                         results = self._parse_results(data)
 
                         if results:
-                            logger.info(f"Yandex Web Search: found {len(results)} results for '{query}'")
+                            logger.info(
+                                f"Yandex Web Search: found {len(results)} results for '{query}'"
+                            )
                             self._cache_set(cache_key, results)
                             return results[:count]
 
@@ -163,7 +168,9 @@ class YandexWebSearch:
                     logger.debug(f"Yandex Web Search unexpected error: {e}")
                     continue
 
-        logger.warning(f"Yandex Web Search: no results for '{query}' (all attempts failed)")
+        logger.warning(
+            f"Yandex Web Search: no results for '{query}' (all attempts failed)"
+        )
         return []
 
     def _parse_results(self, data: dict) -> list[dict]:
@@ -191,16 +198,9 @@ class YandexWebSearch:
                     doc = item.get("doc") or item.get("document") or item
 
                     title = (
-                        doc.get("title")
-                        or doc.get("snippet", {}).get("title")
-                        or ""
+                        doc.get("title") or doc.get("snippet", {}).get("title") or ""
                     )
-                    url = (
-                        doc.get("url")
-                        or doc.get("link")
-                        or doc.get("href")
-                        or ""
-                    )
+                    url = doc.get("url") or doc.get("link") or doc.get("href") or ""
                     snippet = (
                         doc.get("snippet", {}).get("text")
                         or doc.get("snippet")
@@ -209,11 +209,13 @@ class YandexWebSearch:
                     )
 
                     if title and url:
-                        results.append({
-                            "title": str(title)[:200],
-                            "url": str(url),
-                            "snippet": str(snippet)[:500] if snippet else "",
-                        })
+                        results.append(
+                            {
+                                "title": str(title)[:200],
+                                "url": str(url),
+                                "snippet": str(snippet)[:500] if snippet else "",
+                            }
+                        )
 
                 except Exception as e:
                     logger.debug(f"Error parsing Yandex result item: {e}")

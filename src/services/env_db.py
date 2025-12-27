@@ -34,7 +34,7 @@ class EnvDatabase:
     def _save_data(self):
         """Save data to environment variable (manual update needed)."""
         try:
-            json_data = json.dumps(self.data, separators=(',', ':'))
+            json_data = json.dumps(self.data, separators=(",", ":"))
             logger.info(f"UPDATE RAILWAY ENV: {self.env_key}={json_data}")
             # Note: Can't actually update env vars at runtime
             # User needs to manually update in Railway dashboard
@@ -50,7 +50,7 @@ class EnvDatabase:
         stars_amount: int,
         telegram_username: str | None = None,
         first_name: str | None = None,
-        invoice_payload: str | None = None
+        invoice_payload: str | None = None,
     ) -> bool:
         """Add a new donation."""
         try:
@@ -63,13 +63,15 @@ class EnvDatabase:
                     return False
 
             # Add donation
-            self.data["donations"].append({
-                "user_id": user_id,
-                "payment_id": payment_id,
-                "stars_amount": stars_amount,
-                "payment_date": current_time,
-                "invoice_payload": invoice_payload
-            })
+            self.data["donations"].append(
+                {
+                    "user_id": user_id,
+                    "payment_id": payment_id,
+                    "stars_amount": stars_amount,
+                    "payment_date": current_time,
+                    "invoice_payload": invoice_payload,
+                }
+            )
 
             # Update or create donor
             user_key = str(user_id)
@@ -85,7 +87,8 @@ class EnvDatabase:
                     "total_stars": stars_amount,
                     "first_donation_date": current_time,
                     "last_donation_date": current_time,
-                    "premium_expires": current_time + (25 * 365 * 24 * 60 * 60)  # 25 years
+                    "premium_expires": current_time
+                    + (25 * 365 * 24 * 60 * 60),  # 25 years
                 }
 
             # Log the update command for manual update
@@ -129,7 +132,8 @@ class EnvDatabase:
             total_donations = len(self.data["donations"])
             total_stars = sum(d["stars_amount"] for d in self.data["donations"])
             active_premium = sum(
-                1 for d in self.data["donors"].values()
+                1
+                for d in self.data["donors"].values()
                 if d.get("premium_expires", 0) > int(time.time())
             )
 
@@ -137,7 +141,7 @@ class EnvDatabase:
                 "total_donors": total_donors,
                 "total_donations": total_donations,
                 "total_stars": total_stars,
-                "active_premium": active_premium
+                "active_premium": active_premium,
             }
         except Exception as e:
             logger.error(f"Failed to get stats: {e}")

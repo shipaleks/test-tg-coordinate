@@ -22,7 +22,9 @@ class PostgresDatabase:
 
         # Convert postgres:// to postgresql:// for compatibility
         if self.database_url.startswith("postgres://"):
-            self.database_url = self.database_url.replace("postgres://", "postgresql://", 1)
+            self.database_url = self.database_url.replace(
+                "postgres://", "postgresql://", 1
+            )
 
         self.pool: Pool | None = None
         self.db_path = f"postgresql://{self.database_url.split('@')[1]}"  # For display
@@ -31,15 +33,13 @@ class PostgresDatabase:
         """Initialize connection pool and create tables."""
         try:
             self.pool = await asyncpg.create_pool(
-                self.database_url,
-                min_size=1,
-                max_size=10,
-                command_timeout=60
+                self.database_url, min_size=1, max_size=10, command_timeout=60
             )
 
             # Create tables
             async with self.pool.acquire() as conn:
-                await conn.execute("""
+                await conn.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS donors (
                         user_id BIGINT PRIMARY KEY,
                         telegram_username TEXT,
@@ -50,9 +50,11 @@ class PostgresDatabase:
                         premium_expires BIGINT DEFAULT 0,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
-                """)
+                """
+                )
 
-                await conn.execute("""
+                await conn.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS donations (
                         id SERIAL PRIMARY KEY,
                         user_id BIGINT REFERENCES donors(user_id),
@@ -61,9 +63,11 @@ class PostgresDatabase:
                         payment_date BIGINT,
                         invoice_payload TEXT
                     )
-                """)
+                """
+                )
 
-                await conn.execute("""
+                await conn.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS user_preferences (
                         user_id BIGINT PRIMARY KEY,
                         language TEXT DEFAULT 'ru',
@@ -72,7 +76,8 @@ class PostgresDatabase:
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
-                """)
+                """
+                )
                 # Ensure reasoning column exists
                 try:
                     await conn.execute(
@@ -88,8 +93,12 @@ class PostgresDatabase:
                     pass
 
                 # Create indexes
-                await conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_user_id ON donations(user_id)")
-                await conn.execute("CREATE INDEX IF NOT EXISTS idx_donations_payment_id ON donations(payment_id)")
+                await conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_donations_user_id ON donations(user_id)"
+                )
+                await conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_donations_payment_id ON donations(payment_id)"
+                )
 
             logger.info("PostgreSQL database initialized successfully")
 
@@ -109,7 +118,7 @@ class PostgresDatabase:
         stars_amount: int,
         telegram_username: str | None = None,
         first_name: str | None = None,
-        invoice_payload: str | None = None
+        invoice_payload: str | None = None,
     ) -> bool:
         """Add a new donation and update donor status."""
         try:
@@ -120,8 +129,7 @@ class PostgresDatabase:
                 async with conn.transaction():
                     # Check if payment already exists
                     existing = await conn.fetchval(
-                        "SELECT id FROM donations WHERE payment_id = $1",
-                        payment_id
+                        "SELECT id FROM donations WHERE payment_id = $1", payment_id
                     )
 
                     if existing:
@@ -130,40 +138,63 @@ class PostgresDatabase:
 
                     # First ensure donor exists
                     donor = await conn.fetchrow(
-                        "SELECT total_stars FROM donors WHERE user_id = $1",
-                        user_id
+                        "SELECT total_stars FROM donors WHERE user_id = $1", user_id
                     )
 
                     if donor:
                         # Update existing donor
-                        new_total = donor['total_stars'] + stars_amount
-                        await conn.execute("""
-                            UPDATE donors 
-                            SET total_stars = $2, 
-                                last_donation_date = $3, 
-                                telegram_username = $4, 
+                        new_total = donor["total_stars"] + stars_amount
+                        await conn.execute(
+                            """
+                            UPDATE donors
+                            SET total_stars = $2,
+                                last_donation_date = $3,
+                                telegram_username = $4,
                                 first_name = $5,
                                 premium_expires = $6
                             WHERE user_id = $1
-                        """, user_id, new_total, current_time, telegram_username,
-                            first_name, current_time + (25 * 365 * 24 * 60 * 60))
+                        """,
+                            user_id,
+                            new_total,
+                            current_time,
+                            telegram_username,
+                            first_name,
+                            current_time + (25 * 365 * 24 * 60 * 60),
+                        )
                     else:
                         # Create new donor first (before adding donation due to foreign key)
-                        await conn.execute("""
-                            INSERT INTO donors 
-                            (user_id, telegram_username, first_name, total_stars, 
+                        await conn.execute(
+                            """
+                            INSERT INTO donors
+                            (user_id, telegram_username, first_name, total_stars,
                              first_donation_date, last_donation_date, premium_expires)
                             VALUES ($1, $2, $3, $4, $5, $6, $7)
-                        """, user_id, telegram_username, first_name, stars_amount,
-                            current_time, current_time, current_time + (25 * 365 * 24 * 60 * 60))
+                        """,
+                            user_id,
+                            telegram_username,
+                            first_name,
+                            stars_amount,
+                            current_time,
+                            current_time,
+                            current_time + (25 * 365 * 24 * 60 * 60),
+                        )
 
                     # Now add donation (after donor exists)
-                    await conn.execute("""
+                    await conn.execute(
+                        """
                         INSERT INTO donations (user_id, payment_id, stars_amount, payment_date, invoice_payload)
                         VALUES ($1, $2, $3, $4, $5)
-                    """, user_id, payment_id, stars_amount, current_time, invoice_payload)
+                    """,
+                        user_id,
+                        payment_id,
+                        stars_amount,
+                        current_time,
+                        invoice_payload,
+                    )
 
-                    logger.info(f"Added donation: user_id={user_id}, stars={stars_amount}")
+                    logger.info(
+                        f"Added donation: user_id={user_id}, stars={stars_amount}"
+                    )
                     return True
 
         except Exception as e:
@@ -176,10 +207,14 @@ class PostgresDatabase:
             current_time = int(time.time())
 
             async with self.pool.acquire() as conn:
-                result = await conn.fetchval("""
-                    SELECT premium_expires FROM donors 
+                result = await conn.fetchval(
+                    """
+                    SELECT premium_expires FROM donors
                     WHERE user_id = $1 AND premium_expires > $2
-                """, user_id, current_time)
+                """,
+                    user_id,
+                    current_time,
+                )
 
                 return result is not None
 
@@ -191,11 +226,14 @@ class PostgresDatabase:
         """Get donor information."""
         try:
             async with self.pool.acquire() as conn:
-                row = await conn.fetchrow("""
-                    SELECT user_id, telegram_username, first_name, total_stars, 
+                row = await conn.fetchrow(
+                    """
+                    SELECT user_id, telegram_username, first_name, total_stars,
                            first_donation_date, last_donation_date, premium_expires
                     FROM donors WHERE user_id = $1
-                """, user_id)
+                """,
+                    user_id,
+                )
 
                 if row:
                     return dict(row)
@@ -209,12 +247,15 @@ class PostgresDatabase:
         """Get donation history for a user."""
         try:
             async with self.pool.acquire() as conn:
-                rows = await conn.fetch("""
+                rows = await conn.fetch(
+                    """
                     SELECT payment_id, stars_amount, payment_date, invoice_payload
-                    FROM donations 
+                    FROM donations
                     WHERE user_id = $1
                     ORDER BY payment_date DESC
-                """, user_id)
+                """,
+                    user_id,
+                )
 
                 return [dict(row) for row in rows]
 
@@ -229,14 +270,17 @@ class PostgresDatabase:
 
             async with self.pool.acquire() as conn:
                 # Use single query for efficiency
-                stats = await conn.fetchrow("""
-                    SELECT 
+                stats = await conn.fetchrow(
+                    """
+                    SELECT
                         (SELECT COUNT(*) FROM donors) as total_donors,
                         (SELECT COUNT(*) FROM donations) as total_donations,
                         (SELECT COALESCE(SUM(stars_amount), 0) FROM donations) as total_stars,
                         (SELECT COUNT(*) FROM donors WHERE premium_expires > $1) as active_premium,
                         (SELECT COUNT(*) FROM user_preferences) as users_with_language
-                """, current_time)
+                """,
+                    current_time,
+                )
 
                 return dict(stats) if stats else {}
 
@@ -249,8 +293,7 @@ class PostgresDatabase:
         try:
             async with self.pool.acquire() as conn:
                 language = await conn.fetchval(
-                    "SELECT language FROM user_preferences WHERE user_id = $1",
-                    user_id
+                    "SELECT language FROM user_preferences WHERE user_id = $1", user_id
                 )
                 return language or "ru"
 
@@ -262,12 +305,16 @@ class PostgresDatabase:
         """Set user's preferred language."""
         try:
             async with self.pool.acquire() as conn:
-                await conn.execute("""
+                await conn.execute(
+                    """
                     INSERT INTO user_preferences (user_id, language, updated_at)
                     VALUES ($1, $2, CURRENT_TIMESTAMP)
-                    ON CONFLICT (user_id) 
+                    ON CONFLICT (user_id)
                     DO UPDATE SET language = $2, updated_at = CURRENT_TIMESTAMP
-                """, user_id, language)
+                """,
+                    user_id,
+                    language,
+                )
 
                 logger.info(f"Set language {language} for user {user_id}")
                 return True

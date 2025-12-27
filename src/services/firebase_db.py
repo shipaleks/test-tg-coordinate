@@ -139,10 +139,17 @@ class FirestoreDatabase:
     def get_stats(self) -> dict[str, Any]:
         try:
             # Best-effort light stats
-            total_donations = (
-                len(list(self.db.collection("donations").limit(1_000).stream()))
+            total_donations = len(
+                list(self.db.collection("donations").limit(1_000).stream())
             )
-            total_donors = len(list(self.db.collection("users").where("total_stars", ">", 0).limit(1_000).stream()))
+            total_donors = len(
+                list(
+                    self.db.collection("users")
+                    .where("total_stars", ">", 0)
+                    .limit(1_000)
+                    .stream()
+                )
+            )
             return {
                 "total_donors": total_donors,
                 "total_donations": total_donations,
@@ -183,7 +190,9 @@ class FirestoreDatabase:
 
             user_data = snap.to_dict() or {}
             has_lang = user_data.get("language") is not None
-            logger.info(f"has_language_set: user {user_id} has language={user_data.get('language')}, result={has_lang}")
+            logger.info(
+                f"has_language_set: user {user_id} has language={user_data.get('language')}, result={has_lang}"
+            )
             return has_lang
         except Exception as e:
             logger.error(f"has_language_set error for user {user_id}: {e}")
@@ -253,5 +262,3 @@ class FirestoreDatabase:
             logger.info(f"Reset language for ~{count} users in Firestore")
         except Exception as e:
             logger.warning(f"Bulk language reset failed: {e}")
-
-

@@ -96,13 +96,15 @@ class WebSearchService:
             web_results = data.get("web", {}).get("results", [])
 
             for item in web_results[:count]:
-                results.append({
-                    "title": item.get("title", ""),
-                    "url": item.get("url", ""),
-                    "description": item.get("description", ""),
-                    "age": item.get("age", ""),
-                    "language": item.get("language", ""),
-                })
+                results.append(
+                    {
+                        "title": item.get("title", ""),
+                        "url": item.get("url", ""),
+                        "description": item.get("description", ""),
+                        "age": item.get("age", ""),
+                        "language": item.get("language", ""),
+                    }
+                )
 
             logger.info(f"Web search for '{query}' returned {len(results)} results")
             return results
@@ -112,13 +114,21 @@ class WebSearchService:
             logger.error(f"Web search HTTP error: {status_code} - {e}")
 
             # Try Yandex fallback on rate limit (429)
-            if status_code == 429 and self._yandex_fallback and self._yandex_fallback.enabled:
-                logger.warning(f"Brave Search rate limited (429), trying Yandex fallback for '{query}'")
+            if (
+                status_code == 429
+                and self._yandex_fallback
+                and self._yandex_fallback.enabled
+            ):
+                logger.warning(
+                    f"Brave Search rate limited (429), trying Yandex fallback for '{query}'"
+                )
                 try:
                     async with self._yandex_fallback as yandex:
                         yandex_results = await yandex.search(query, count=count)
                         if yandex_results:
-                            logger.info(f"Yandex fallback successful: {len(yandex_results)} results")
+                            logger.info(
+                                f"Yandex fallback successful: {len(yandex_results)} results"
+                            )
                             return yandex_results
                 except Exception as yandex_error:
                     logger.error(f"Yandex fallback also failed: {yandex_error}")

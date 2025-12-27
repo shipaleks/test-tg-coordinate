@@ -34,7 +34,12 @@ def test_get_nearby_fact_success(claude_client):
         # Patch messages.create for Claude
         with patch.object(claude_client.client.messages, "create", mock_create):
             # Also patch web_search to avoid actual API calls
-            with patch.object(claude_client.web_search, "search", new_callable=AsyncMock, return_value=[]):
+            with patch.object(
+                claude_client.web_search,
+                "search",
+                new_callable=AsyncMock,
+                return_value=[],
+            ):
                 fact = await claude_client.get_nearby_fact(
                     55.751244, 37.618423, is_live_location=False
                 )
@@ -59,7 +64,12 @@ def test_get_nearby_fact_empty_response(claude_client):
         mock_create = AsyncMock(return_value=mock_response)
 
         with patch.object(claude_client.client.messages, "create", mock_create):
-            with patch.object(claude_client.web_search, "search", new_callable=AsyncMock, return_value=[]):
+            with patch.object(
+                claude_client.web_search,
+                "search",
+                new_callable=AsyncMock,
+                return_value=[],
+            ):
                 with pytest.raises(ValueError, match="Empty response from Claude"):
                     await claude_client.get_nearby_fact(
                         55.751244, 37.618423, is_live_location=False
@@ -75,7 +85,12 @@ def test_get_nearby_fact_api_error(claude_client):
         mock_create = AsyncMock(side_effect=Exception("API Error"))
 
         with patch.object(claude_client.client.messages, "create", mock_create):
-            with patch.object(claude_client.web_search, "search", new_callable=AsyncMock, return_value=[]):
+            with patch.object(
+                claude_client.web_search,
+                "search",
+                new_callable=AsyncMock,
+                return_value=[],
+            ):
                 with pytest.raises(Exception, match="API Error"):
                     await claude_client.get_nearby_fact(
                         55.751244, 37.618423, is_live_location=False
@@ -97,7 +112,12 @@ def test_get_nearby_fact_prompt_format(claude_client):
         mock_create = AsyncMock(return_value=mock_response)
 
         with patch.object(claude_client.client.messages, "create", mock_create):
-            with patch.object(claude_client.web_search, "search", new_callable=AsyncMock, return_value=[]):
+            with patch.object(
+                claude_client.web_search,
+                "search",
+                new_callable=AsyncMock,
+                return_value=[],
+            ):
                 await claude_client.get_nearby_fact(
                     55.751244, 37.618423, is_live_location=False
                 )
@@ -144,7 +164,12 @@ def test_get_nearby_fact_live_location_model(claude_client):
         mock_create = AsyncMock(return_value=mock_response)
 
         with patch.object(claude_client.client.messages, "create", mock_create):
-            with patch.object(claude_client.web_search, "search", new_callable=AsyncMock, return_value=[]):
+            with patch.object(
+                claude_client.web_search,
+                "search",
+                new_callable=AsyncMock,
+                return_value=[],
+            ):
                 await claude_client.get_nearby_fact(
                     55.751244, 37.618423, is_live_location=True
                 )
@@ -379,9 +404,7 @@ def test_validate_city_coordinates(claude_client):
     assert claude_client._validate_city_coordinates(55.7558, 37.6173, "Москва") is True
 
     # Unknown city - should return True (can't validate)
-    assert (
-        claude_client._validate_city_coordinates(0, 0, "Unknown City") is True
-    )
+    assert claude_client._validate_city_coordinates(0, 0, "Unknown City") is True
 
 
 def test_calculate_distance(claude_client):
