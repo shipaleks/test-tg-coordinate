@@ -195,6 +195,19 @@ class ClaudeClient:
 2) Исследование: A) конкретное здание/место в точке B) непосредственная близость (<200м) C) ближайший район (200-800м).
 3) Видно сегодня: конкретные детали, которые посетитель может увидеть (никаких воображаемых табличек/надписей/меток).
 
+КРИТИЧЕСКОЕ ТРЕБОВАНИЕ - ВЕРИФИКАЦИЯ ФАКТОВ:
+- КАЖДЫЙ факт ДОЛЖЕН быть подтвержден надежным источником из веб-поиска
+- НЕ выдумывай детали, которых нет в источниках (даты, имена, события)
+- Если источники противоречат друг другу - используй только общепризнанные факты
+- НИКОГДА не пиши "сердца польских королей", "серебряные урны", "тайные подземелья" без ПРЯМОГО подтверждения в источниках
+- Если не можешь найти достаточно фактов в источниках - лучше верни [[NO_POI_FOUND]]
+
+КРИТИЧЕСКОЕ ТРЕБОВАНИЕ - ТОЧНОСТЬ КООРДИНАТ:
+- Coordinates ДОЛЖНЫ быть координатами ОПИСЫВАЕМОГО места, НЕ координатами пользователя!
+- Используй точные координаты из веб-поиска или карт (например, Google Maps, OpenStreetMap)
+- Если координаты неточные или неизвестны - используй Search для геокодирования
+- ПРОВЕРЬ: расстояние от пользователя должно быть <2км (иначе это явно неправильное место!)
+
 СТРОГО ЗАПРЕЩЕНО:
 - Мета-факты о координатах как "безымянных"/"пустых"
 - Упоминание технических инструментов (Nominatim, Overpass, геокодирование, панорамы, API)
@@ -269,6 +282,19 @@ METHOD:
 1) Location: Find a real building/monument/place (not empty point). Exact address with house number. Distance: prefer within 400m, good up to 800m, max 1200m if needed.
 2) Research: A) specific building/place at exact spot B) immediate vicinity (<200m) C) nearby area (200-800m).
 3) Visible today: concrete details a visitor can see (no imaginary plaques/signatures/marks).
+
+CRITICAL REQUIREMENT - FACT VERIFICATION:
+- EVERY fact MUST be confirmed by reliable sources from web search
+- DO NOT invent details not present in sources (dates, names, events)
+- If sources contradict - use only universally accepted facts
+- NEVER write "hearts of Polish kings", "silver urns", "secret tunnels" without DIRECT confirmation in sources
+- If you cannot find enough facts in sources - better return [[NO_POI_FOUND]]
+
+CRITICAL REQUIREMENT - COORDINATE ACCURACY:
+- Coordinates MUST be coordinates of the DESCRIBED place, NOT user's coordinates!
+- Use precise coordinates from web search or maps (e.g., Google Maps, OpenStreetMap)
+- If coordinates are imprecise or unknown - use Search field for geocoding
+- CHECK: distance from user should be <2km (otherwise it's clearly the wrong place!)
 
 WRITING STYLE (Atlas Obscura):
 - Start with the most surprising detail immediately - no generic introductions
@@ -825,7 +851,12 @@ If you cannot find any real place (building/POI) within 1200m with a verifiable 
     async def parse_coordinates_from_response(
         self, response: str, user_lat: float = None, user_lon: float = None
     ) -> tuple[float, float] | None:
-        """Parse coordinates from Claude response using search keywords.
+        """Parse coordinates from Claude response.
+
+        Priority:
+        1. Parse Coordinates: field directly from response (most accurate)
+        2. Fallback to Search: keywords via Nominatim (less accurate)
+        3. Fallback to Location: name via Nominatim (least accurate)
 
         Args:
             response: Claude response text
@@ -840,10 +871,48 @@ If you cannot find any real place (building/POI) within 1200m with a verifiable 
             if answer_match:
                 answer_content = answer_match.group(1).strip()
 
+                # PRIORITY 1: Parse Coordinates: field directly
+                # This is what Claude explicitly provides - use it first!
+                coordinates_match = re.search(
+                    r"Coordinates:\s*([\d.]+),\s*([\d.]+)",
+                    answer_content
+                )
+                if coordinates_match:
+                    try:
+                        lat = float(coordinates_match.group(1))
+                        lon = float(coordinates_match.group(2))
+
+                        # Validate coordinates are reasonable
+                        if -90 <= lat <= 90 and -180 <= lon <= 180:
+                            # If user coordinates provided, check distance
+                            if user_lat is not None and user_lon is not None:
+                                distance = self._calculate_distance(
+                                    user_lat, user_lon, lat, lon
+                                )
+                                # Reject if Claude's coordinates are more than 5km away
+                                # (likely hallucination or wrong place)
+                                if distance > 5:
+                                    logger.warning(
+                                        f"Coordinates from Claude ({lat}, {lon}) are {distance:.1f}km "
+                                        f"from user ({user_lat}, {user_lon}), rejecting and using fallback"
+                                    )
+                                else:
+                                    logger.info(
+                                        f"Using coordinates directly from Claude: {lat}, {lon} "
+                                        f"({distance:.1f}km from user)"
+                                    )
+                                    return (lat, lon)
+                            else:
+                                logger.info(f"Using coordinates directly from Claude: {lat}, {lon}")
+                                return (lat, lon)
+                    except (ValueError, IndexError) as e:
+                        logger.warning(f"Failed to parse Coordinates field: {e}")
+
+                # PRIORITY 2: Fallback to Search: keywords via Nominatim
                 search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
                 if search_match:
                     search_keywords = search_match.group(1).strip()
-                    logger.info(f"Found search keywords: {search_keywords}")
+                    logger.info(f"Fallback: using search keywords via Nominatim: {search_keywords}")
 
                     coords = await self.get_coordinates_from_search_keywords(
                         search_keywords, user_lat, user_lon
@@ -851,12 +920,13 @@ If you cannot find any real place (building/POI) within 1200m with a verifiable 
                     if coords:
                         return coords
 
+                # PRIORITY 3: Fallback to Location: name via Nominatim
                 location_match = re.search(
                     r"Location:\s*(.+?)(?:\n|$)", answer_content
                 )
                 if location_match:
                     place_name = location_match.group(1).strip()
-                    logger.info(f"Using location name: {place_name}")
+                    logger.info(f"Fallback: using location name via Nominatim: {place_name}")
 
                     coords = await self.get_coordinates_from_search_keywords(
                         place_name, user_lat, user_lon
@@ -883,7 +953,7 @@ If you cannot find any real place (building/POI) within 1200m with a verifiable 
                     if coords:
                         return coords
 
-            logger.debug("No search keywords or location name found in response")
+            logger.debug("No coordinates, search keywords, or location name found in response")
             return None
 
         except (ValueError, AttributeError) as e:
