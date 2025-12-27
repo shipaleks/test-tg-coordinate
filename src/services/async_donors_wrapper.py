@@ -25,6 +25,7 @@ class AsyncDonorsWrapper:
         if not self._initialized:
             if self._use_firestore:
                 from .firebase_db import FirestoreDatabase
+
                 self._db = FirestoreDatabase()
                 self.db_path = self._db.db_path
             elif self._is_postgres:
@@ -33,6 +34,7 @@ class AsyncDonorsWrapper:
             else:
                 # Use regular SQLite database
                 from .donors_db import DonorsDatabase
+
                 self._db = DonorsDatabase()
                 self.db_path = self._db.db_path
             self._initialized = True
@@ -44,20 +46,28 @@ class AsyncDonorsWrapper:
         stars_amount: int,
         telegram_username: str | None = None,
         first_name: str | None = None,
-        invoice_payload: str | None = None
+        invoice_payload: str | None = None,
     ) -> bool:
         """Add donation (async)."""
         await self._ensure_initialized()
 
         if self._use_firestore or self._is_postgres:
             return await self._db.add_donation(
-                user_id, payment_id, stars_amount,
-                telegram_username, first_name, invoice_payload
+                user_id,
+                payment_id,
+                stars_amount,
+                telegram_username,
+                first_name,
+                invoice_payload,
             )
         else:
             return self._db.add_donation(
-                user_id, payment_id, stars_amount,
-                telegram_username, first_name, invoice_payload
+                user_id,
+                payment_id,
+                stars_amount,
+                telegram_username,
+                first_name,
+                invoice_payload,
             )
 
     async def is_premium_user(self, user_id: int) -> bool:
@@ -122,7 +132,9 @@ class AsyncDonorsWrapper:
                 return await self._db.has_language_set(user_id)  # type: ignore[attr-defined]
             except Exception as e:
                 # If we cannot check explicitly, default to False so the menu is shown
-                logger.warning(f"Postgres has_language_set check failed for user {user_id}: {e}. Defaulting to False.")
+                logger.warning(
+                    f"Postgres has_language_set check failed for user {user_id}: {e}. Defaulting to False."
+                )
                 return False
         else:
             return self._db.has_language_set(user_id)  # type: ignore[attr-defined]
@@ -140,7 +152,7 @@ class AsyncDonorsWrapper:
 
     async def get_user_reasoning(self, user_id: int) -> str:
         """Get user's preferred reasoning level (async).
-        
+
         Auto-upgrades donors from 'none' to 'low' as a bonus reward.
         """
         await self._ensure_initialized()

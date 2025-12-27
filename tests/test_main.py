@@ -47,11 +47,13 @@ def test_start_command(mock_update, mock_context):
     async def _test():
         # Call start command
         # We need to mock get_async_donors_db to avoid real DB calls
-        with patch("src.main.get_async_donors_db") as mock_get_db, \
-             patch("src.main.fb_ensure_user", new_callable=AsyncMock):
+        with (
+            patch("src.main.get_async_donors_db") as mock_get_db,
+            patch("src.main.fb_ensure_user", new_callable=AsyncMock),
+        ):
 
             mock_db = MagicMock()
-            mock_db.has_language_set = AsyncMock(return_value=False) # New user
+            mock_db.has_language_set = AsyncMock(return_value=False)  # New user
             mock_get_db.return_value = mock_db
 
             await start_command(mock_update, mock_context)
@@ -101,11 +103,15 @@ def test_info_command(mock_update, mock_context):
 
             # Collect text messages
             calls_text = mock_context.bot.send_message.call_args_list
-            texts = [call.kwargs.get('text', '') or (call.args[1] if len(call.args) > 1 else '') for call in calls_text]
+            texts = [
+                call.kwargs.get("text", "")
+                or (call.args[1] if len(call.args) > 1 else "")
+                for call in calls_text
+            ]
 
             # Collect photo captions
             calls_photo = mock_context.bot.send_photo.call_args_list
-            captions = [call.kwargs.get('caption', '') for call in calls_photo]
+            captions = [call.kwargs.get("caption", "") for call in calls_photo]
 
             combined_text = " ".join(texts + captions)
 

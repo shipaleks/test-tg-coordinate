@@ -31,19 +31,25 @@ async def migrate_from_sqlite(sqlite_path: str, postgres_db: PostgresDatabase):
 
             for donor in donors:
                 async with postgres_db.pool.acquire() as conn:
-                    await conn.execute("""
-                        INSERT INTO donors 
-                        (user_id, telegram_username, first_name, total_stars, 
+                    await conn.execute(
+                        """
+                        INSERT INTO donors
+                        (user_id, telegram_username, first_name, total_stars,
                          first_donation_date, last_donation_date, premium_expires)
                         VALUES ($1, $2, $3, $4, $5, $6, $7)
                         ON CONFLICT (user_id) DO UPDATE SET
                             total_stars = EXCLUDED.total_stars,
                             last_donation_date = EXCLUDED.last_donation_date,
                             premium_expires = EXCLUDED.premium_expires
-                    """, donor['user_id'], donor['telegram_username'],
-                        donor['first_name'], donor['total_stars'],
-                        donor['first_donation_date'], donor['last_donation_date'],
-                        donor['premium_expires'])
+                    """,
+                        donor["user_id"],
+                        donor["telegram_username"],
+                        donor["first_name"],
+                        donor["total_stars"],
+                        donor["first_donation_date"],
+                        donor["last_donation_date"],
+                        donor["premium_expires"],
+                    )
 
             # Migrate donations
             donations = sqlite_conn.execute("SELECT * FROM donations").fetchall()
@@ -52,29 +58,42 @@ async def migrate_from_sqlite(sqlite_path: str, postgres_db: PostgresDatabase):
             for donation in donations:
                 async with postgres_db.pool.acquire() as conn:
                     try:
-                        await conn.execute("""
-                            INSERT INTO donations 
+                        await conn.execute(
+                            """
+                            INSERT INTO donations
                             (user_id, payment_id, stars_amount, payment_date, invoice_payload)
                             VALUES ($1, $2, $3, $4, $5)
                             ON CONFLICT (payment_id) DO NOTHING
-                        """, donation['user_id'], donation['payment_id'],
-                            donation['stars_amount'], donation['payment_date'],
-                            donation['invoice_payload'])
+                        """,
+                            donation["user_id"],
+                            donation["payment_id"],
+                            donation["stars_amount"],
+                            donation["payment_date"],
+                            donation["invoice_payload"],
+                        )
                     except Exception as e:
-                        logger.warning(f"Skipping duplicate donation {donation['payment_id']}: {e}")
+                        logger.warning(
+                            f"Skipping duplicate donation {donation['payment_id']}: {e}"
+                        )
 
             # Migrate user preferences
             try:
-                preferences = sqlite_conn.execute("SELECT * FROM user_preferences").fetchall()
+                preferences = sqlite_conn.execute(
+                    "SELECT * FROM user_preferences"
+                ).fetchall()
                 logger.info(f"Found {len(preferences)} user preferences to migrate")
 
                 for pref in preferences:
                     async with postgres_db.pool.acquire() as conn:
-                        await conn.execute("""
+                        await conn.execute(
+                            """
                             INSERT INTO user_preferences (user_id, language)
                             VALUES ($1, $2)
                             ON CONFLICT (user_id) DO UPDATE SET language = EXCLUDED.language
-                        """, pref['user_id'], pref['language'])
+                        """,
+                            pref["user_id"],
+                            pref["language"],
+                        )
             except sqlite3.OperationalError:
                 logger.info("No user_preferences table found in SQLite")
 
@@ -93,7 +112,7 @@ async def check_and_migrate():
         "/tmp/railway_data/donors.db",
         "/app/railway_data/donors.db",
         "/data/donors.db",
-        "/data/appdata/donors.db"
+        "/data/appdata/donors.db",
     ]
 
     # Initialize PostgreSQL
@@ -106,7 +125,9 @@ async def check_and_migrate():
             donor_count = await conn.fetchval("SELECT COUNT(*) FROM donors")
 
             if donor_count > 0:
-                logger.info(f"PostgreSQL already has {donor_count} donors, skipping migration")
+                logger.info(
+                    f"PostgreSQL already has {donor_count} donors, skipping migration"
+                )
                 return
 
         # Try to find and migrate from SQLite

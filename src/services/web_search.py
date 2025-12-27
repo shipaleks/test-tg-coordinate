@@ -1,10 +1,12 @@
-"""Web search service using Brave Search API."""
+"""Web search service using Brave Search API with Yandex fallback."""
 
 import logging
 import os
 from typing import Any
 
 import httpx
+
+from .yandex_web_search import YandexWebSearch
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,15 @@ class WebSearchService:
         self.api_key = api_key or os.getenv("BRAVE_API_KEY")
         if not self.api_key:
             logger.warning("BRAVE_API_KEY not set - web search will be unavailable")
+
+        # Initialize Yandex as fallback (will auto-disable if not configured)
+        self._yandex_fallback: YandexWebSearch | None = None
+        try:
+            self._yandex_fallback = YandexWebSearch()
+            if self._yandex_fallback.enabled:
+                logger.info("Yandex Web Search initialized as fallback")
+        except Exception as e:
+            logger.debug(f"Yandex fallback not available: {e}")
 
     async def search(
         self,
@@ -85,19 +96,43 @@ class WebSearchService:
             web_results = data.get("web", {}).get("results", [])
 
             for item in web_results[:count]:
-                results.append({
-                    "title": item.get("title", ""),
-                    "url": item.get("url", ""),
-                    "description": item.get("description", ""),
-                    "age": item.get("age", ""),
-                    "language": item.get("language", ""),
-                })
+                results.append(
+                    {
+                        "title": item.get("title", ""),
+                        "url": item.get("url", ""),
+                        "description": item.get("description", ""),
+                        "age": item.get("age", ""),
+                        "language": item.get("language", ""),
+                    }
+                )
 
             logger.info(f"Web search for '{query}' returned {len(results)} results")
             return results
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"Web search HTTP error: {e.response.status_code} - {e}")
+            status_code = e.response.status_code
+            logger.error(f"Web search HTTP error: {status_code} - {e}")
+
+            # Try Yandex fallback on rate limit (429)
+            if (
+                status_code == 429
+                and self._yandex_fallback
+                and self._yandex_fallback.enabled
+            ):
+                logger.warning(
+                    f"Brave Search rate limited (429), trying Yandex fallback for '{query}'"
+                )
+                try:
+                    async with self._yandex_fallback as yandex:
+                        yandex_results = await yandex.search(query, count=count)
+                        if yandex_results:
+                            logger.info(
+                                f"Yandex fallback successful: {len(yandex_results)} results"
+                            )
+                            return yandex_results
+                except Exception as yandex_error:
+                    logger.error(f"Yandex fallback also failed: {yandex_error}")
+
             return []
         except httpx.TimeoutException:
             logger.error(f"Web search timeout for query: {query}")

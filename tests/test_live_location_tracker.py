@@ -278,9 +278,7 @@ def test_session_expiry():
         mock_bot = MagicMock(spec=Bot)
         mock_bot.send_message = AsyncMock()
 
-        with patch(
-            "src.services.live_location_tracker.get_openai_client"
-        ):
+        with patch("src.services.live_location_tracker.get_openai_client"):
             with patch("asyncio.sleep") as mock_sleep:
                 # Mock to return immediately on first sleep call
                 mock_sleep.return_value = asyncio.Future()

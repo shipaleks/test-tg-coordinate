@@ -40,7 +40,7 @@ def extract_sources_from_answer(answer_content: str) -> list[tuple[str, str]]:
                 url_match = re.search(r"https?://\S+", item)
                 if url_match:
                     url = url_match.group(0)
-                    domain = re.sub(r"^https?://(www\.)?", "", url).split('/')[0]
+                    domain = re.sub(r"^https?://(www\.)?", "", url).split("/")[0]
                     pairs.append((domain, url))
         return pairs
     except Exception:
@@ -64,19 +64,13 @@ def strip_sources_section(text: str) -> str:
 def sanitize_url(url: str) -> str:
     """Percent-encode characters that break Telegram Markdown links."""
     try:
-        return (
-            url.replace(" ", "%20").replace("(", "%28").replace(")", "%29")
-        )
+        return url.replace(" ", "%20").replace("(", "%28").replace(")", "%29")
     except Exception:
         return url
 
 
 def escape_html(text: str) -> str:
-    return (
-        text.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-    )
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def label_to_html(label: str) -> str:
@@ -89,7 +83,9 @@ def extract_bare_links(text: str) -> list[str]:
     try:
         urls = []
         # Match domains optionally with a simple path, avoid already http(s) links
-        for m in re.finditer(r"(?<!https?://)([a-z0-9.-]+\.[a-z]{2,})(/[\w\-/%]+)?", text, re.IGNORECASE):
+        for m in re.finditer(
+            r"(?<!https?://)([a-z0-9.-]+\.[a-z]{2,})(/[\w\-/%]+)?", text, re.IGNORECASE
+        ):
             domain = m.group(1)
             path = m.group(2) or ""
             url = f"https://{domain}{path}"
@@ -110,7 +106,12 @@ def remove_bare_links_from_text(text: str) -> str:
     """Remove bare domains in parentheses or as standalone tokens from text."""
     try:
         # Remove (example.com) or (example.com/path)
-        text = re.sub(r"\((?<!https?://)([a-z0-9.-]+\.[a-z]{2,}(/[\w\-/%]+)?)\)", "", text, flags=re.IGNORECASE)
+        text = re.sub(
+            r"\((?<!https?://)([a-z0-9.-]+\.[a-z]{2,}(/[\w\-/%]+)?)\)",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
         return text
     except Exception:
         return text
@@ -118,7 +119,7 @@ def remove_bare_links_from_text(text: str) -> str:
 
 def normalize_place_name(place: str) -> str:
     """Normalize a place name for duplicate detection.
-    
+
     This function removes common prefixes, suffixes, articles, and punctuation
     to allow comparison of place names that may be written differently:
     - "Église Saint-Eustache" → "saint eustache"
@@ -162,26 +163,66 @@ def normalize_place_name(place: str) -> str:
     # Remove common prefixes/articles in multiple languages
     prefixes_to_remove = [
         # French
-        r"^l'", r"^la\s+", r"^le\s+", r"^les\s+", r"^du\s+", r"^de\s+la\s+", r"^de\s+l'",
-        r"^église\s+", r"^cathédrale\s+", r"^basilique\s+", r"^musée\s+", r"^palais\s+",
-        r"^place\s+", r"^rue\s+", r"^avenue\s+", r"^boulevard\s+",
+        r"^l'",
+        r"^la\s+",
+        r"^le\s+",
+        r"^les\s+",
+        r"^du\s+",
+        r"^de\s+la\s+",
+        r"^de\s+l'",
+        r"^église\s+",
+        r"^cathédrale\s+",
+        r"^basilique\s+",
+        r"^musée\s+",
+        r"^palais\s+",
+        r"^place\s+",
+        r"^rue\s+",
+        r"^avenue\s+",
+        r"^boulevard\s+",
         # English
-        r"^the\s+", r"^a\s+", r"^an\s+",
-        r"^church\s+of\s+", r"^cathedral\s+of\s+", r"^basilica\s+of\s+",
-        r"^museum\s+of\s+", r"^palace\s+of\s+",
-        r"^saint\s+", r"^st\.?\s+",
+        r"^the\s+",
+        r"^a\s+",
+        r"^an\s+",
+        r"^church\s+of\s+",
+        r"^cathedral\s+of\s+",
+        r"^basilica\s+of\s+",
+        r"^museum\s+of\s+",
+        r"^palace\s+of\s+",
+        r"^saint\s+",
+        r"^st\.?\s+",
         # Russian
-        r"^церковь\s+", r"^собор\s+", r"^храм\s+", r"^музей\s+", r"^дворец\s+",
-        r"^площадь\s+", r"^улица\s+", r"^проспект\s+", r"^бульвар\s+",
+        r"^церковь\s+",
+        r"^собор\s+",
+        r"^храм\s+",
+        r"^музей\s+",
+        r"^дворец\s+",
+        r"^площадь\s+",
+        r"^улица\s+",
+        r"^проспект\s+",
+        r"^бульвар\s+",
         # German
-        r"^die\s+", r"^der\s+", r"^das\s+",
-        r"^kirche\s+", r"^dom\s+", r"^schloss\s+",
+        r"^die\s+",
+        r"^der\s+",
+        r"^das\s+",
+        r"^kirche\s+",
+        r"^dom\s+",
+        r"^schloss\s+",
         # Spanish
-        r"^el\s+", r"^la\s+", r"^los\s+", r"^las\s+",
-        r"^iglesia\s+de\s+", r"^catedral\s+de\s+",
+        r"^el\s+",
+        r"^la\s+",
+        r"^los\s+",
+        r"^las\s+",
+        r"^iglesia\s+de\s+",
+        r"^catedral\s+de\s+",
         # Italian
-        r"^il\s+", r"^lo\s+", r"^la\s+", r"^i\s+", r"^gli\s+", r"^le\s+",
-        r"^chiesa\s+di\s+", r"^basilica\s+di\s+",
+        r"^il\s+",
+        r"^lo\s+",
+        r"^la\s+",
+        r"^i\s+",
+        r"^gli\s+",
+        r"^le\s+",
+        r"^chiesa\s+di\s+",
+        r"^basilica\s+di\s+",
     ]
 
     for prefix in prefixes_to_remove:
@@ -208,7 +249,9 @@ def normalize_place_name(place: str) -> str:
     return normalized
 
 
-def is_duplicate_place(new_place: str, previous_places: list[str], threshold: float = 0.5) -> bool:
+def is_duplicate_place(
+    new_place: str, previous_places: list[str], threshold: float = 0.5
+) -> bool:
     """Check if a place name is a duplicate of any previous places.
 
     Uses normalized comparison and substring matching.
@@ -262,7 +305,9 @@ def is_duplicate_place(new_place: str, previous_places: list[str], threshold: fl
         # Also check for very short matches (3+ chars) to catch common place fragments
         if len(new_normalized) >= 3 and len(prev_normalized) >= 3:
             if new_normalized in prev_normalized or prev_normalized in new_normalized:
-                logger.debug(f"Duplicate detected (substring): '{new_place}' ⊆ '{prev}'")
+                logger.debug(
+                    f"Duplicate detected (substring): '{new_place}' ⊆ '{prev}'"
+                )
                 return True
 
     return False
@@ -270,12 +315,12 @@ def is_duplicate_place(new_place: str, previous_places: list[str], threshold: fl
 
 def extract_place_names_from_history(fact_history: list[str]) -> list[str]:
     """Extract just the place names from fact history entries.
-    
+
     Fact history format: "Place Name: fact text..."
-    
+
     Args:
         fact_history: List of strings in format "Place: Fact"
-    
+
     Returns:
         List of place names only
     """
@@ -286,5 +331,3 @@ def extract_place_names_from_history(fact_history: list[str]) -> list[str]:
             if place:
                 places.append(place)
     return places
-
-

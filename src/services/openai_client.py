@@ -66,7 +66,9 @@ class StaticLocationHistory:
 
         # Keep only last 10 facts per location to prevent memory bloat
         if len(self._cache[search_keywords]["facts"]) > 10:
-            self._cache[search_keywords]["facts"] = self._cache[search_keywords]["facts"][-10:]
+            self._cache[search_keywords]["facts"] = self._cache[search_keywords][
+                "facts"
+            ][-10:]
 
         logger.debug(f"Added fact to static location history: {place}")
 
@@ -76,7 +78,8 @@ class StaticLocationHistory:
 
         # Remove expired entries
         expired_keys = [
-            key for key, entry in self._cache.items()
+            key
+            for key, entry in self._cache.items()
             if (current_time - entry["timestamp"]) >= self._ttl_seconds
         ]
         for key in expired_keys:
@@ -85,11 +88,10 @@ class StaticLocationHistory:
         # Limit cache size
         if len(self._cache) > self._max_entries:
             # Remove oldest entries
-            sorted_items = sorted(
-                self._cache.items(),
-                key=lambda x: x[1]["timestamp"]
-            )
-            keys_to_remove = [item[0] for item in sorted_items[:len(self._cache) - self._max_entries]]
+            sorted_items = sorted(self._cache.items(), key=lambda x: x[1]["timestamp"])
+            keys_to_remove = [
+                item[0] for item in sorted_items[: len(self._cache) - self._max_entries]
+            ]
             for key in keys_to_remove:
                 del self._cache[key]
 
@@ -100,7 +102,9 @@ class StaticLocationHistory:
         return {
             "locations": len(self._cache),
             "total_facts": total_facts,
-            "oldest_entry": min((entry["timestamp"] for entry in self._cache.values()), default=0)
+            "oldest_entry": min(
+                (entry["timestamp"] for entry in self._cache.values()), default=0
+            ),
         }
 
 
@@ -116,9 +120,11 @@ class OpenAIClient:
         self.client = AsyncOpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.static_history = StaticLocationHistory()
         # Lightweight caches for Wikimedia pipeline
-        self._qid_cache: dict[str, tuple[str, float]] = {}           # key -> (qid, ts)
-        self._p18_cache: dict[str, tuple[str, float]] = {}           # qid -> (filename, ts)
-        self._fileinfo_cache: dict[str, tuple[dict, float]] = {}     # filename -> (info, ts)
+        self._qid_cache: dict[str, tuple[str, float]] = {}  # key -> (qid, ts)
+        self._p18_cache: dict[str, tuple[str, float]] = {}  # qid -> (filename, ts)
+        self._fileinfo_cache: dict[str, tuple[dict, float]] = (
+            {}
+        )  # filename -> (info, ts)
         self._image_cache_ttl_seconds = 24 * 3600
         # Семафор для ограничения одновременных запросов к OpenAI API
         self._api_semaphore = asyncio.Semaphore(3)  # Максимум 3 параллельных запроса
@@ -325,26 +331,31 @@ Sources/Источники:
         try:
             # Note: force_reasoning_none parameter is available in this scope
             # Check if user has premium access for o3 model and get language preference
-            is_premium_user = False
-            user_language = "ru"  # Default to Russian as most users are Russian-speaking
+            user_language = (
+                "ru"  # Default to Russian as most users are Russian-speaking
+            )
             if user_id:
                 try:
                     # Check if we're in async context (telegram handlers)
                     import asyncio
+
                     try:
-                        loop = asyncio.get_running_loop()
+                        asyncio.get_running_loop()
                         # We're in async context, use async wrapper
                         from .async_donors_wrapper import get_async_donors_db
+
                         donors_db = await get_async_donors_db()
-                        is_premium_user = await donors_db.is_premium_user(user_id)
+                        await donors_db.is_premium_user(user_id)
                         user_language = await donors_db.get_user_language(user_id)
                     except RuntimeError:
                         # Not in async context, use sync wrapper
                         donors_db = get_donors_db()
-                        is_premium_user = donors_db.is_premium_user(user_id)
+                        donors_db.is_premium_user(user_id)
                         user_language = donors_db.get_user_language(user_id)
                 except Exception as e:
-                    logger.warning(f"Failed to check user preferences for user {user_id}: {e}")
+                    logger.warning(
+                        f"Failed to check user preferences for user {user_id}: {e}"
+                    )
 
             # Special instructions for Russian language quality
             language_instructions = ""
@@ -381,7 +392,7 @@ SPECIAL REQUIREMENTS FOR RUSSIAN (Atlas Obscura style):
                 language_instructions += """
  - Каждое предложение добавляет новую конкретную информацию; избегайте воды
  - Точность важнее драматизма; явно отличайте документированные факты от легенд
- 
+
 ТОПОНИМЫ И ИМЕНА НА РУССКОМ:
 - Всегда используйте русские названия улиц, площадей, районов и достопримечательностей, если они общеприняты в русской Википедии/СМИ.
 - Если общепринятого русского названия нет, используйте латиницу, но не смешивайте языки в одном названии (например, «rue de la Glacière» без добавлений на русском).
@@ -421,7 +432,7 @@ Step 2: DEEP RESEARCH FOR THE UNEXPECTED (WITH FACT VERIFICATION)
 Search for facts in this priority order:
    A) The specific building/location at these coordinates:
       - Former unexpected uses (morgue→nightclub, palace→parking lot)
-      - Hidden architectural features (secret rooms, disguised elements)  
+      - Hidden architectural features (secret rooms, disguised elements)
       - Specific incidents that happened here (crimes, meetings, discoveries)
       - Famous residents/visitors and what they did here specifically
 
@@ -662,7 +673,9 @@ Write in {user_language} - crisp, factual, surprising. Verify online before fina
             previous_facts_text = ""
             previous_facts_instruction = ""
             if previous_facts:
-                previous_facts_text = "\n".join([f"- {fact}" for fact in previous_facts[-5:]])
+                previous_facts_text = "\n".join(
+                    [f"- {fact}" for fact in previous_facts[-5:]]
+                )
                 previous_facts_instruction = "CRITICAL: Find a DIFFERENT place near these coordinates. Do NOT repeat any of the already mentioned locations or facts above."
 
             if is_live_location:
@@ -755,12 +768,20 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # No fallback to gpt-4.1 - same quality for static and live location
             try:
                 logger.info("Attempting GPT-5.1 Responses with web_search... (forced)")
-                content = await self._get_with_gpt5_responses(system_prompt, user_prompt, is_live_location, user_id=user_id, force_reasoning_none=force_reasoning_none)
+                content = await self._get_with_gpt5_responses(
+                    system_prompt,
+                    user_prompt,
+                    is_live_location,
+                    user_id=user_id,
+                    force_reasoning_none=force_reasoning_none,
+                )
                 if content:
                     logger.info("GPT-5.1 Responses: success (web_search enabled)")
                     return content.strip()
                 else:
-                    logger.error("GPT-5.1 Responses returned None, cannot generate fact")
+                    logger.error(
+                        "GPT-5.1 Responses returned None, cannot generate fact"
+                    )
                     raise ValueError("Empty response from GPT-5.1 Responses")
             except Exception as e:
                 logger.error(f"GPT-5.1 Responses failed: {e}")
@@ -768,13 +789,18 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             # This code should never be reached (GPT-5.1 Responses should work or raise)
             # Kept as emergency fallback only
-            logger.error("Reached fallback code unexpectedly - GPT-5.1 should have worked or raised")
+            logger.error(
+                "Reached fallback code unexpectedly - GPT-5.1 should have worked or raised"
+            )
 
             logger.info(f"Generated fact for location {lat},{lon}")
 
             # Post-process Russian text for better quality
             final_content = content.strip()
-            if user_language == "ru" and ("Interesting fact:" in final_content or "Интересный факт:" in final_content):
+            if user_language == "ru" and (
+                "Interesting fact:" in final_content
+                or "Интересный факт:" in final_content
+            ):
                 logger.info("Applying Russian language polish for better quality")
                 final_content = self._postprocess_russian_fact(final_content)
 
@@ -784,12 +810,19 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             logger.error(f"Failed to generate fact for {lat},{lon}: {e}")
             raise
 
-    async def _get_with_gpt5_responses(self, system_prompt: str, user_prompt: str, is_live: bool, user_id: int | None = None, force_reasoning_none: bool = False) -> str | None:
+    async def _get_with_gpt5_responses(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        is_live: bool,
+        user_id: int | None = None,
+        force_reasoning_none: bool = False,
+    ) -> str | None:
         """Attempt to use GPT-5.1 Responses API with built-in web_search tool.
 
         Args:
             force_reasoning_none: If True, force reasoning=none regardless of user settings
-            
+
         Returns text content or None on failure.
         """
         try:
@@ -807,8 +840,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 + "- If you cannot produce a fact, return ONLY '[[NO_POI_FOUND]]' - no explanations.\n"
             )
             messages = [
-                {"role": "system", "content": [{"type": "input_text", "text": gpt5_system_prompt}]},
-                {"role": "user", "content": [{"type": "input_text", "text": user_prompt}]},
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": gpt5_system_prompt}],
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": user_prompt}],
+                },
             ]
             tools = [{"type": "web_search"}]
 
@@ -822,16 +861,19 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 try:
                     if user_id:
                         from .async_donors_wrapper import get_async_donors_db
+
                         db = await get_async_donors_db()
-                        reasoning_level = (await db.get_user_reasoning(user_id)) or "none"
+                        reasoning_level = (
+                            await db.get_user_reasoning(user_id)
+                        ) or "none"
                 except Exception:
                     reasoning_level = "none"
 
             # Map our levels to API levels
             # GPT-5.1 supports: none, low, medium, high
             level_map = {
-                "none": "none",       # No reasoning (fast, low-latency)
-                "minimal": "low",     # Legacy: minimal → low for compatibility
+                "none": "none",  # No reasoning (fast, low-latency)
+                "minimal": "low",  # Legacy: minimal → low for compatibility
                 "low": "low",
                 "medium": "medium",
                 "high": "high",
@@ -841,7 +883,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # For "none" reasoning, don't pass reasoning parameter at all (per API docs)
             if api_effort == "none":
                 reasoning = None
-                logger.info("GPT-5.1 Responses: using reasoning=none (no reasoning parameter)")
+                logger.info(
+                    "GPT-5.1 Responses: using reasoning=none (no reasoning parameter)"
+                )
             else:
                 reasoning = {"effort": api_effort}
 
@@ -850,6 +894,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             try:
                 if user_id:
                     from .async_donors_wrapper import get_async_donors_db
+
                     db = await get_async_donors_db()
                     user_model = (await db.get_user_model(user_id)) or "gpt-5.1"
             except Exception:
@@ -858,7 +903,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Hosted web_search should use tool_choice="auto" per API guidance
             forced_tool_choice = "auto"
 
-            logger.info(f"GPT-5.1 Responses: sending request (model={user_model}, reasoning={api_effort if reasoning else 'none'}, tool_choice=auto)")
+            logger.info(
+                f"GPT-5.1 Responses: sending request (model={user_model}, reasoning={api_effort if reasoning else 'none'}, tool_choice=auto)"
+            )
 
             # Build request kwargs
             request_kwargs = {
@@ -876,17 +923,21 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 response = await self.client.responses.create(**request_kwargs)
 
             # Debug: log response structure to understand format
-            logger.info(f"GPT-5.1 Responses: received response type={type(response).__name__}")
+            logger.info(
+                f"GPT-5.1 Responses: received response type={type(response).__name__}"
+            )
 
             # Log all available attributes (non-private)
-            attrs = [attr for attr in dir(response) if not attr.startswith('_')]
+            attrs = [attr for attr in dir(response) if not attr.startswith("_")]
             logger.info(f"GPT-5.1 Responses: available attributes={attrs}")
 
             # Try to log response as dict if possible
             try:
                 if hasattr(response, "model_dump"):
                     dump = response.model_dump()
-                    logger.info(f"GPT-5.1 Responses: model_dump keys={list(dump.keys())}")
+                    logger.info(
+                        f"GPT-5.1 Responses: model_dump keys={list(dump.keys())}"
+                    )
                 elif hasattr(response, "dict"):
                     dump = response.dict()
                     logger.info(f"GPT-5.1 Responses: dict keys={list(dump.keys())}")
@@ -900,53 +951,78 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             if hasattr(response, "output"):
                 try:
                     outputs = response.output
-                    logger.info(f"GPT-5.1 Responses: output type={type(outputs).__name__}")
+                    logger.info(
+                        f"GPT-5.1 Responses: output type={type(outputs).__name__}"
+                    )
 
                     # If output is a list (Responses API with tool calls returns list of items)
                     if isinstance(outputs, list) and len(outputs) > 0:
-                        logger.info(f"GPT-5.1 Responses: output is list with {len(outputs)} items")
+                        logger.info(
+                            f"GPT-5.1 Responses: output is list with {len(outputs)} items"
+                        )
 
                         # Iterate through all items to find the one with type='text' or 'output_text'
                         for idx, item in enumerate(outputs):
                             # Log first 3 and last 3 items to debug
                             if idx < 3 or idx >= len(outputs) - 3:
                                 item_type = type(item).__name__
-                                logger.info(f"GPT-5.1 Responses: output[{idx}] type={item_type}")
+                                logger.info(
+                                    f"GPT-5.1 Responses: output[{idx}] type={item_type}"
+                                )
 
                                 # Try to log item structure
                                 if hasattr(item, "type"):
-                                    logger.info(f"GPT-5.1 Responses: output[{idx}].type={item.type}")
+                                    logger.info(
+                                        f"GPT-5.1 Responses: output[{idx}].type={item.type}"
+                                    )
                                 elif isinstance(item, dict):
-                                    logger.info(f"GPT-5.1 Responses: output[{idx}] dict keys={list(item.keys())}")
+                                    logger.info(
+                                        f"GPT-5.1 Responses: output[{idx}] dict keys={list(item.keys())}"
+                                    )
 
                             # Check if item has type='text' or 'output_text' (pydantic object)
                             if hasattr(item, "type"):
                                 item_type_val = item.type
                                 if item_type_val in ["text", "output_text", "message"]:
                                     # Try to get text from this item
-                                    if hasattr(item, "text") and isinstance(item.text, str):
+                                    if hasattr(item, "text") and isinstance(
+                                        item.text, str
+                                    ):
                                         content = item.text
-                                        logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}].text (type={item_type_val}, length={len(content)})")
+                                        logger.info(
+                                            f"GPT-5.1 Responses: FOUND! output[{idx}].text (type={item_type_val}, length={len(content)})"
+                                        )
                                         break
                                     elif hasattr(item, "content"):
                                         # content might be list of content parts
                                         content_val = item.content
                                         if isinstance(content_val, str):
                                             content = content_val
-                                            logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}].content (type={item_type_val}, length={len(content)})")
+                                            logger.info(
+                                                f"GPT-5.1 Responses: FOUND! output[{idx}].content (type={item_type_val}, length={len(content)})"
+                                            )
                                             break
                                         elif isinstance(content_val, list):
                                             # Look for text in content list
                                             for part in content_val:
-                                                if isinstance(part, dict) and part.get("type") == "text":
+                                                if (
+                                                    isinstance(part, dict)
+                                                    and part.get("type") == "text"
+                                                ):
                                                     text = part.get("text")
                                                     if text and isinstance(text, str):
                                                         content = text
-                                                        logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}].content[].text (length={len(content)})")
+                                                        logger.info(
+                                                            f"GPT-5.1 Responses: FOUND! output[{idx}].content[].text (length={len(content)})"
+                                                        )
                                                         break
-                                                elif hasattr(part, "text") and isinstance(part.text, str):
+                                                elif hasattr(
+                                                    part, "text"
+                                                ) and isinstance(part.text, str):
                                                     content = part.text
-                                                    logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}].content[].text (length={len(content)})")
+                                                    logger.info(
+                                                        f"GPT-5.1 Responses: FOUND! output[{idx}].content[].text (length={len(content)})"
+                                                    )
                                                     break
                                         if content:
                                             break
@@ -958,7 +1034,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                                     text = item.get("text")
                                     if text and isinstance(text, str):
                                         content = text
-                                        logger.info(f"GPT-5.1 Responses: FOUND! output[{idx}]['text'] (dict, type={item_type_val}, length={len(content)})")
+                                        logger.info(
+                                            f"GPT-5.1 Responses: FOUND! output[{idx}]['text'] (dict, type={item_type_val}, length={len(content)})"
+                                        )
                                         break
 
                 except Exception as e:
@@ -974,31 +1052,41 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 # Only use if it's actually a string
                 if isinstance(text_obj, str):
                     content = text_obj
-                    logger.info(f"GPT-5.1 Responses: extracted text string (length={len(content)})")
+                    logger.info(
+                        f"GPT-5.1 Responses: extracted text string (length={len(content)})"
+                    )
 
             # Method 3: output_text convenience accessor
             if not content and hasattr(response, "output_text"):
                 text_val = response.output_text
                 if isinstance(text_val, str):
                     content = text_val
-                    logger.info(f"GPT-5.1 Responses: extracted via .output_text (length={len(content)})")
+                    logger.info(
+                        f"GPT-5.1 Responses: extracted via .output_text (length={len(content)})"
+                    )
 
             # Method 5: Try to get content from choices (like chat completions)
             if not content and hasattr(response, "choices") and response.choices:
                 try:
                     content = response.choices[0].message.content
-                    logger.info("GPT-5.1 Responses: extracted from choices (chat format)")
+                    logger.info(
+                        "GPT-5.1 Responses: extracted from choices (chat format)"
+                    )
                 except Exception:
                     pass
 
             if not content:
-                logger.warning(f"GPT-5.1 Responses: could not extract content from response, available attributes: {[attr for attr in dir(response) if not attr.startswith('_')]}")
+                logger.warning(
+                    f"GPT-5.1 Responses: could not extract content from response, available attributes: {[attr for attr in dir(response) if not attr.startswith('_')]}"
+                )
                 content = None
 
             # If the model explicitly signals no POI found → escalate to gpt-5.1 (medium)
             if content and "[[NO_POI_FOUND]]" in content:
                 try:
-                    logger.info("NO_POI_FOUND token detected → retrying with gpt-5.1 (low)")
+                    logger.info(
+                        "NO_POI_FOUND token detected → retrying with gpt-5.1 (low)"
+                    )
                     async with self._api_semaphore:
                         retry = await self.client.responses.create(
                             model="gpt-5.1",
@@ -1013,10 +1101,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     outputs = getattr(retry, "output", None)
                     if isinstance(outputs, list):
                         for item in outputs:
-                            parts = item.get("content") if isinstance(item, dict) else None
+                            parts = (
+                                item.get("content") if isinstance(item, dict) else None
+                            )
                             if isinstance(parts, list):
                                 for part in parts:
-                                    if part.get("type") == "output_text" and part.get("text"):
+                                    if part.get("type") == "output_text" and part.get(
+                                        "text"
+                                    ):
                                         return part["text"]
                 except Exception as e2:
                     logger.warning(f"Retry after NO_POI_FOUND failed: {e2}")
@@ -1046,8 +1138,12 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         parts = item.get("content") if isinstance(item, dict) else None
                         if isinstance(parts, list):
                             for part in parts:
-                                if part.get("type") == "output_text" and part.get("text"):
-                                    logger.info("GPT-5.1 Responses: retry output_text extracted")
+                                if part.get("type") == "output_text" and part.get(
+                                    "text"
+                                ):
+                                    logger.info(
+                                        "GPT-5.1 Responses: retry output_text extracted"
+                                    )
                                     return part["text"]
             except Exception as e2:
                 logger.warning(f"GPT-5.1 Responses retry failed: {e2}")
@@ -1103,18 +1199,22 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         # Add viewbox if user coordinates are provided to prioritize nearby results
         if user_lat is not None and user_lon is not None:
             # Create a viewbox of ~2km around user location
-            base_params.update({
-                "viewbox": f"{user_lon-0.02},{user_lat-0.02},{user_lon+0.02},{user_lat+0.02}",
-                "bounded": "0"  # Don't restrict to viewbox, just prioritize
-            })
+            base_params.update(
+                {
+                    "viewbox": f"{user_lon-0.02},{user_lat-0.02},{user_lon+0.02},{user_lat+0.02}",
+                    "bounded": "0",  # Don't restrict to viewbox, just prioritize
+                }
+            )
 
         # Strategy 1: Try exact search first
-        search_strategies.append({
-            **base_params,
-            "q": place_name,
-            "extratags": 1,
-            "accept-language": "fr,en,ru",  # Multi-language support
-        })
+        search_strategies.append(
+            {
+                **base_params,
+                "q": place_name,
+                "extratags": 1,
+                "accept-language": "fr,en,ru",  # Multi-language support
+            }
+        )
 
         # Strategy 2: Try structured search if comma-separated
         if "," in place_name:
@@ -1135,8 +1235,10 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     structured_params["city"] = parts[2]
                 elif len(parts) == 2:  # Street, City or Place, City
                     # Check if first part looks like a street
-                    street_indicators = ['rue', 'avenue', 'boulevard', 'street', 'road']
-                    if any(indicator in parts[0].lower() for indicator in street_indicators):
+                    street_indicators = ["rue", "avenue", "boulevard", "street", "road"]
+                    if any(
+                        indicator in parts[0].lower() for indicator in street_indicators
+                    ):
                         structured_params["street"] = parts[0]
                         structured_params["city"] = parts[1]
                     else:
@@ -1146,19 +1248,25 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 search_strategies.append(structured_params)
 
         # Strategy 3: If it's a street address, try parsing it
-        street_match = re.search(r'(\d+)\s+(.+)', place_name)
+        street_match = re.search(r"(\d+)\s+(.+)", place_name)
         if street_match:
             number = street_match.group(1)
             rest = street_match.group(2)
             if "," in rest:
                 street_parts = rest.split(",")
-                search_strategies.append({
-                    "format": "json",
-                    "limit": 5,
-                    "addressdetails": 1,
-                    "street": f"{number} {street_parts[0].strip()}",
-                    "city": street_parts[-1].strip() if len(street_parts) > 1 else "Paris"
-                })
+                search_strategies.append(
+                    {
+                        "format": "json",
+                        "limit": 5,
+                        "addressdetails": 1,
+                        "street": f"{number} {street_parts[0].strip()}",
+                        "city": (
+                            street_parts[-1].strip()
+                            if len(street_parts) > 1
+                            else "Paris"
+                        ),
+                    }
+                )
 
         url = "https://nominatim.openstreetmap.org/search"
         headers = {"User-Agent": "BotVoyage/1.0 (Educational Project)"}
@@ -1167,7 +1275,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         async with aiohttp.ClientSession() as session:
             for i, params in enumerate(search_strategies):
                 try:
-                    logger.debug(f"Trying Nominatim strategy {i+1}/{len(search_strategies)} for: {place_name}")
+                    logger.debug(
+                        f"Trying Nominatim strategy {i+1}/{len(search_strategies)} for: {place_name}"
+                    )
                     logger.debug(f"Parameters: {params}")
 
                     async with session.get(
@@ -1182,26 +1292,39 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
                                 for result in data:
                                     score = 0
-                                    result_type = result.get('type', '')
-                                    result_class = result.get('class', '')
+                                    result_type = result.get("type", "")
+                                    result.get("class", "")
 
                                     # Prefer certain types
-                                    if result_type in ['building', 'house', 'amenity', 'historic']:
+                                    if result_type in [
+                                        "building",
+                                        "house",
+                                        "amenity",
+                                        "historic",
+                                    ]:
                                         score += 3
-                                    elif result_type in ['street', 'road']:
+                                    elif result_type in ["street", "road"]:
                                         score += 2
-                                    elif result_type in ['suburb', 'neighbourhood']:
+                                    elif result_type in ["suburb", "neighbourhood"]:
                                         score += 1
 
                                     # Check if result is in expected city
-                                    display_name = result.get('display_name', '').lower()
-                                    if 'paris' in place_name.lower() and 'paris' in display_name:
+                                    display_name = result.get(
+                                        "display_name", ""
+                                    ).lower()
+                                    if (
+                                        "paris" in place_name.lower()
+                                        and "paris" in display_name
+                                    ):
                                         score += 5
-                                    elif 'москва' in place_name.lower() and 'москва' in display_name:
+                                    elif (
+                                        "москва" in place_name.lower()
+                                        and "москва" in display_name
+                                    ):
                                         score += 5
 
                                     # Prefer results with better importance score
-                                    importance = result.get('importance', 0)
+                                    importance = result.get("importance", 0)
                                     score += importance
 
                                     if score > best_score:
@@ -1216,7 +1339,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                                         logger.info(
                                             f"Found Nominatim coordinates for '{place_name}': {lat}, {lon}"
                                         )
-                                        logger.debug(f"Best result: {best_result.get('display_name')}")
+                                        logger.debug(
+                                            f"Best result: {best_result.get('display_name')}"
+                                        )
                                         return lat, lon
 
                 except Exception as e:
@@ -1260,11 +1385,13 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         lon_str = str(lon)
 
         # Check for overly rounded coordinates (less than 2 decimal places)
-        lat_decimals = len(lat_str.split('.')[-1]) if '.' in lat_str else 0
-        lon_decimals = len(lon_str.split('.')[-1]) if '.' in lon_str else 0
+        lat_decimals = len(lat_str.split(".")[-1]) if "." in lat_str else 0
+        lon_decimals = len(lon_str.split(".")[-1]) if "." in lon_str else 0
 
         if lat_decimals < 2 or lon_decimals < 2:
-            logger.debug(f"Coordinates have too few decimal places: {lat} ({lat_decimals}), {lon} ({lon_decimals})")
+            logger.debug(
+                f"Coordinates have too few decimal places: {lat} ({lat_decimals}), {lon} ({lon_decimals})"
+            )
             return True
 
         # Check for suspicious round numbers (often means city center, not specific landmark)
@@ -1287,7 +1414,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
         return False
 
-    def _coordinates_are_more_precise(self, coords1: tuple[float, float], coords2: tuple[float, float]) -> bool:
+    def _coordinates_are_more_precise(
+        self, coords1: tuple[float, float], coords2: tuple[float, float]
+    ) -> bool:
         """Compare two coordinate pairs to determine which is more precise.
 
         Args:
@@ -1301,10 +1430,10 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         lat2, lon2 = coords2
 
         # Compare decimal places (more decimal places = more precise)
-        lat1_decimals = len(str(lat1).split('.')[-1]) if '.' in str(lat1) else 0
-        lon1_decimals = len(str(lon1).split('.')[-1]) if '.' in str(lon1) else 0
-        lat2_decimals = len(str(lat2).split('.')[-1]) if '.' in str(lat2) else 0
-        lon2_decimals = len(str(lon2).split('.')[-1]) if '.' in str(lon2) else 0
+        lat1_decimals = len(str(lat1).split(".")[-1]) if "." in str(lat1) else 0
+        lon1_decimals = len(str(lon1).split(".")[-1]) if "." in str(lon1) else 0
+        lat2_decimals = len(str(lat2).split(".")[-1]) if "." in str(lat2) else 0
+        lon2_decimals = len(str(lon2).split(".")[-1]) if "." in str(lon2) else 0
 
         coords1_precision = lat1_decimals + lon1_decimals
         coords2_precision = lat2_decimals + lon2_decimals
@@ -1328,7 +1457,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
         # Clean search keywords for better results
         # Remove quotes and extra spaces
-        clean_keywords = search_keywords.replace('"', '').replace("'", '').strip()
+        clean_keywords = search_keywords.replace('"', "").replace("'", "").strip()
 
         # Extract city name from keywords for validation
         city_name = None
@@ -1340,20 +1469,26 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             "New York": (40.7128, -74.0060, 25),
             "Санкт-Петербург": (59.9311, 30.3609, 20),
             "Saint Petersburg": (59.9311, 30.3609, 20),
-            "St Petersburg": (59.9311, 30.3609, 20)
+            "St Petersburg": (59.9311, 30.3609, 20),
         }
 
-        for city, (city_lat, city_lon, radius) in common_cities.items():
+        for city, (_city_lat, _city_lon, _radius) in common_cities.items():
             if city in clean_keywords:
                 city_name = city
                 break
 
         # Try original keywords first
-        nominatim_coords = await self.get_coordinates_from_nominatim(clean_keywords, user_lat, user_lon)
+        nominatim_coords = await self.get_coordinates_from_nominatim(
+            clean_keywords, user_lat, user_lon
+        )
         if nominatim_coords:
             # Validate coordinates are in the expected city
-            if city_name and not self._validate_city_coordinates(nominatim_coords[0], nominatim_coords[1], city_name):
-                logger.warning(f"Coordinates {nominatim_coords} are not in {city_name}, rejecting")
+            if city_name and not self._validate_city_coordinates(
+                nominatim_coords[0], nominatim_coords[1], city_name
+            ):
+                logger.warning(
+                    f"Coordinates {nominatim_coords} are not in {city_name}, rejecting"
+                )
             else:
                 logger.info(f"Found Nominatim coordinates: {nominatim_coords}")
                 return nominatim_coords
@@ -1369,15 +1504,25 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             parts = [p.strip() for p in search_keywords.split(",")]
             if len(parts) >= 2:
                 # Look for street indicators
-                street_indicators = ['rue', 'avenue', 'boulevard', 'street', 'road', 'place', 'square']
+                street_indicators = [
+                    "rue",
+                    "avenue",
+                    "boulevard",
+                    "street",
+                    "road",
+                    "place",
+                    "square",
+                ]
                 for i, part in enumerate(parts):
-                    if any(indicator in part.lower() for indicator in street_indicators):
+                    if any(
+                        indicator in part.lower() for indicator in street_indicators
+                    ):
                         # Found a street, try street + city
                         if i < len(parts) - 1:
                             street_with_city = f"{part}, {parts[-1]}"
                             fallback_patterns.append(street_with_city)
                         # Also try just the street name with number if present
-                        if re.search(r'\d+', part):
+                        if re.search(r"\d+", part):
                             fallback_patterns.append(part)
                         break
 
@@ -1385,14 +1530,33 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         # Example: "Couvent des Capucins" -> "Capucins" + city
         if city_name:
             # Remove common descriptors
-            descriptors = ['couvent', 'église', 'temple', 'monastery', 'convent', 'church',
-                          'prison', 'hôpital', 'hospital', 'école', 'school', 'musée', 'museum']
-            first_part = search_keywords.split(",")[0] if "," in search_keywords else search_keywords
+            descriptors = [
+                "couvent",
+                "église",
+                "temple",
+                "monastery",
+                "convent",
+                "church",
+                "prison",
+                "hôpital",
+                "hospital",
+                "école",
+                "school",
+                "musée",
+                "museum",
+            ]
+            first_part = (
+                search_keywords.split(",")[0]
+                if "," in search_keywords
+                else search_keywords
+            )
             for descriptor in descriptors:
                 if descriptor in first_part.lower():
                     # Try without descriptor
                     simplified = first_part.lower().replace(descriptor, "").strip()
-                    simplified = re.sub(r'\b(de|des|du|la|le|les|the|of)\b', '', simplified).strip()
+                    simplified = re.sub(
+                        r"\b(de|des|du|la|le|les|the|of)\b", "", simplified
+                    ).strip()
                     if simplified and len(simplified) > 2:
                         fallback_patterns.append(f"{simplified}, {city_name}")
                     break
@@ -1400,21 +1564,33 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         # For metro/subway stations, try different formats
         if "metro" in search_keywords.lower() or "метро" in search_keywords.lower():
             # Extract station name and try different combinations
-            station_name = search_keywords.replace("Metro", "").replace("metro", "").replace("метро", "").replace("станция", "").strip()
+            station_name = (
+                search_keywords.replace("Metro", "")
+                .replace("metro", "")
+                .replace("метро", "")
+                .replace("станция", "")
+                .strip()
+            )
             if city_name:
-                fallback_patterns.extend([
-                    f"{station_name} station {city_name}",
-                    f"{station_name} {city_name} metro",
-                    f"{station_name} {city_name}"
-                ])
+                fallback_patterns.extend(
+                    [
+                        f"{station_name} station {city_name}",
+                        f"{station_name} {city_name} metro",
+                        f"{station_name} {city_name}",
+                    ]
+                )
 
         # For places with + or complex formatting
         if " + " in search_keywords or "+" in search_keywords:
             parts = search_keywords.replace("+", " ").split()
-            fallback_patterns.extend([
-                " ".join(parts[:2]) if len(parts) >= 2 else parts[0],  # First two words
-                parts[0] if parts else "",  # First word only
-            ])
+            fallback_patterns.extend(
+                [
+                    (
+                        " ".join(parts[:2]) if len(parts) >= 2 else parts[0]
+                    ),  # First two words
+                    parts[0] if parts else "",  # First word only
+                ]
+            )
 
         # For addresses with city names, preserve city context
         words = search_keywords.split()
@@ -1422,16 +1598,37 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Try removing middle descriptive words but keeping location identifiers
             # Keep first main identifier and city
             main_place = words[0]
-            if words[1] and words[1].lower() not in ['de', 'la', 'du', 'le', 'des', 'of', 'the']:
+            if words[1] and words[1].lower() not in [
+                "de",
+                "la",
+                "du",
+                "le",
+                "des",
+                "of",
+                "the",
+            ]:
                 main_place = f"{words[0]} {words[1]}"
 
-            fallback_patterns.extend([
-                f"{main_place} {city_name}",  # Main place + city
-                f"{' '.join(words[-3:])}" if len(words) > 3 else "",  # Last 3 words (usually street + city)
-            ])
+            fallback_patterns.extend(
+                [
+                    f"{main_place} {city_name}",  # Main place + city
+                    (
+                        f"{' '.join(words[-3:])}" if len(words) > 3 else ""
+                    ),  # Last 3 words (usually street + city)
+                ]
+            )
 
         # For addresses, try street + city
-        street_indicators = ['rue', 'boulevard', 'avenue', 'street', 'road', 'улица', 'проспект', 'переулок']
+        street_indicators = [
+            "rue",
+            "boulevard",
+            "avenue",
+            "street",
+            "road",
+            "улица",
+            "проспект",
+            "переулок",
+        ]
         for i, word in enumerate(words):
             if word.lower() in street_indicators and i < len(words) - 1:
                 street_part = f"{word} {words[i+1]}"
@@ -1441,7 +1638,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
         # Remove empty patterns and duplicates
         fallback_patterns = [p.strip() for p in fallback_patterns if p and p.strip()]
-        fallback_patterns = list(dict.fromkeys(fallback_patterns))  # Remove duplicates while preserving order
+        fallback_patterns = list(
+            dict.fromkeys(fallback_patterns)
+        )  # Remove duplicates while preserving order
 
         # Note: We intentionally don't add city center as fallback
         # Better to not send coordinates than to send wrong ones
@@ -1450,24 +1649,36 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         for pattern in fallback_patterns:
             if pattern and pattern != search_keywords:  # Don't retry the original
                 logger.info(f"Trying fallback search: {pattern}")
-                coords = await self.get_coordinates_from_nominatim(pattern, user_lat, user_lon)
+                coords = await self.get_coordinates_from_nominatim(
+                    pattern, user_lat, user_lon
+                )
                 if coords:
                     # Validate coordinates if we have city context, but relax for generic fallback patterns
                     if city_name:
                         try:
-                            if not self._validate_city_coordinates(coords[0], coords[1], city_name):
-                                logger.warning(f"Fallback coordinates {coords} for '{pattern}' are not in {city_name}, allowing due to relaxed validation for fallbacks")
+                            if not self._validate_city_coordinates(
+                                coords[0], coords[1], city_name
+                            ):
+                                logger.warning(
+                                    f"Fallback coordinates {coords} for '{pattern}' are not in {city_name}, allowing due to relaxed validation for fallbacks"
+                                )
                         except Exception:
                             pass
 
                     # If we have user coordinates, check distance (should be within reasonable range)
                     if user_lat and user_lon:
-                        distance = self._calculate_distance(user_lat, user_lon, coords[0], coords[1])
+                        distance = self._calculate_distance(
+                            user_lat, user_lon, coords[0], coords[1]
+                        )
                         if distance > 50:  # More than 50km away
-                            logger.warning(f"Fallback coordinates {coords} are {distance:.1f}km from user, skipping")
+                            logger.warning(
+                                f"Fallback coordinates {coords} are {distance:.1f}km from user, skipping"
+                            )
                             continue
 
-                    logger.info(f"Found coordinates with fallback search '{pattern}': {coords}")
+                    logger.info(
+                        f"Found coordinates with fallback search '{pattern}': {coords}"
+                    )
                     return coords
 
         logger.warning(f"No coordinates found for keywords: {search_keywords}")
@@ -1496,10 +1707,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 search_match = re.search(r"Search:\s*(.+?)(?:\n|$)", answer_content)
                 if search_match:
                     search_keywords = search_match.group(1).strip()
-                    logger.info(f"Found search keywords from <answer> tags: {search_keywords}")
+                    logger.info(
+                        f"Found search keywords from <answer> tags: {search_keywords}"
+                    )
 
                     # Use new keyword-based search with user coordinates for validation
-                    coords = await self.get_coordinates_from_search_keywords(search_keywords, user_lat, user_lon)
+                    coords = await self.get_coordinates_from_search_keywords(
+                        search_keywords, user_lat, user_lon
+                    )
                     if coords:
                         return coords
 
@@ -1507,10 +1722,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 location_match = re.search(r"Location:\s*(.+?)(?:\n|$)", answer_content)
                 if location_match:
                     place_name = location_match.group(1).strip()
-                    logger.info(f"No search keywords found, using location name from <answer>: {place_name}")
+                    logger.info(
+                        f"No search keywords found, using location name from <answer>: {place_name}"
+                    )
 
                     # Use location name as search keywords with user coordinates
-                    coords = await self.get_coordinates_from_search_keywords(place_name, user_lat, user_lon)
+                    coords = await self.get_coordinates_from_search_keywords(
+                        place_name, user_lat, user_lon
+                    )
                     if coords:
                         return coords
 
@@ -1520,10 +1739,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
                 if search_match:
                     search_keywords = search_match.group(1).strip()
-                    logger.info(f"Found search keywords from legacy format: {search_keywords}")
+                    logger.info(
+                        f"Found search keywords from legacy format: {search_keywords}"
+                    )
 
                     # Use new keyword-based search with user coordinates for validation
-                    coords = await self.get_coordinates_from_search_keywords(search_keywords, user_lat, user_lon)
+                    coords = await self.get_coordinates_from_search_keywords(
+                        search_keywords, user_lat, user_lon
+                    )
                     if coords:
                         return coords
 
@@ -1531,10 +1754,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 place_match = re.search(r"Локация:\s*(.+?)(?:\n|$)", response)
                 if place_match:
                     place_name = place_match.group(1).strip()
-                    logger.info(f"No search keywords found, using location name from legacy: {place_name}")
+                    logger.info(
+                        f"No search keywords found, using location name from legacy: {place_name}"
+                    )
 
                     # Use location name as search keywords with user coordinates
-                    coords = await self.get_coordinates_from_search_keywords(place_name, user_lat, user_lon)
+                    coords = await self.get_coordinates_from_search_keywords(
+                        place_name, user_lat, user_lon
+                    )
                     if coords:
                         return coords
 
@@ -1545,34 +1772,56 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             logger.warning(f"Error parsing coordinates: {e}")
             return None
 
-    async def get_wikipedia_images(self, search_keywords: str, max_images: int = 5, *, lat: float | None = None, lon: float | None = None, place_hint: str | None = None, sources: list[tuple[str, str]] | None = None, fact_text: str | None = None) -> list[str]:
+    async def get_wikipedia_images(
+        self,
+        search_keywords: str,
+        max_images: int = 5,
+        *,
+        lat: float | None = None,
+        lon: float | None = None,
+        place_hint: str | None = None,
+        sources: list[tuple[str, str]] | None = None,
+        fact_text: str | None = None,
+    ) -> list[str]:
         """Get images relevant to the fact using Yandex Search API, with Wikimedia fallback.
-        
+
         Maintains backward compatibility while providing better relevance.
         """
         # Primary: Yandex Search API if credentials are configured
         try:
             yandex_api_key = os.getenv("YANDEX_API_KEY")
             yandex_folder_id = os.getenv("YANDEX_FOLDER_ID")
-            logger.info(f"Yandex env check: API_KEY={'set' if yandex_api_key else 'not set'}, FOLDER_ID={'set' if yandex_folder_id else 'not set'}")
+            logger.info(
+                f"Yandex env check: API_KEY={'set' if yandex_api_key else 'not set'}, FOLDER_ID={'set' if yandex_folder_id else 'not set'}"
+            )
             if yandex_api_key and yandex_folder_id:
-                logger.info(f"Attempting Yandex image search for: {place_hint or search_keywords}")
+                logger.info(
+                    f"Attempting Yandex image search for: {place_hint or search_keywords}"
+                )
                 from .yandex_image_search import YandexImageSearch
+
                 logger.info("YandexImageSearch imported successfully")
-                async with YandexImageSearch(yandex_api_key, yandex_folder_id) as yandex:
+                async with YandexImageSearch(
+                    yandex_api_key, yandex_folder_id
+                ) as yandex:
                     # Prefer building multiple variants for diversity
-                    base_query = (place_hint or search_keywords or "").strip() or (search_keywords or "")
+                    base_query = (place_hint or search_keywords or "").strip() or (
+                        search_keywords or ""
+                    )
                     variants = yandex.build_query_variants(
                         base_query=base_query,
                         fact_text=fact_text,
                         place_name=place_hint,
                     ) or [base_query]
                     from .yandex_image_search import YandexImageSearch as _YIS
+
                     region = _YIS.detect_region(lat, lon)
                     # Try variants sequentially until enough images collected
                     collected: list[str] = []
                     for q in variants:
-                        images = await yandex.search_images(query=q, max_images=max(2, max_images), region=region)
+                        images = await yandex.search_images(
+                            query=q, max_images=max(2, max_images), region=region
+                        )
                         if images:
                             for u in images:
                                 if u not in collected:
@@ -1580,16 +1829,22 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         if len(collected) >= max_images:
                             break
                     if collected:
-                        logger.info(f"Yandex image search returned {len(collected)} images for variants: {variants}")
+                        logger.info(
+                            f"Yandex image search returned {len(collected)} images for variants: {variants}"
+                        )
                         return collected[:max_images]
         except Exception as e:
-            logger.warning(f"Yandex image search failed, will try Wikimedia fallback: {e}")
+            logger.warning(
+                f"Yandex image search failed, will try Wikimedia fallback: {e}"
+            )
             import traceback
+
             logger.info(f"Yandex error traceback: {traceback.format_exc()}")
 
         # Secondary: existing Wikimedia Commons-based engine if we have context
         if (place_hint or fact_text) and lat is not None and lon is not None:
             from .image_search import ImageSearchEngine
+
             try:
                 async with ImageSearchEngine() as engine:
                     fact_content = fact_text or search_keywords
@@ -1601,10 +1856,12 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         place_name=place_name,
                         coordinates=coordinates,
                         sources=sources_list,
-                        max_images=max_images
+                        max_images=max_images,
                     )
                     if images:
-                        logger.info(f"Wikimedia image search found {len(images)} images for '{place_name}'")
+                        logger.info(
+                            f"Wikimedia image search found {len(images)} images for '{place_name}'"
+                        )
                         return images
             except Exception as e:
                 logger.warning(f"Wikimedia image search failed: {e}")
@@ -1612,16 +1869,18 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         # Legacy fallback continues below
         sources_hint = sources
 
-
-
         # Normalize keywords
-        clean_keywords = (search_keywords or '').replace(' + ', ' ').replace('+', ' ').strip()
+        clean_keywords = (
+            (search_keywords or "").replace(" + ", " ").replace("+", " ").strip()
+        )
 
         # Fast path: if we only have plain keywords (no coords/place hint), use
         # the lightweight legacy search that unit tests rely on.
         if clean_keywords and lat is None and lon is None and not place_hint:
             try:
-                quick = await self._search_wikipedia_images(clean_keywords, 'en', max_images)
+                quick = await self._search_wikipedia_images(
+                    clean_keywords, "en", max_images
+                )
                 if quick:
                     return quick
             except Exception:
@@ -1630,7 +1889,9 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         async def _fetch_json(session, url, params):
             headers = {"User-Agent": "BotVoyage/1.0 (contact: botvoyage@example.com)"}
             try:
-                async with session.get(url, params=params, headers=headers, timeout=6) as resp:
+                async with session.get(
+                    url, params=params, headers=headers, timeout=6
+                ) as resp:
                     if resp.status != 200:
                         raise RuntimeError(f"{url} HTTP {resp.status}")
                     return await resp.json()
@@ -1651,8 +1912,10 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         def _cache_set(cache: dict, key: str, val):
             cache[key] = (val, time.time())
 
-        async def _qid_from_coords_or_search(session, lat_val, lon_val, keywords: str, place_text: str | None) -> str | None:
-            languages = ['ru', 'en', 'fr', 'de', 'es', 'it']
+        async def _qid_from_coords_or_search(
+            session, lat_val, lon_val, keywords: str, place_text: str | None
+        ) -> str | None:
+            languages = ["ru", "en", "fr", "de", "es", "it"]
             # Prefer title/keyword resolution FIRST (so image matches POI from the fact)
             titles_to_try: list[tuple[str, str]] = []  # (lang, title)
             if place_text:
@@ -1668,11 +1931,21 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     cached_qid = _cache_get(self._qid_cache, f"title:{lang}:{title}")
                     if cached_qid:
                         return cached_qid
-                    page = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
-                        'action': 'query', 'prop': 'pageprops', 'ppprop': 'wikibase_item',
-                        'titles': title, 'redirects': 1, 'format': 'json'
-                    })
-                    qid = next(iter(page['query']['pages'].values()))['pageprops']['wikibase_item']
+                    page = await _fetch_json(
+                        session,
+                        f"https://{lang}.wikipedia.org/w/api.php",
+                        {
+                            "action": "query",
+                            "prop": "pageprops",
+                            "ppprop": "wikibase_item",
+                            "titles": title,
+                            "redirects": 1,
+                            "format": "json",
+                        },
+                    )
+                    qid = next(iter(page["query"]["pages"].values()))["pageprops"][
+                        "wikibase_item"
+                    ]
                     if qid:
                         _cache_set(self._qid_cache, f"title:{lang}:{title}", qid)
                         return qid
@@ -1681,18 +1954,36 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Then try keyword search → pageprops
             if keywords:
                 for lang in languages:
-                    res = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
-                        'action': 'query', 'list': 'search', 'srsearch': keywords, 'srlimit': 1, 'format': 'json'
-                    })
+                    res = await _fetch_json(
+                        session,
+                        f"https://{lang}.wikipedia.org/w/api.php",
+                        {
+                            "action": "query",
+                            "list": "search",
+                            "srsearch": keywords,
+                            "srlimit": 1,
+                            "format": "json",
+                        },
+                    )
                     try:
-                        search_res = res['query']['search']
+                        search_res = res["query"]["search"]
                         if not search_res:
                             continue
-                        title = search_res[0]['title']
-                        page = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
-                            'action': 'query', 'prop': 'pageprops', 'ppprop': 'wikibase_item', 'titles': title, 'format': 'json'
-                        })
-                        qid = next(iter(page['query']['pages'].values()))['pageprops']['wikibase_item']
+                        title = search_res[0]["title"]
+                        page = await _fetch_json(
+                            session,
+                            f"https://{lang}.wikipedia.org/w/api.php",
+                            {
+                                "action": "query",
+                                "prop": "pageprops",
+                                "ppprop": "wikibase_item",
+                                "titles": title,
+                                "format": "json",
+                            },
+                        )
+                        qid = next(iter(page["query"]["pages"].values()))["pageprops"][
+                            "wikibase_item"
+                        ]
                         if qid:
                             return qid
                     except Exception:
@@ -1701,31 +1992,45 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             if lat_val is not None and lon_val is not None:
                 for lang in languages:
                     params = {
-                        'action': 'query', 'list': 'geosearch',
-                        'gscoord': f"{lat_val}|{lon_val}", 'gsradius': 200, 'gslimit': 20,
-                        'format': 'json'
+                        "action": "query",
+                        "list": "geosearch",
+                        "gscoord": f"{lat_val}|{lon_val}",
+                        "gsradius": 200,
+                        "gslimit": 20,
+                        "format": "json",
                     }
-                    data = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", params)
+                    data = await _fetch_json(
+                        session, f"https://{lang}.wikipedia.org/w/api.php", params
+                    )
                     if not data:
                         continue
-                    pages = data.get('query', {}).get('geosearch', [])
+                    pages = data.get("query", {}).get("geosearch", [])
                     if not pages:
                         continue
                     # Pick nearest page
-                    pages.sort(key=lambda p: p.get('dist', 1e9))
-                    pageid = pages[0].get('pageid')
+                    pages.sort(key=lambda p: p.get("dist", 1e9))
+                    pageid = pages[0].get("pageid")
                     if not pageid:
                         continue
                     cached = _cache_get(self._qid_cache, f"pageid:{pageid}")
                     if cached:
                         return cached
                     # Fetch pageprops to get QID
-                    pp = await _fetch_json(session, f"https://{lang}.wikipedia.org/w/api.php", {
-                        'action': 'query', 'prop': 'pageprops', 'ppprop': 'wikibase_item',
-                        'pageids': pageid, 'format': 'json'
-                    })
+                    pp = await _fetch_json(
+                        session,
+                        f"https://{lang}.wikipedia.org/w/api.php",
+                        {
+                            "action": "query",
+                            "prop": "pageprops",
+                            "ppprop": "wikibase_item",
+                            "pageids": pageid,
+                            "format": "json",
+                        },
+                    )
                     try:
-                        qid = next(iter(pp['query']['pages'].values()))['pageprops']['wikibase_item']
+                        qid = next(iter(pp["query"]["pages"].values()))["pageprops"][
+                            "wikibase_item"
+                        ]
                         if qid:
                             _cache_set(self._qid_cache, f"pageid:{pageid}", qid)
                             return qid
@@ -1737,49 +2042,76 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             cached = _cache_get(self._p18_cache, qid)
             if cached:
                 return cached
-            data = await _fetch_json(session, "https://www.wikidata.org/w/api.php", {
-                'action': 'wbgetentities', 'ids': qid, 'props': 'claims', 'format': 'json'
-            })
+            data = await _fetch_json(
+                session,
+                "https://www.wikidata.org/w/api.php",
+                {
+                    "action": "wbgetentities",
+                    "ids": qid,
+                    "props": "claims",
+                    "format": "json",
+                },
+            )
             try:
-                claims = data['entities'][qid]['claims']
-                p18 = claims.get('P18')
+                claims = data["entities"][qid]["claims"]
+                p18 = claims.get("P18")
                 if p18:
-                    filename = p18[0]['mainsnak']['datavalue']['value']
+                    filename = p18[0]["mainsnak"]["datavalue"]["value"]
                     _cache_set(self._p18_cache, qid, filename)
                     return filename
             except Exception:
                 return None
             return None
 
-        async def _imageinfo_for_filename(session, filename: str, target_width: int = 1600) -> dict | None:
+        async def _imageinfo_for_filename(
+            session, filename: str, target_width: int = 1600
+        ) -> dict | None:
             cached = _cache_get(self._fileinfo_cache, filename)
             if cached:
                 return cached
-            info = await _fetch_json(session, "https://commons.wikimedia.org/w/api.php", {
-                'action': 'query', 'titles': f"File:{filename}", 'prop': 'imageinfo',
-                'iiprop': 'url|size|timestamp|user|extmetadata', 'iiurlwidth': target_width, 'format': 'json'
-            })
+            info = await _fetch_json(
+                session,
+                "https://commons.wikimedia.org/w/api.php",
+                {
+                    "action": "query",
+                    "titles": f"File:{filename}",
+                    "prop": "imageinfo",
+                    "iiprop": "url|size|timestamp|user|extmetadata",
+                    "iiurlwidth": target_width,
+                    "format": "json",
+                },
+            )
             try:
-                pages = info['query']['pages']
+                pages = info["query"]["pages"]
                 page = next(iter(pages.values()))
-                ii = page['imageinfo'][0]
+                ii = page["imageinfo"][0]
                 _cache_set(self._fileinfo_cache, filename, ii)
                 return ii
             except Exception:
                 return None
 
-        async def _commons_depicts_for_qid(session, qid: str, limit: int = 6) -> list[dict]:
-            data = await _fetch_json(session, "https://commons.wikimedia.org/w/api.php", {
-                'action': 'query', 'list': 'search', 'srsearch': f"haswbstatement:P180={qid}",
-                'srnamespace': 6, 'srlimit': limit, 'format': 'json'
-            })
+        async def _commons_depicts_for_qid(
+            session, qid: str, limit: int = 6
+        ) -> list[dict]:
+            data = await _fetch_json(
+                session,
+                "https://commons.wikimedia.org/w/api.php",
+                {
+                    "action": "query",
+                    "list": "search",
+                    "srsearch": f"haswbstatement:P180={qid}",
+                    "srnamespace": 6,
+                    "srlimit": limit,
+                    "format": "json",
+                },
+            )
             out = []
             try:
-                for hit in data.get('query', {}).get('search', []):
-                    title = hit.get('title')  # "File:..."
+                for hit in data.get("query", {}).get("search", []):
+                    title = hit.get("title")  # "File:..."
                     if not title:
                         continue
-                    filename = title.split(':', 1)[-1]
+                    filename = title.split(":", 1)[-1]
                     ii = await _imageinfo_for_filename(session, filename)
                     if ii:
                         out.append(ii)
@@ -1787,50 +2119,72 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 pass
             return out
 
-        async def _commons_geosearch(session, lat_val, lon_val, limit: int = 10) -> list[dict]:
+        async def _commons_geosearch(
+            session, lat_val, lon_val, limit: int = 10
+        ) -> list[dict]:
             # Increase search radius to get more diverse results
-            data = await _fetch_json(session, "https://commons.wikimedia.org/w/api.php", {
-                'action': 'query', 'list': 'geosearch', 'gscoord': f"{lat_val}|{lon_val}",
-                'gsradius': 500, 'gslimit': limit * 2, 'format': 'json'  # Increased radius and limit
-            })
+            data = await _fetch_json(
+                session,
+                "https://commons.wikimedia.org/w/api.php",
+                {
+                    "action": "query",
+                    "list": "geosearch",
+                    "gscoord": f"{lat_val}|{lon_val}",
+                    "gsradius": 500,
+                    "gslimit": limit * 2,
+                    "format": "json",  # Increased radius and limit
+                },
+            )
             items = []
             try:
-                geosearch_results = data.get('query', {}).get('geosearch', [])
+                geosearch_results = data.get("query", {}).get("geosearch", [])
 
                 for item in geosearch_results:
-                    title = item.get('title')
-                    if not title or not title.startswith('File:'):
+                    title = item.get("title")
+                    if not title or not title.startswith("File:"):
                         continue
-                    filename = title.split(':', 1)[-1]
+                    filename = title.split(":", 1)[-1]
 
                     # Skip generic file names that tend to be repeated
                     lower_filename = filename.lower()
-                    if any(skip in lower_filename for skip in ['logo', 'emblem', 'coat_of_arms', 'flag']):
+                    if any(
+                        skip in lower_filename
+                        for skip in ["logo", "emblem", "coat_of_arms", "flag"]
+                    ):
                         continue
 
                     ii = await _imageinfo_for_filename(session, filename)
                     if ii:
                         # Attach distance if present
-                        if 'dist' in item:
-                            ii['distance'] = item['dist']
+                        if "dist" in item:
+                            ii["distance"] = item["dist"]
                         items.append(ii)
             except Exception as e:
                 logger.debug(f"Commons geosearch error: {e}")
             return items
 
-        def _pick_urls_from_infos(infos: list[dict], need: int, place_hint_text: str | None = None, sources_list: list[tuple[str, str]] | None = None) -> list[str]:
+        def _pick_urls_from_infos(
+            infos: list[dict],
+            need: int,
+            place_hint_text: str | None = None,
+            sources_list: list[tuple[str, str]] | None = None,
+        ) -> list[str]:
             # Prefer token/distance relevance, then landscape, then width
             def score(ii: dict) -> tuple:
-                width = ii.get('thumbwidth') or ii.get('width') or 0
-                height = ii.get('thumbheight') or ii.get('height') or 0
+                width = ii.get("thumbwidth") or ii.get("width") or 0
+                height = ii.get("thumbheight") or ii.get("height") or 0
                 landscape = 1 if width and height and width >= height else 0
 
                 # Build haystack from fields
-                haystack = (ii.get('descriptionurl') or ii.get('url') or '').lower()
+                haystack = (ii.get("descriptionurl") or ii.get("url") or "").lower()
                 try:
-                    em = ii.get('extmetadata') or {}
-                    for k in ('ImageDescription', 'ObjectName'):
-                        v = em.get(k, {}).get('value') if isinstance(em.get(k), dict) else em.get(k)
+                    em = ii.get("extmetadata") or {}
+                    for k in ("ImageDescription", "ObjectName"):
+                        v = (
+                            em.get(k, {}).get("value")
+                            if isinstance(em.get(k), dict)
+                            else em.get(k)
+                        )
                         if v:
                             haystack += f" {str(v).lower()}"
                 except Exception:
@@ -1841,8 +2195,8 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 if place_hint_text:
                     tokens.update(place_hint_text.lower().split())
                 if sources_list:
-                    for t, _ in (sources_list or []):
-                        tokens.update((t or '').lower().split())
+                    for t, _ in sources_list or []:
+                        tokens.update((t or "").lower().split())
 
                 token_bonus = 0
                 for t in tokens:
@@ -1852,7 +2206,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 # Distance bonus if available
                 dist_bonus = 0
                 try:
-                    d = ii.get('distance')
+                    d = ii.get("distance")
                     if isinstance(d, (int, float)):
                         if d <= 60:
                             dist_bonus = 3
@@ -1871,16 +2225,19 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             seen_bases = set()
             filtered_infos = []
             for ii in infos_sorted:
-                url = ii.get('thumburl') or ii.get('url')
+                url = ii.get("thumburl") or ii.get("url")
                 if not url:
                     continue
 
                 # Extract base filename without size/extension variations
                 import re
-                filename = url.split('/')[-1]
+
+                filename = url.split("/")[-1]
                 # Remove size markers like -1600px-, _thumb_, etc
-                base = re.sub(r'[-_]\d+px[-_]|_thumb_?|\.thumb\.|/thumb/', '', filename.lower())
-                base = re.sub(r'\.(jpg|jpeg|png|svg|webp).*', '', base)
+                base = re.sub(
+                    r"[-_]\d+px[-_]|_thumb_?|\.thumb\.|/thumb/", "", filename.lower()
+                )
+                base = re.sub(r"\.(jpg|jpeg|png|svg|webp).*", "", base)
 
                 if base not in seen_bases:
                     seen_bases.add(base)
@@ -1889,7 +2246,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             # Take URLs from filtered list
             urls: list[str] = []
             for ii in filtered_infos:
-                url = ii.get('thumburl') or ii.get('url')
+                url = ii.get("thumburl") or ii.get("url")
                 if url and url not in urls:
                     urls.append(url)
                 if len(urls) >= need:
@@ -1897,8 +2254,8 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             # If we have fewer images than needed, add some variety by taking lower-scored images
             if len(urls) < need and len(filtered_infos) > len(urls):
-                for ii in filtered_infos[len(urls):]:
-                    url = ii.get('thumburl') or ii.get('url')
+                for ii in filtered_infos[len(urls) :]:
+                    url = ii.get("thumburl") or ii.get("url")
                     if url and url not in urls:
                         urls.append(url)
                     if len(urls) >= need:
@@ -1910,13 +2267,17 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         try:
             async with aiohttp.ClientSession() as session:
                 # 1) Try to identify QID strictly by place_hint/keywords
-                qid = await _qid_from_coords_or_search(session, lat, lon, clean_keywords, place_hint)
+                qid = await _qid_from_coords_or_search(
+                    session, lat, lon, clean_keywords, place_hint
+                )
 
                 infos: list[dict] = []
                 # Prepare concurrent tasks for POI image sources
                 import asyncio as _asyncio
+
                 tasks: list = []
                 if qid:
+
                     async def _p18_info():
                         try:
                             filename = await _p18_for_qid(session, qid)
@@ -1925,16 +2286,20 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         except Exception:
                             return None
                         return None
+
                     tasks.append(_p18_info())
-                    tasks.append(_commons_depicts_for_qid(session, qid, limit=max(3, max_images)))
+                    tasks.append(
+                        _commons_depicts_for_qid(session, qid, limit=max(3, max_images))
+                    )
                 # 2) If still no images and we have sources in the fact, try to parse QIDs/File:* from sources
                 if not infos and sources_hint:
                     try:
-                        for title, url in (sources_hint or [])[:4]:
+                        for _title, url in (sources_hint or [])[:4]:
                             if not url:
                                 continue
                             # Try to detect a Wikidata QID in the URL
                             import re as _re
+
                             m = _re.search(r"/(Q\d+)(?:[#/?]|$)", url)
                             if m:
                                 q = m.group(1)
@@ -1946,11 +2311,12 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                                         if len(infos) >= max_images:
                                             break
                             # Or a Commons File: link
-                            if 'File:' in url or 'Special:FilePath' in url:
+                            if "File:" in url or "Special:FilePath" in url:
                                 # Try to extract filename segment
                                 from urllib.parse import unquote
-                                part = url.split('File:')[-1]
-                                part = part.split('?')[0]
+
+                                part = url.split("File:")[-1]
+                                part = part.split("?")[0]
                                 filename = unquote(part)
                                 ii = await _imageinfo_for_filename(session, filename)
                                 if ii:
@@ -1962,19 +2328,32 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                 # Try Commons geosearch around POI coordinates
                 # First try: use provided POI coordinates (from Coordinates field in answer)
                 if lat is not None and lon is not None:
-                    tasks.append(_commons_geosearch(session, lat, lon, limit=max(6, max_images)))
+                    tasks.append(
+                        _commons_geosearch(session, lat, lon, limit=max(6, max_images))
+                    )
                 # Second try: derive POI coordinates from Search keywords
                 elif len(infos) < max_images and clean_keywords:
                     try:
-                        poi_coords = await self.get_coordinates_from_search_keywords(clean_keywords)
+                        poi_coords = await self.get_coordinates_from_search_keywords(
+                            clean_keywords
+                        )
                         if poi_coords:
-                            tasks.append(_commons_geosearch(session, poi_coords[0], poi_coords[1], limit=max(6, max_images)))
+                            tasks.append(
+                                _commons_geosearch(
+                                    session,
+                                    poi_coords[0],
+                                    poi_coords[1],
+                                    limit=max(6, max_images),
+                                )
+                            )
                     except Exception:
                         pass
 
                 # Execute all prepared tasks concurrently and merge results
                 if tasks:
-                    results_lists = await _asyncio.gather(*tasks, return_exceptions=True)
+                    results_lists = await _asyncio.gather(
+                        *tasks, return_exceptions=True
+                    )
                     for res in results_lists:
                         if isinstance(res, list):
                             for ii in res:
@@ -1984,27 +2363,37 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                             infos.append(res)
 
                 if infos:
-                    results = _pick_urls_from_infos(infos, max_images, place_hint, sources_hint)
+                    results = _pick_urls_from_infos(
+                        infos, max_images, place_hint, sources_hint
+                    )
                 # Final fallback to legacy page media search if still empty
                 if not results and clean_keywords:
-                    results = await self._search_wikipedia_images(clean_keywords, 'en', max_images)
+                    results = await self._search_wikipedia_images(
+                        clean_keywords, "en", max_images
+                    )
                     if not results:
                         # try a few more langs quickly
-                        for lg in ['ru', 'fr']:
+                        for lg in ["ru", "fr"]:
                             if results:
                                 break
                             try:
-                                results = await self._search_wikipedia_images(clean_keywords, lg, max_images)
+                                results = await self._search_wikipedia_images(
+                                    clean_keywords, lg, max_images
+                                )
                             except Exception:
                                 pass
         except Exception as e:
             logger.debug(f"Commons pipeline failed: {e}")
 
         if results:
-            logger.info(f"Commons/Wikidata images found: {len(results)} for '{clean_keywords}'")
+            logger.info(
+                f"Commons/Wikidata images found: {len(results)} for '{clean_keywords}'"
+            )
         return results
 
-    async def _search_wikipedia_images(self, search_term: str, lang: str, max_images: int = 5) -> list[str]:
+    async def _search_wikipedia_images(
+        self, search_term: str, lang: str, max_images: int = 5
+    ) -> list[str]:
         """Search for images on specific Wikipedia language.
 
         Args:
@@ -2022,26 +2411,34 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             async with aiohttp.ClientSession() as session:
                 # Search for pages using legacy API
-                async with session.get(search_url, headers=headers, timeout=5) as response:
+                async with session.get(
+                    search_url, headers=headers, timeout=5
+                ) as response:
                     if response.status != 200:
-                        logger.debug(f"Search failed for '{search_term}' in {lang}: status {response.status}")
+                        logger.debug(
+                            f"Search failed for '{search_term}' in {lang}: status {response.status}"
+                        )
                         return None
 
                     search_data = await response.json()
-                    search_results = search_data.get('query', {}).get('search', [])
+                    search_results = search_data.get("query", {}).get("search", [])
 
                     if not search_results:
-                        logger.debug(f"No search results found for '{search_term}' in {lang}")
+                        logger.debug(
+                            f"No search results found for '{search_term}' in {lang}"
+                        )
                         return []
 
-                    logger.debug(f"Found {len(search_results)} search results for '{search_term}' in {lang}")
+                    logger.debug(
+                        f"Found {len(search_results)} search results for '{search_term}' in {lang}"
+                    )
 
                     # Collect all potential images from multiple pages
                     all_potential_images = []
 
                     # Try first few pages
                     for result in search_results[:5]:  # Try more pages
-                        page_title = result.get('title')
+                        page_title = result.get("title")
                         if not page_title:
                             continue
 
@@ -2050,28 +2447,45 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                         # Get media list for this page using REST API (this part still works)
                         media_url = f"https://{lang}.wikipedia.org/api/rest_v1/page/media-list/{quote(page_title)}"
 
-                        async with session.get(media_url, headers=headers, timeout=5) as media_response:
+                        async with session.get(
+                            media_url, headers=headers, timeout=5
+                        ) as media_response:
                             if media_response.status != 200:
                                 continue
 
                             media_data = await media_response.json()
-                            items = media_data.get('items', [])
+                            items = media_data.get("items", [])
 
-                            logger.debug(f"Found {len(items)} media items for page '{page_title}'")
+                            logger.debug(
+                                f"Found {len(items)} media items for page '{page_title}'"
+                            )
 
                             # Look for good images
                             for item in items:
-                                if item.get('type') != 'image':
+                                if item.get("type") != "image":
                                     continue
 
-                                title = item.get('title', '').lower()
+                                title = item.get("title", "").lower()
 
                                 # Skip common non-relevant images
                                 skip_patterns = [
-                                    'commons-logo', 'edit-icon', 'wikimedia', 'stub',
-                                    'ambox', 'crystal', 'nuvola', 'dialog', 'system',
-                                    'red_x', 'green_check', 'question_mark', 'infobox',
-                                    'arrow', 'symbol', 'disambiguation', 'flag'
+                                    "commons-logo",
+                                    "edit-icon",
+                                    "wikimedia",
+                                    "stub",
+                                    "ambox",
+                                    "crystal",
+                                    "nuvola",
+                                    "dialog",
+                                    "system",
+                                    "red_x",
+                                    "green_check",
+                                    "question_mark",
+                                    "infobox",
+                                    "arrow",
+                                    "symbol",
+                                    "disambiguation",
+                                    "flag",
                                 ]
 
                                 if any(pattern in title for pattern in skip_patterns):
@@ -2079,18 +2493,20 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
                                 # Prefer images with good extensions and score them
                                 score = 0
-                                if any(ext in title for ext in ['.jpg', '.jpeg']):
+                                if any(ext in title for ext in [".jpg", ".jpeg"]):
                                     score += 3
-                                elif any(ext in title for ext in ['.png', '.webp']):
+                                elif any(ext in title for ext in [".png", ".webp"]):
                                     score += 2
 
                                 # Prefer images that contain keywords from search term
                                 search_words = search_term.lower().split()
                                 for word in search_words:
-                                    if word in title and len(word) > 2:  # Avoid short words
+                                    if (
+                                        word in title and len(word) > 2
+                                    ):  # Avoid short words
                                         score += 1
 
-                                all_potential_images.append((score, item['title']))
+                                all_potential_images.append((score, item["title"]))
 
                     # Sort by score and return best images
                     all_potential_images.sort(reverse=True, key=lambda x: x[0])
@@ -2098,26 +2514,43 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
                     if all_potential_images:
                         # Return up to max_images best images with multiple URL formats
                         selected_images = []
-                        for score, image_title in all_potential_images[:max_images * 2]:  # Try more images to account for failures
+                        for score, image_title in all_potential_images[
+                            : max_images * 2
+                        ]:  # Try more images to account for failures
                             if len(selected_images) >= max_images:
                                 break
 
                             # Clean image title - remove File: prefix if present
-                            clean_title = image_title[5:] if image_title.startswith('File:') else image_title
+                            clean_title = (
+                                image_title[5:]
+                                if image_title.startswith("File:")
+                                else image_title
+                            )
 
                             # Try multiple URL formats for better reliability
                             # Skip images with potentially problematic filenames
-                            if any(char in clean_title for char in ['|', ':', ';', '<', '>', '"']):
-                                logger.debug(f"Skipping image with problematic filename: {clean_title}")
+                            if any(
+                                char in clean_title
+                                for char in ["|", ":", ";", "<", ">", '"']
+                            ):
+                                logger.debug(
+                                    f"Skipping image with problematic filename: {clean_title}"
+                                )
                                 continue
 
                             # Try to get actual image URL using Wikimedia API
-                            actual_image_url = await self._get_actual_image_url(clean_title, session, lang)
+                            actual_image_url = await self._get_actual_image_url(
+                                clean_title, session, lang
+                            )
                             if actual_image_url:
                                 selected_images.append(actual_image_url)
-                                logger.debug(f"Selected image: {image_title} (score: {score}) -> {actual_image_url}")
+                                logger.debug(
+                                    f"Selected image: {image_title} (score: {score}) -> {actual_image_url}"
+                                )
                             else:
-                                logger.debug(f"Failed to get actual URL for image: {clean_title}")
+                                logger.debug(
+                                    f"Failed to get actual URL for image: {clean_title}"
+                                )
 
                         return selected_images
 
@@ -2138,13 +2571,15 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         """
         try:
             # Wikipedia Commons uses MD5 hash of filename for directory structure
-            md5_hash = hashlib.md5(filename.encode('utf-8')).hexdigest()
+            md5_hash = hashlib.md5(filename.encode("utf-8")).hexdigest()
             return md5_hash
         except Exception as e:
             logger.debug(f"Failed to calculate MD5 hash for {filename}: {e}")
             return None
 
-    async def _get_actual_image_url(self, filename: str, session: aiohttp.ClientSession, lang: str = 'commons') -> str | None:
+    async def _get_actual_image_url(
+        self, filename: str, session: aiohttp.ClientSession, lang: str = "commons"
+    ) -> str | None:
         """Construct a reliable Special:FilePath URL for the given filename.
 
         This avoids extra network calls and matches the URL format expected by tests and Telegram.
@@ -2160,11 +2595,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         try:
             # Encode the filename and prepend File:
             from urllib.parse import quote
+
             encoded = quote(f"File:{filename}")
             url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{encoded}?width=800"
             return url
         except Exception as e:
-            logger.debug(f"Failed to construct Special:FilePath URL for {filename}: {e}")
+            logger.debug(
+                f"Failed to construct Special:FilePath URL for {filename}: {e}"
+            )
             return None
 
     async def get_wikipedia_image(self, search_keywords: str) -> str | None:
@@ -2179,7 +2617,14 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         images = await self.get_wikipedia_images(search_keywords, max_images=1)
         return images[0] if images else None
 
-    async def get_nearby_fact_with_history(self, lat: float, lon: float, cache_key: str | None = None, user_id: int = None, force_reasoning_none: bool = False) -> str:
+    async def get_nearby_fact_with_history(
+        self,
+        lat: float,
+        lon: float,
+        cache_key: str | None = None,
+        user_id: int = None,
+        force_reasoning_none: bool = False,
+    ) -> str:
         """Get fact for static location with history tracking to avoid repetition.
 
         Args:
@@ -2197,15 +2642,26 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         if cache_key:
             previous_facts = self.static_history.get_previous_facts(cache_key)
             if previous_facts:
-                logger.info(f"Found {len(previous_facts)} previous facts for {cache_key}: {previous_facts}")
+                logger.info(
+                    f"Found {len(previous_facts)} previous facts for {cache_key}: {previous_facts}"
+                )
             else:
                 logger.info(f"No previous facts found for {cache_key}")
 
         # Get fact using existing method but with previous facts
-        logger.info(f"Calling get_nearby_fact with {len(previous_facts)} previous facts")
+        logger.info(
+            f"Calling get_nearby_fact with {len(previous_facts)} previous facts"
+        )
         if previous_facts:
             logger.info(f"Previous facts being sent to AI: {previous_facts}")
-        fact_response = await self.get_nearby_fact(lat, lon, is_live_location=False, previous_facts=previous_facts, user_id=user_id, force_reasoning_none=force_reasoning_none)
+        fact_response = await self.get_nearby_fact(
+            lat,
+            lon,
+            is_live_location=False,
+            previous_facts=previous_facts,
+            user_id=user_id,
+            force_reasoning_none=force_reasoning_none,
+        )
 
         # Parse the response to extract place and fact for history
         if cache_key:
@@ -2233,18 +2689,22 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
             # Log cache stats after adding
             stats = self.static_history.get_cache_stats()
-            logger.info(f"Static location cache after add: {stats['locations']} locations, {stats['total_facts']} total facts")
+            logger.info(
+                f"Static location cache after add: {stats['locations']} locations, {stats['total_facts']} total facts"
+            )
 
         return fact_response
 
-    def _validate_city_coordinates(self, lat: float, lon: float, city_name: str) -> bool:
+    def _validate_city_coordinates(
+        self, lat: float, lon: float, city_name: str
+    ) -> bool:
         """Validate that coordinates are within expected city bounds.
-        
+
         Args:
             lat: Latitude to check
-            lon: Longitude to check  
+            lon: Longitude to check
             city_name: Name of the city to validate against
-            
+
         Returns:
             True if coordinates are within city bounds, False otherwise
         """
@@ -2256,7 +2716,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
             "New York": (40.7128, -74.0060, 25),
             "Санкт-Петербург": (59.9311, 30.3609, 20),
             "Saint Petersburg": (59.9311, 30.3609, 20),
-            "St Petersburg": (59.9311, 30.3609, 20)
+            "St Petersburg": (59.9311, 30.3609, 20),
         }
 
         if city_name not in city_bounds:
@@ -2267,13 +2727,15 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
 
         return distance <= radius_km
 
-    def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    def _calculate_distance(
+        self, lat1: float, lon1: float, lat2: float, lon2: float
+    ) -> float:
         """Calculate distance between two coordinates in kilometers.
-        
+
         Args:
             lat1, lon1: First coordinate
             lat2, lon2: Second coordinate
-            
+
         Returns:
             Distance in kilometers
         """
@@ -2285,7 +2747,7 @@ Accuracy matters more than drama. Common errors: wrong expo years, false Eiffel 
         # Haversine formula
         dlat = lat2 - lat1
         dlon = lon2 - lon1
-        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
         c = 2 * asin(sqrt(a))
         r = 6371  # Earth radius in kilometers
 

@@ -15,7 +15,9 @@ def _server_timestamp():
     return firestore.SERVER_TIMESTAMP
 
 
-async def ensure_user(user_id: int, username: str | None, first_name: str | None) -> None:
+async def ensure_user(
+    user_id: int, username: str | None, first_name: str | None
+) -> None:
     try:
         db: Client = get_firestore()
         user_ref = db.collection(USERS_COLLECTION).document(str(user_id))
@@ -29,25 +31,35 @@ async def ensure_user(user_id: int, username: str | None, first_name: str | None
             if not user_snapshot.exists:
                 # Create metrics if not exists
                 if not metrics_snapshot.exists:
-                    transaction.set(metrics_ref, {
-                        "total_users": 0,
-                        "total_facts": 0,
-                    })
+                    transaction.set(
+                        metrics_ref,
+                        {
+                            "total_users": 0,
+                            "total_facts": 0,
+                        },
+                    )
 
-                transaction.set(user_ref, {
-                    "username": username,
-                    "first_name": first_name,
-                    "facts_count": 0,
-                    "created_at": _server_timestamp(),
-                    "last_seen_at": _server_timestamp(),
-                })
-                transaction.update(metrics_ref, {"total_users": admin_firestore.Increment(1)})
+                transaction.set(
+                    user_ref,
+                    {
+                        "username": username,
+                        "first_name": first_name,
+                        "facts_count": 0,
+                        "created_at": _server_timestamp(),
+                        "last_seen_at": _server_timestamp(),
+                    },
+                )
+                transaction.update(
+                    metrics_ref, {"total_users": admin_firestore.Increment(1)}
+                )
             else:
                 transaction.update(user_ref, {"last_seen_at": _server_timestamp()})
 
         _tx(db.transaction())
     except Exception as e:
-        logging.getLogger(__name__).warning(f"ensure_user skipped (firebase not configured or error): {e}")
+        logging.getLogger(__name__).warning(
+            f"ensure_user skipped (firebase not configured or error): {e}"
+        )
 
 
 async def increment_fact_counters(user_id: int, delta: int = 1) -> None:
@@ -64,10 +76,20 @@ async def increment_fact_counters(user_id: int, delta: int = 1) -> None:
         logging.getLogger(__name__).warning(f"increment_fact_counters skipped: {e}")
 
 
-async def record_movement(user_id: int, lat: float, lon: float, ts: datetime | None = None, session_id: str | None = None) -> None:
+async def record_movement(
+    user_id: int,
+    lat: float,
+    lon: float,
+    ts: datetime | None = None,
+    session_id: str | None = None,
+) -> None:
     try:
         db: Client = get_firestore()
-        coll = db.collection(USERS_COLLECTION).document(str(user_id)).collection("movements")
+        coll = (
+            db.collection(USERS_COLLECTION)
+            .document(str(user_id))
+            .collection("movements")
+        )
         data = {
             "lat": lat,
             "lon": lon,
@@ -104,5 +126,3 @@ async def get_global_stats() -> dict:
     except Exception as e:
         logging.getLogger(__name__).warning(f"get_global_stats fallback to zeros: {e}")
         return {"total_users": 0, "total_facts": 0}
-
-

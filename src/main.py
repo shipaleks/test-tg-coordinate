@@ -51,19 +51,19 @@ logger = logging.getLogger(__name__)
 
 # Localized welcome messages (focus on Live Location)
 LOCALIZED_MESSAGES = {
-    'ru': {
-        'welcome': (
+    "ru": {
+        "welcome": (
             "🗺️ Привет! Я *Bot Voyage*. Покажу неожиданные факты вокруг тебя.\n\n"
             "ℹ️ Живая локация — это когда ты делишься местоположением в реальном времени на выбранный срок. Telegram можно закрыть — факты придут пушами.\n\n"
             "🔴 Включим? Нажми ниже — покажу в 3 шага."
         ),
-        'buttons': {
-            'info': "📱💡 Как включить живую локацию",
-            'one_time': "📍 Отправить локацию",
-            'language': "🌐 Язык / Language",
-            'donate': "⭐💝 Поддержать проект"
+        "buttons": {
+            "info": "📱💡 Как включить живую локацию",
+            "one_time": "📍 Отправить локацию",
+            "language": "🌐 Язык / Language",
+            "donate": "⭐💝 Поддержать проект",
         },
-        'info_text': (
+        "info_text": (
             "📱 *Как включить живую локацию:*\n\n"
             "1️⃣ Скрепка 📎 → 📍 Location → 🔴 Share Live Location\n"
             "2️⃣ Выберите время (обычно 60 мин удобно)\n"
@@ -74,21 +74,21 @@ LOCALIZED_MESSAGES = {
             "• Не нужно постоянно отправлять локацию\n"
             "• Идеально для туристических прогулок\n\n"
             "Если что — разовая локация тоже работает, просто отправьте её через 📎."
-        )
+        ),
     },
-    'en': {
-        'welcome': (
+    "en": {
+        "welcome": (
             "🗺️ Hi, I'm *Bot Voyage*. I'll show surprising facts around you.\n\n"
             "ℹ️ Live location means you share your real‑time location for a chosen time. You can close Telegram — I'll keep sending facts as push notifications.\n\n"
             "🔴 Turn it on? Tap below — 3 short steps."
         ),
-        'buttons': {
-            'info': "📱💡 How to enable Live Location",
-            'one_time': "📍 Send location",
-            'language': "🌐 Language / Язык",
-            'donate': "⭐💝 Support project"
+        "buttons": {
+            "info": "📱💡 How to enable Live Location",
+            "one_time": "📍 Send location",
+            "language": "🌐 Language / Язык",
+            "donate": "⭐💝 Support project",
         },
-        'info_text': (
+        "info_text": (
             "📱 *How to enable Live Location:*\n\n"
             "1️⃣ Paperclip 📎 → 📍 Location → 🔴 Share Live Location\n"
             "2️⃣ Pick a duration (60 min is a good default)\n"
@@ -99,21 +99,21 @@ LOCALIZED_MESSAGES = {
             "• No need to constantly send location\n"
             "• Perfect for tourist walks\n\n"
             "One-time location also works — just send your location via 📎 if needed."
-        )
+        ),
     },
-    'fr': {
-        'welcome': (
+    "fr": {
+        "welcome": (
             "🗺️ Bonjour, je suis *Bot Voyage*. Je montre des faits inattendus autour de vous.\n\n"
             "ℹ️ La position en direct = partager votre position en temps réel pendant une durée choisie. Vous pouvez fermer Telegram — j'enverrai quand même les faits.\n\n"
             "🔴 On l'active ? 3 étapes ci‑dessous."
         ),
-        'buttons': {
-            'info': "📱💡 Activer la position en direct",
-            'one_time': "📍 Envoyer ma position",
-            'language': "🌐 Langue / Language",
-            'donate': "⭐💝 Soutenir le projet"
+        "buttons": {
+            "info": "📱💡 Activer la position en direct",
+            "one_time": "📍 Envoyer ma position",
+            "language": "🌐 Langue / Language",
+            "donate": "⭐💝 Soutenir le projet",
         },
-        'info_text': (
+        "info_text": (
             "📱 *Activer la position en direct :*\n\n"
             "1️⃣ Trombone 📎 → 📍 Location → 🔴 Share Live Location\n"
             "2️⃣ Durée conseillée : 60 min\n"
@@ -124,31 +124,34 @@ LOCALIZED_MESSAGES = {
             "• Pas besoin d'envoyer constamment votre position\n"
             "• Parfait pour les promenades touristiques\n\n"
             "La position unique fonctionne aussi via 📎 si besoin."
-        )
-    }
+        ),
+    },
     # Add more languages as needed
 }
 
 
-async def send_welcome_message(user_id: int, chat_id: int, bot, language: str = None) -> None:
+async def send_welcome_message(
+    user_id: int, chat_id: int, bot, language: str = None
+) -> None:
     """Send welcome message in user's language."""
     if language is None:
         from src.services.async_donors_wrapper import get_async_donors_db
+
         donors_db = await get_async_donors_db()
         language = await donors_db.get_user_language(user_id)
 
     # Get localized messages (default to English)
-    messages = LOCALIZED_MESSAGES.get(language, LOCALIZED_MESSAGES['en'])
+    messages = LOCALIZED_MESSAGES.get(language, LOCALIZED_MESSAGES["en"])
 
-    welcome_text = messages['welcome']
-    buttons = messages['buttons']
+    welcome_text = messages["welcome"]
+    buttons = messages["buttons"]
 
     # Create keyboard with localized buttons
     # Focus on Live Location, but include one-time location for convenience
     keyboard = [
-        [KeyboardButton(buttons['info'])],
-        [KeyboardButton(buttons['one_time'], request_location=True)],
-        [KeyboardButton(buttons['language']), KeyboardButton(buttons['donate'])],
+        [KeyboardButton(buttons["info"])],
+        [KeyboardButton(buttons["one_time"], request_location=True)],
+        [KeyboardButton(buttons["language"]), KeyboardButton(buttons["donate"])],
     ]
     reply_markup = ReplyKeyboardMarkup(
         keyboard, resize_keyboard=True, one_time_keyboard=False
@@ -158,7 +161,7 @@ async def send_welcome_message(user_id: int, chat_id: int, bot, language: str = 
         chat_id=chat_id,
         text=welcome_text,
         parse_mode="Markdown",
-        reply_markup=reply_markup
+        reply_markup=reply_markup,
     )
 
 
@@ -177,6 +180,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # Safety: cancel any existing live session for this user
     try:
         from src.services.live_location_tracker import get_live_location_tracker
+
         tracker = get_live_location_tracker()
         if tracker.is_user_tracking(user.id):
             logger.info(f"Stopping live location for user {user.id}")
@@ -184,13 +188,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             # Inform user that we reset the session
             try:
                 from src.handlers.location import get_localized_message as _msg
-                reset_text = await _msg(user.id, 'live_manual_stop')
+
+                reset_text = await _msg(user.id, "live_manual_stop")
             except Exception:
                 reset_text = "✅ Session reset. Let's start fresh."
-            await context.bot.send_message(chat_id=chat_id, text=reset_text, parse_mode="Markdown")
+            await context.bot.send_message(
+                chat_id=chat_id, text=reset_text, parse_mode="Markdown"
+            )
             logger.info(f"/start: stopped existing live session for user {user.id}")
     except Exception as e:
-        logger.warning(f"/start: failed to stop existing session for user {user.id}: {e}")
+        logger.warning(
+            f"/start: failed to stop existing session for user {user.id}: {e}"
+        )
 
     # Best-effort: register user in Firestore (non-blocking failure)
     try:
@@ -203,7 +212,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         donors_db = await get_async_donors_db()
     except Exception as e:
         logger.error(f"Failed to get donors_db: {e}")
-        await context.bot.send_message(chat_id=chat_id, text="❌ Initialization error. Please try again.")
+        await context.bot.send_message(
+            chat_id=chat_id, text="❌ Initialization error. Please try again."
+        )
         return
 
     try:
@@ -224,7 +235,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         logger.error(f"/start flow error for user {user.id}: {e}")
         # Fallback minimal message so user always sees a response
         try:
-            await context.bot.send_message(chat_id=chat_id, text="👋 I'm ready. Send location (or Live Location) to start.")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="👋 I'm ready. Send location (or Live Location) to start.",
+            )
         except Exception:
             pass
 
@@ -239,19 +253,19 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     # Localized sequence: definition + 3 steps (no buttons)
     steps = {
-        'ru': [
+        "ru": [
             "Что такое живая локация: ты делишься местоположением в реальном времени на выбранный срок. Telegram можно закрыть — факты придут пушами.",
             "Шаг 1/3. Нажми 📎 внизу.",
             "Шаг 2/3. Открой вкладку 📍 Геопозиция/Location снизу.",
             "Шаг 3/3. Выбери 🟢 Транслировать геопозицию/Share My Live Location.",
         ],
-        'en': [
+        "en": [
             "Live location = share your real‑time location for a chosen time. You can close Telegram — I’ll keep sending facts.",
             "Step 1/3. Tap 📎 below.",
             "Step 2/3. Open the 📍 Location tab at the bottom.",
             "Step 3/3. Choose 🟢 Share My Live Location.",
         ],
-        'fr': [
+        "fr": [
             "Position en direct = partager votre position en temps réel pendant une durée choisie. Vous pouvez fermer Telegram — j’enverrai quand même les faits.",
             "Étape 1/3. Touchez 📎 en bas.",
             "Étape 2/3. Ouvrez l’onglet 📍 Localisation/Location en bas.",
@@ -259,12 +273,12 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         ],
     }
     labels = {
-        'ru': { 'next': "Далее", 'done': "Готово", 'go': "Поехали" },
-        'en': { 'next': "Next", 'done': "Done", 'go': "Let’s go" },
-        'fr': { 'next': "Suivant", 'done': "Terminé", 'go': "C’est parti" },
+        "ru": {"next": "Далее", "done": "Готово", "go": "Поехали"},
+        "en": {"next": "Next", "done": "Done", "go": "Let’s go"},
+        "fr": {"next": "Suivant", "done": "Terminé", "go": "C’est parti"},
     }
-    lang_steps = steps.get(language, steps['en'])
-    lang_labels = labels.get(language, labels['en'])
+    lang_steps = steps.get(language, steps["en"])
+    labels.get(language, labels["en"])
 
     # No video or GIF: send only text + step images
 
@@ -274,6 +288,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     # Then send 3 step messages with images if available
     import os
+
     base_path = Path(__file__).resolve().parent.parent
     step_images = ["IMG_9249.PNG", "IMG_9248.PNG", "IMG_9247.PNG"]
     step_file_ids = [
@@ -287,10 +302,12 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         sent_photo = False
 
         # First priority: use file_id from environment (best for Railway)
-        file_id = step_file_ids[idx-1]
+        file_id = step_file_ids[idx - 1]
         if file_id:
             try:
-                await context.bot.send_photo(chat_id=chat_id, photo=file_id, caption=caption)
+                await context.bot.send_photo(
+                    chat_id=chat_id, photo=file_id, caption=caption
+                )
                 logger.info(f"Sent step {idx} image via file_id")
                 sent_photo = True
             except Exception as e:
@@ -298,13 +315,15 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         # Second priority: try local file (for local development)
         if not sent_photo:
-            image_name = step_images[idx-1]
+            image_name = step_images[idx - 1]
             image_path = base_path / "docs" / image_name
 
             if image_path.exists():
                 try:
                     with open(image_path, "rb") as f:
-                        await context.bot.send_photo(chat_id=chat_id, photo=f, caption=caption)
+                        await context.bot.send_photo(
+                            chat_id=chat_id, photo=f, caption=caption
+                        )
                     logger.info(f"Sent step {idx} image from {image_path}")
                     sent_photo = True
                 except Exception as e:
@@ -351,13 +370,17 @@ def main() -> None:
     if os.environ.get("RESET_LANG_ON_DEPLOY", "").lower() == "true":
         try:
             import asyncio
+
             async def _reset_all_languages():
                 db = await get_async_donors_db()
                 # best-effort: if backend supports bulk reset; otherwise skip
                 reset_supported = hasattr(db._db, "reset_all_languages")  # type: ignore[attr-defined]
                 if reset_supported:
                     await db._db.reset_all_languages()  # type: ignore[attr-defined]
-            asyncio.get_event_loop_policy().get_event_loop().run_until_complete(_reset_all_languages())
+
+            asyncio.get_event_loop_policy().get_event_loop().run_until_complete(
+                _reset_all_languages()
+            )
             logger.info("RESET_LANG_ON_DEPLOY executed")
         except Exception as e:
             logger.warning(f"RESET_LANG_ON_DEPLOY failed or unsupported: {e}")
@@ -392,7 +415,9 @@ def main() -> None:
     application.add_handler(CommandHandler("reset", reset_language_command))
 
     # Debug command
-    async def debuguser_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def debuguser_command(
+        update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         """Debug user state in Firestore."""
         user = update.effective_user
 
@@ -400,8 +425,9 @@ def main() -> None:
             donors_db = await get_async_donors_db()
 
             # Check if using Firestore
-            if hasattr(donors_db, '_use_firestore') and donors_db._use_firestore:
+            if hasattr(donors_db, "_use_firestore") and donors_db._use_firestore:
                 from src.services.firebase_client import get_firestore
+
                 db = get_firestore()
 
                 # Get user document
@@ -434,14 +460,18 @@ def main() -> None:
     # Hidden command to control reasoning effort per user
     application.add_handler(CommandHandler("reason", reason_command))
     # Hidden callbacks for reasoning/model toggles
-    application.add_handler(CallbackQueryHandler(handle_reason_model_callback, pattern="^(set_reason|set_model):"))
+    application.add_handler(
+        CallbackQueryHandler(
+            handle_reason_model_callback, pattern="^(set_reason|set_model):"
+        )
+    )
 
     # Add universal button handlers (check multiple language variants)
     # Info button patterns
     info_patterns = [
         "^📱💡 Как включить живую локацию$",
         "^📱💡 How to enable Live Location$",
-        "^📱💡 Activer la position en direct$"
+        "^📱💡 Activer la position en direct$",
     ]
     for pattern in info_patterns:
         application.add_handler(
@@ -452,18 +482,20 @@ def main() -> None:
     language_patterns = [
         "^🌐 Язык / Language$",
         "^🌐 Language / Язык$",
-        "^🌐 Langue / Language$"
+        "^🌐 Langue / Language$",
     ]
     for pattern in language_patterns:
         application.add_handler(
-            MessageHandler(filters.TEXT & filters.Regex(pattern), show_language_selection)
+            MessageHandler(
+                filters.TEXT & filters.Regex(pattern), show_language_selection
+            )
         )
 
     # Donate button patterns
     donate_patterns = [
         "^⭐💝 Поддержать проект$",
         "^⭐💝 Support project$",
-        "^⭐💝 Soutenir le projet$"
+        "^⭐💝 Soutenir le projet$",
     ]
     for pattern in donate_patterns:
         application.add_handler(
@@ -473,7 +505,8 @@ def main() -> None:
     # Add custom language input handler (must be after button handlers)
     application.add_handler(
         MessageHandler(
-            filters.TEXT & ~filters.COMMAND & ~filters.LOCATION, handle_custom_language_input
+            filters.TEXT & ~filters.COMMAND & ~filters.LOCATION,
+            handle_custom_language_input,
         )
     )
 
@@ -497,7 +530,9 @@ def main() -> None:
     )
 
     # Handler for "show live info" button (after static fact)
-    async def show_live_info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def show_live_info_callback(
+        update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         """Show live location info when user clicks upsell button."""
         query = update.callback_query
         await query.answer()
@@ -555,9 +590,13 @@ def main() -> None:
         # Run healthcheck on a separate port to avoid conflicts
         health_port = port + 1
         health_server = HTTPServer(("0.0.0.0", health_port), HealthCheckHandler)
-        health_thread = threading.Thread(target=health_server.serve_forever, daemon=True)
+        health_thread = threading.Thread(
+            target=health_server.serve_forever, daemon=True
+        )
         health_thread.start()
-        logger.info(f"Healthcheck server started on port {health_port} (/, /health, /healthz)")
+        logger.info(
+            f"Healthcheck server started on port {health_port} (/, /health, /healthz)"
+        )
 
         # Use synchronous run_webhook which handles event loop internally
         application.run_webhook(
