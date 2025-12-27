@@ -763,16 +763,55 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if answer_match and 'poi_coords' in locals() and poi_coords is not None:
             venue_lat, venue_lon = poi_coords
         else:
+            # Try to parse coordinates from response
+            # Keep user coordinates for 5km validation (prevents hallucinated distant coordinates)
             try:
                 parse_method = getattr(openai_client, "parse_coordinates_from_response", None)
                 if parse_method and inspect.iscoroutinefunction(parse_method):
-                    parsed = await parse_method(response, lat, lon)
+                    parsed = await parse_method(response, lat, lon)  # Keep user coords for validation
                 else:
                     parsed = None
             except Exception:
                 parsed = None
             if parsed:
                 venue_lat, venue_lon = parsed
+
+        # Validate: if POI coords are suspiciously close to user's location, they're likely wrong
+        # Claude sometimes returns user coordinates instead of POI coordinates
+        # Threshold: 0.002 degrees ≈ 200 meters (at equator, less at higher latitudes)
+        try:
+            if venue_lat is not None and venue_lon is not None:
+                dy = abs(venue_lat - lat)
+                dx = abs(venue_lon - lon)
+                # Check if venue is too close to user (within ~200m)
+                too_close_to_user = (dy < 0.002 and dx < 0.002)
+                if too_close_to_user:
+                    logger.warning(
+                        f"Venue coordinates too close to user location "
+                        f"(venue: {venue_lat}, {venue_lon}; user: {lat}, {lon}; "
+                        f"delta: {dy:.6f}, {dx:.6f}). Attempting Nominatim fallback."
+                    )
+                    # Try Nominatim lookup using search keywords
+                    if final_search_keywords:
+                        logger.info(f"Attempting Nominatim lookup with search keywords: {final_search_keywords}")
+                        try:
+                            nomi_coords = await openai_client.get_coordinates_from_search_keywords(
+                                final_search_keywords, lat, lon
+                            )
+                            if nomi_coords:
+                                venue_lat, venue_lon = nomi_coords
+                                logger.info(f"Successfully adjusted venue via Nominatim: {venue_lat}, {venue_lon}")
+                            else:
+                                logger.warning("Nominatim lookup failed, venue will not be sent")
+                                venue_lat, venue_lon = None, None
+                        except Exception as e:
+                            logger.warning(f"Nominatim lookup failed: {e}")
+                            venue_lat, venue_lon = None, None
+                    else:
+                        logger.warning("Venue too close to user but no search keywords available, venue will not be sent")
+                        venue_lat, venue_lon = None, None
+        except Exception as e:
+            logger.error(f"Error validating venue coordinates: {e}")
 
         if venue_lat is not None and venue_lon is not None:
             try:

@@ -755,27 +755,48 @@ class LiveLocationTracker:
                         venue_lat, venue_lon = poi_lat, poi_lon
                     else:
                         # Try to parse coordinates from response as fallback
-                        coordinates = await openai_client.parse_coordinates_from_response(
-                            response, session_data.latitude, session_data.longitude
-                        )
-                        if coordinates:
-                            venue_lat, venue_lon = coordinates
-                        else:
+                        # Keep user coordinates for 5km validation (prevents hallucinated distant coordinates)
+                        try:
+                            coordinates = await openai_client.parse_coordinates_from_response(
+                                response, session_data.latitude, session_data.longitude
+                            )
+                            if coordinates:
+                                venue_lat, venue_lon = coordinates
+                            else:
+                                venue_lat, venue_lon = None, None
+                        except Exception:
                             venue_lat, venue_lon = None, None
 
-                    # If POI coords look suspiciously equal to user's live point, try Nominatim from Search
+                    # Validate: if POI coords are suspiciously close to user's location, they're likely wrong
+                    # Claude sometimes returns user coordinates instead of POI coordinates
+                    # Threshold: 0.002 degrees ≈ 200 meters (at equator, less at higher latitudes)
                     try:
                         too_close_to_user = False
                         if venue_lat is not None and venue_lon is not None:
                             dy = abs(venue_lat - session_data.latitude)
                             dx = abs(venue_lon - session_data.longitude)
-                            too_close_to_user = (dy < 1e-6 and dx < 1e-6)
+                            # Expanded threshold from 1e-6 (0.11m) to 0.002° (~200m) to catch nearby coords
+                            too_close_to_user = (dy < 0.002 and dx < 0.002)
+                            if too_close_to_user:
+                                logger.warning(
+                                    f"Venue coordinates too close to user location "
+                                    f"(venue: {venue_lat}, {venue_lon}; user: {session_data.latitude}, {session_data.longitude}; "
+                                    f"delta: {dy:.6f}, {dx:.6f}). Will try Nominatim fallback."
+                                )
                         if too_close_to_user and search_keywords:
+                            logger.info(f"Attempting Nominatim lookup with search keywords: {search_keywords}")
                             nomi = await openai_client.get_coordinates_from_search_keywords(search_keywords, session_data.latitude, session_data.longitude)
                             if nomi:
                                 venue_lat, venue_lon = nomi
-                                logger.info(f"Adjusted venue via Nominatim from Search: {venue_lat}, {venue_lon}")
-                    except Exception:
+                                logger.info(f"Successfully adjusted venue via Nominatim from Search: {venue_lat}, {venue_lon}")
+                            else:
+                                logger.warning("Nominatim lookup failed, venue will not be sent")
+                                venue_lat, venue_lon = None, None
+                        elif too_close_to_user and not search_keywords:
+                            logger.warning("Venue too close to user but no search keywords available, venue will not be sent")
+                            venue_lat, venue_lon = None, None
+                    except Exception as e:
+                        logger.error(f"Error validating venue coordinates: {e}")
                         pass
 
                     if venue_lat is not None and venue_lon is not None:
