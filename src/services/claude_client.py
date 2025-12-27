@@ -187,7 +187,13 @@ class ClaudeClient:
 РЕЗУЛЬТАТЫ ПОИСКА В ИНТЕРНЕТЕ:
 {web_search_results}
 
-Используйте эти результаты для верификации фактов. Цитируйте источники в разделе "Источники"."""
+**КРИТИЧНО - РАБОТА С ИСТОЧНИКАМИ:**
+- В разделе "Источники" используй ТОЛЬКО URL из результатов поиска выше
+- СТРОГО ЗАПРЕЩЕНО выдумывать, угадывать или генерировать URL
+- НИКОГДА не пиши несуществующие ссылки типа wikipedia.org/..., atlasобscura.com/..., paris.fr/...
+- Каждый URL в "Источниках" ДОЛЖЕН быть скопирован ДОСЛОВНО из "РЕЗУЛЬТАТЫ ПОИСКА"
+- Если ни один URL из поиска не подходит для твоего факта - лучше верни [[NO_POI_FOUND]]
+- Проверь: каждая ссылка в твоём ответе есть в списке выше? Если нет - это ОШИБКА."""
 
         base_rules = f"""Ты — автор фактов для Atlas Obscura на русском языке. Твоя миссия: найти самую удивительную, конкретную, проверенную деталь о РЕАЛЬНОМ МЕСТЕ рядом с указанными координатами.
 
@@ -215,11 +221,15 @@ class ClaudeClient:
 - ПЛАНКА КАЧЕСТВА: Заставит ли этот факт человека остановиться идти и посмотреть ближе? Если нет, копай глубже.
 
 КРИТИЧЕСКОЕ ТРЕБОВАНИЕ - ВЕРИФИКАЦИЯ ФАКТОВ:
-- КАЖДЫЙ факт ДОЛЖЕН быть подтвержден надежным источником из веб-поиска
-- НЕ выдумывай детали, которых нет в источниках (даты, имена, события)
+- КАЖДЫЙ факт ДОЛЖЕН быть подтвержден надежным источником из РЕЗУЛЬТАТОВ ПОИСКА выше
+- Пиши ТОЛЬКО то, что можешь найти в предоставленных результатах поиска
+- НЕ выдумывай детали, которых нет в источниках (даты, имена, события, системы, инженеров)
+- Если в результатах поиска нет информации о конкретной детали - НЕ упоминай её
+- Примеры ЗАПРЕЩЁННЫХ выдумок: "система Пейтер", "инженер Эдуард Пейтер 1902", "сердца польских королей", "серебряные урны"
 - Если источники противоречат друг другу - используй только общепризнанные факты
-- НИКОГДА не пиши "сердца польских королей", "серебряные урны", "тайные подземелья" без ПРЯМОГО подтверждения в источниках
-- Если не можешь найти достаточно фактов в источниках - лучше верни [[NO_POI_FOUND]]
+- НИКОГДА не пиши конкретные имена инженеров/архитекторов/годы без ПРЯМОГО упоминания в результатах поиска
+- Если не можешь найти достаточно проверяемых фактов в результатах поиска - лучше верни [[NO_POI_FOUND]]
+- ЗОЛОТОЕ ПРАВИЛО: Если сомневаешься - проверь результаты поиска. Нет в поиске = не пиши.
 
 КРИТИЧЕСКОЕ ТРЕБОВАНИЕ - ТОЧНОСТЬ КООРДИНАТ:
 - Coordinates ДОЛЖНЫ быть координатами ОПИСЫВАЕМОГО места, НЕ координатами пользователя!
@@ -263,9 +273,11 @@ Coordinates: [LAT, LON точки, которую описываешь, НЕ к�
 Search: [Запрос для геокодирования через Nominatim: "Название, Улица, Город"]
 Interesting fact: [Удивительное начало → История с именами/датами → Почему важно → Что видно сегодня. Без URL в тексте.]
 Источники:
-- [Краткое название] — [URL]
-- [Краткое название] — [URL]
-</answer>"""
+- [Краткое название] — [ТОЛЬКО URL из РЕЗУЛЬТАТОВ ПОИСКА - скопируй дословно, НЕ выдумывай!]
+- [Краткое название] — [ТОЛЬКО URL из РЕЗУЛЬТАТОВ ПОИСКА - скопируй дословно, НЕ выдумывай!]
+</answer>
+
+ПРОВЕРЬ ПЕРЕД ОТПРАВКОЙ: Каждый URL в Источниках есть в РЕЗУЛЬТАТАХ ПОИСКА выше? Если хоть один URL выдуман - это КРИТИЧЕСКАЯ ОШИБКА!"""
         else:
             return base_rules + """
 
@@ -276,9 +288,11 @@ Coordinates: [LAT, LON точки, которую описываешь, НЕ к�
 Search: [Запрос для Nominatim: "Название, Улица, Город"]
 Interesting fact: [Удивительная деталь → Краткий контекст с датой/именем → Что видно сегодня. Без URL в тексте.]
 Источники:
-- [Краткое название] — [URL]
-- [Краткое название] — [URL]
-</answer>"""
+- [Краткое название] — [ТОЛЬКО URL из РЕЗУЛЬТАТОВ ПОИСКА - скопируй дословно, НЕ выдумывай!]
+- [Краткое название] — [ТОЛЬКО URL из РЕЗУЛЬТАТОВ ПОИСКА - скопируй дословно, НЕ выдумывай!]
+</answer>
+
+ПРОВЕРЬ ПЕРЕД ОТПРАВКОЙ: Каждый URL в Источниках есть в РЕЗУЛЬТАТАХ ПОИСКА выше? Если хоть один URL выдуман - это КРИТИЧЕСКАЯ ОШИБКА!"""
 
     def _build_system_prompt_english(
         self,
@@ -295,7 +309,13 @@ Interesting fact: [Удивительная деталь → Краткий ко
 WEB SEARCH RESULTS:
 {web_search_results}
 
-Use these results to verify facts. Cite sources in the Sources section."""
+**CRITICAL - WORKING WITH SOURCES:**
+- In the "Sources" section use ONLY URLs from the search results above
+- STRICTLY FORBIDDEN to invent, guess, or generate URLs
+- NEVER write non-existent links like wikipedia.org/..., atlasobscura.com/..., paris.fr/...
+- Each URL in "Sources" MUST be copied VERBATIM from "WEB SEARCH RESULTS"
+- If no URL from search results fits your fact - better return [[NO_POI_FOUND]]
+- Verify: is each link in your answer present in the list above? If not - this is an ERROR."""
 
         base_rules = f"""You are an Atlas Obscura fact writer. Your mission: find the most surprising, specific, verified detail about a REAL PLACE near the given coordinates.
 
@@ -318,11 +338,15 @@ METHOD:
 - QUALITY BAR: Would this fact make someone stop walking and look closer? If not, dig deeper.
 
 CRITICAL REQUIREMENT - FACT VERIFICATION:
-- EVERY fact MUST be confirmed by reliable sources from web search
-- DO NOT invent details not present in sources (dates, names, events)
+- EVERY fact MUST be confirmed by reliable sources from WEB SEARCH RESULTS above
+- Write ONLY what you can find in the provided search results
+- DO NOT invent details not present in sources (dates, names, events, systems, engineers)
+- If search results don't have information about a specific detail - DO NOT mention it
+- Examples of FORBIDDEN inventions: "Peyter system", "engineer Édouard Peyter 1902", "hearts of Polish kings", "silver urns"
 - If sources contradict - use only universally accepted facts
-- NEVER write "hearts of Polish kings", "silver urns", "secret tunnels" without DIRECT confirmation in sources
-- If you cannot find enough facts in sources - better return [[NO_POI_FOUND]]
+- NEVER write specific engineer/architect names/years without DIRECT mention in search results
+- If you cannot find enough verifiable facts in search results - better return [[NO_POI_FOUND]]
+- GOLDEN RULE: If in doubt - check search results. Not in search = don't write.
 
 CRITICAL REQUIREMENT - COORDINATE ACCURACY:
 - Coordinates MUST be coordinates of the DESCRIBED place, NOT user's coordinates!
@@ -371,9 +395,11 @@ Coordinates: [LAT, LON of the point being described, NOT user location! 6 decima
 Search: [Nominatim query: "Name, Street, City"]
 Interesting fact: [Surprising opening → Human story with names/dates → Why it matters → What to see today. No URLs in text.]
 Sources:
-- [Concise title] — [URL]
-- [Concise title] — [URL]
+- [Concise title] — [ONLY URL from WEB SEARCH RESULTS - copy verbatim, DON'T invent!]
+- [Concise title] — [ONLY URL from WEB SEARCH RESULTS - copy verbatim, DON'T invent!]
 </answer>
+
+VERIFY BEFORE SENDING: Is each URL in Sources present in WEB SEARCH RESULTS above? If even one URL is invented - this is a CRITICAL ERROR!
 
 Write in {user_language}."""
         else:
@@ -386,9 +412,11 @@ Coordinates: [LAT, LON of the point being described, NOT user location! 6 decima
 Search: [Nominatim query: "Name, Street, City"]
 Interesting fact: [Surprising detail → Quick context with date/name → What visitors can see today. No URLs in text.]
 Sources:
-- [Concise title] — [URL]
-- [Concise title] — [URL]
+- [Concise title] — [ONLY URL from WEB SEARCH RESULTS - copy verbatim, DON'T invent!]
+- [Concise title] — [ONLY URL from WEB SEARCH RESULTS - copy verbatim, DON'T invent!]
 </answer>
+
+VERIFY BEFORE SENDING: Is each URL in Sources present in WEB SEARCH RESULTS above? If even one URL is invented - this is a CRITICAL ERROR!
 
 Write in {user_language}."""
 
