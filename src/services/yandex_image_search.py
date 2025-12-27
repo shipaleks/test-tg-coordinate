@@ -12,15 +12,12 @@ Environment variables required:
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import logging
 import os
 import time
-from typing import Dict, List, Optional
 
 import aiohttp
-
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +37,12 @@ class YandexImageSearch:
     def __init__(self, api_key: str, folder_id: str):
         self.api_key = api_key
         self.folder_id = folder_id
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
         # Simple in-memory cache to reduce API usage and latency
-        self._cache: Dict[str, Dict] = {}
+        self._cache: dict[str, dict] = {}
         self._cache_ttl_seconds: int = 3600
 
-    async def __aenter__(self) -> "YandexImageSearch":
+    async def __aenter__(self) -> YandexImageSearch:
         self.session = aiohttp.ClientSession()
         return self
 
@@ -53,10 +50,10 @@ class YandexImageSearch:
         if self.session:
             await self.session.close()
 
-    def _cache_key(self, query: str, region: Optional[int]) -> str:
-        return hashlib.md5(f"{query}|{region}".encode("utf-8")).hexdigest()
+    def _cache_key(self, query: str, region: int | None) -> str:
+        return hashlib.md5(f"{query}|{region}".encode()).hexdigest()
 
-    def _cache_get(self, key: str) -> Optional[List[str]]:
+    def _cache_get(self, key: str) -> list[str] | None:
         entry = self._cache.get(key)
         if not entry:
             return None
@@ -69,7 +66,7 @@ class YandexImageSearch:
             return None
         return entry["images"].copy()
 
-    def _cache_set(self, key: str, images: List[str]) -> None:
+    def _cache_set(self, key: str, images: list[str]) -> None:
         self._cache[key] = {"ts": time.time(), "images": images[:20]}
 
     async def search_images(
@@ -77,9 +74,9 @@ class YandexImageSearch:
         query: str,
         max_images: int = 8,
         *,
-        region: Optional[int] = None,
+        region: int | None = None,
         safe_mode: bool = True,
-    ) -> List[str]:
+    ) -> list[str]:
         """Search for images using Yandex Cloud Search API.
 
         Args:
@@ -133,7 +130,7 @@ class YandexImageSearch:
                 "page": 0,
             },
         }
-        payload_variants: List[Dict] = [base_snake, alt_camel, alt_numeric]
+        payload_variants: list[dict] = [base_snake, alt_camel, alt_numeric]
         if region is not None:
             for p in payload_variants:
                 try:
@@ -190,15 +187,20 @@ class YandexImageSearch:
             return []
 
         images = self._extract_images(data, max_images * 3)
+
+        # CRITICAL: Normalize all Wikimedia URLs to use Special:FilePath
+        # This fixes Telegram's "webpage_curl_failed" error with thumbnail URLs
+        images = [self._normalize_wikimedia_url(url) for url in images]
+
         # Stronger dedup: collapse by base filename and prefer larger widths
         images = self._deduplicate_and_select(images, need=max_images)
         if images:
             self._cache_set(cache_key, images)
         return images[:max_images]
 
-    def _extract_images(self, data: Dict, max_images: int) -> List[str]:
+    def _extract_images(self, data: dict, max_images: int) -> list[str]:
         """Extract image URLs from API response with defensive parsing."""
-        images: List[str] = []
+        images: list[str] = []
 
         # 0) Some deployments return a single "rawData" field with JSON or HTML/text
         raw = data.get("rawData")
@@ -221,7 +223,7 @@ class YandexImageSearch:
                 except Exception:
                     pass
                 # Attempt base64 decode → XML parse
-                found: List[str] = []
+                found: list[str] = []
                 try:
                     import base64 as _b64
                     decoded = _b64.b64decode(raw, validate=False)
@@ -328,7 +330,7 @@ class YandexImageSearch:
                 pass
 
         # Deduplicate and filter wiki pages while preserving order
-        deduped: List[str] = []
+        deduped: list[str] = []
         seen = set()
         for u in images:
             # Final safety check: only accept valid image URLs
@@ -337,11 +339,11 @@ class YandexImageSearch:
                 deduped.append(u)
         return deduped
 
-    def _deduplicate_and_select(self, urls: List[str], need: int) -> List[str]:
+    def _deduplicate_and_select(self, urls: list[str], need: int) -> list[str]:
         # Group by base filename
         def extract_base(u: str) -> tuple[str, int]:
-            from urllib.parse import urlparse, parse_qs
             import re as _re
+            from urllib.parse import parse_qs, urlparse
             # Try to extract canonical commons filename (without 'File:')
             filename = self._extract_commons_filename(u)
             if not filename:
@@ -374,7 +376,7 @@ class YandexImageSearch:
             base, width = extract_base(u)
             groups.setdefault(base, []).append((width, u))
 
-        selected: List[str] = []
+        selected: list[str] = []
         # Sort each group by width desc, take first; then take groups in insertion order
         for base, items in groups.items():
             items.sort(key=lambda x: x[0], reverse=True)
@@ -389,9 +391,9 @@ class YandexImageSearch:
         self,
         base_query: str,
         *,
-        fact_text: Optional[str] = None,
-        place_name: Optional[str] = None,
-    ) -> List[str]:
+        fact_text: str | None = None,
+        place_name: str | None = None,
+    ) -> list[str]:
         """Build multiple query variants to increase diversity of results.
 
         Strategy:
@@ -399,7 +401,7 @@ class YandexImageSearch:
           - Add detected place type (e.g., музей/museum, парк/park, мост/bridge)
           - Add area token from comma-separated place (e.g., district/city)
         """
-        variants: List[str] = []
+        variants: list[str] = []
 
         seed = (place_name or base_query or "").strip()
         if seed:
@@ -416,7 +418,7 @@ class YandexImageSearch:
             ("театр", ["театр", "theater"]),
             ("университет", ["университет", "university"]),
         ]
-        type_token: Optional[str] = None
+        type_token: str | None = None
         if fact_text:
             low = fact_text.lower()
             for ru, keys in place_types:
@@ -438,7 +440,7 @@ class YandexImageSearch:
                 pass
 
         # De-duplicate while preserving order and cap to 3 variants
-        out: List[str] = []
+        out: list[str] = []
         seen = set()
         for v in variants:
             if v and v not in seen:
@@ -448,7 +450,7 @@ class YandexImageSearch:
                 break
         return out
 
-    def _passes_basic_filters(self, item: Dict) -> bool:
+    def _passes_basic_filters(self, item: dict) -> bool:
         """Filter out non-photo content heuristically."""
         snippet = item.get("snippet") or {}
         title = str(snippet.get("title", "")).lower()
@@ -478,8 +480,8 @@ class YandexImageSearch:
             return False
         return True
 
-    def _find_image_urls_anywhere(self, node, need: int = 3, depth: int = 0, max_depth: int = 5) -> List[str]:
-        urls: List[str] = []
+    def _find_image_urls_anywhere(self, node, need: int = 3, depth: int = 0, max_depth: int = 5) -> list[str]:
+        urls: list[str] = []
         if depth > max_depth or need <= 0:
             return urls
         try:
@@ -514,27 +516,27 @@ class YandexImageSearch:
             # Must be HTTP(S)
             if not lower.startswith("http"):
                 return False
-            
+
             # Special:FilePath URLs are always valid (Telegram can load them)
             if "special:filepath" in lower:
                 return True
-            
+
             # CRITICAL: Reject ALL wiki page URLs (desktop and mobile)
             # Telegram can't load these, only direct image URLs work
             if "/wiki/file:" in lower or "/wiki/fichier:" in lower:
                 return False
-            if "wikipedia.org/wiki/" in lower and not "special:filepath" in lower:
+            if "wikipedia.org/wiki/" in lower and "special:filepath" not in lower:
                 return False
-            
+
             # For other URLs, must end with image extension
             if any(ext in lower for ext in (".jpg", ".jpeg", ".png", ".webp")):
                 return True
-            
+
             return False
         except Exception:
             return False
 
-    def _extract_image_urls_from_text(self, text: str, need: int = 5) -> List[str]:
+    def _extract_image_urls_from_text(self, text: str, need: int = 5) -> list[str]:
         try:
             import re as _re
             # Find http(s) URLs ending with image extensions (basic heuristic)
@@ -542,7 +544,7 @@ class YandexImageSearch:
             matches = _re.findall(pattern, text, flags=_re.IGNORECASE)
             # Preserve order and unique
             seen = set()
-            out: List[str] = []
+            out: list[str] = []
             for m in matches:
                 norm = self._normalize_wikimedia_url(m)
                 # Only accept valid image URLs (not wiki pages)
@@ -611,7 +613,7 @@ class YandexImageSearch:
             return url
 
     @staticmethod
-    def _extract_commons_filename(url: str) -> Optional[str]:
+    def _extract_commons_filename(url: str) -> str | None:
         """Extract canonical Wikimedia filename from various URL forms.
 
         Returns filename with extension, without 'File:' prefix, lowercased if possible.
@@ -648,7 +650,7 @@ class YandexImageSearch:
             return None
 
     @staticmethod
-    def detect_region(lat: Optional[float], lon: Optional[float]) -> Optional[int]:
+    def detect_region(lat: float | None, lon: float | None) -> int | None:
         """Very rough region detection for better local relevance.
 
         Returns a Yandex region code or None.

@@ -2,28 +2,28 @@
 
 import asyncio
 import logging
-from typing import Optional, List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
-from .postgres_db import get_postgres_db, PostgresDatabase
+from .postgres_db import PostgresDatabase, get_postgres_db
 
 logger = logging.getLogger(__name__)
 
 
 class PostgresSyncWrapper:
     """Synchronous wrapper for PostgreSQL database."""
-    
+
     def __init__(self):
         """Initialize the wrapper."""
         self.db_path = "postgresql://railway"
         self._loop = None
         self._executor = ThreadPoolExecutor(max_workers=5)
-        self._db: Optional[PostgresDatabase] = None
+        self._db: PostgresDatabase | None = None
         self._initialized = False
-        
+
         # Initialize database on first use
         self._ensure_initialized()
-    
+
     def _ensure_initialized(self):
         """Ensure database is initialized."""
         if not self._initialized:
@@ -40,7 +40,7 @@ class PostgresSyncWrapper:
                     # No running loop, we can initialize normally
                     self._loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(self._loop)
-                    
+
                     # Initialize database
                     self._db = self._loop.run_until_complete(get_postgres_db())
                     self._initialized = True
@@ -48,7 +48,7 @@ class PostgresSyncWrapper:
             except Exception as e:
                 logger.error(f"Failed to initialize PostgreSQL wrapper: {e}")
                 raise
-    
+
     def _run_async(self, coro):
         """Run async coroutine in sync context."""
         try:
@@ -63,7 +63,7 @@ class PostgresSyncWrapper:
                             self._db = await get_postgres_db()
                         return await coro
                     coro = wrapper()
-            
+
             # Try to get current event loop
             try:
                 loop = asyncio.get_running_loop()
@@ -77,19 +77,19 @@ class PostgresSyncWrapper:
             except RuntimeError:
                 # No running loop, create one
                 return asyncio.run(coro)
-                
+
         except Exception as e:
             logger.error(f"Error running async operation: {e}")
             raise
-    
+
     def add_donation(
-        self, 
-        user_id: int, 
-        payment_id: str, 
+        self,
+        user_id: int,
+        payment_id: str,
         stars_amount: int,
-        telegram_username: Optional[str] = None,
-        first_name: Optional[str] = None,
-        invoice_payload: Optional[str] = None
+        telegram_username: str | None = None,
+        first_name: str | None = None,
+        invoice_payload: str | None = None
     ) -> bool:
         """Add a new donation (sync)."""
         return self._run_async(
@@ -98,36 +98,36 @@ class PostgresSyncWrapper:
                 telegram_username, first_name, invoice_payload
             )
         )
-    
+
     def is_premium_user(self, user_id: int) -> bool:
         """Check if user has premium status (sync)."""
         return self._run_async(self._db.is_premium_user(user_id))
-    
-    def get_donor_info(self, user_id: int) -> Optional[Dict[str, Any]]:
+
+    def get_donor_info(self, user_id: int) -> dict[str, Any] | None:
         """Get donor information (sync)."""
         return self._run_async(self._db.get_donor_info(user_id))
-    
-    def get_donation_history(self, user_id: int) -> List[Dict[str, Any]]:
+
+    def get_donation_history(self, user_id: int) -> list[dict[str, Any]]:
         """Get donation history (sync)."""
         return self._run_async(self._db.get_donation_history(user_id))
-    
-    def get_stats(self) -> Dict[str, Any]:
+
+    def get_stats(self) -> dict[str, Any]:
         """Get database statistics (sync)."""
         return self._run_async(self._db.get_stats())
-    
+
     def get_user_language(self, user_id: int) -> str:
         """Get user language (sync)."""
         return self._run_async(self._db.get_user_language(user_id))
-    
+
     def set_user_language(self, user_id: int, language: str) -> bool:
         """Set user language (sync)."""
         return self._run_async(self._db.set_user_language(user_id, language))
-    
+
     def has_language_set(self, user_id: int) -> bool:
         """Check if user has language set."""
         language = self.get_user_language(user_id)
         return language != "ru"  # ru is default
-    
+
     def reset_user_language(self, user_id: int) -> bool:
         """Reset user language to default."""
         return self.set_user_language(user_id, "ru")
@@ -139,7 +139,7 @@ class PostgresSyncWrapper:
     def set_user_reasoning(self, user_id: int, level: str) -> bool:
         """Set user reasoning level (sync)."""
         return self._run_async(self._db.set_user_reasoning(user_id, level))
-    
+
     def __del__(self):
         """Cleanup on deletion."""
         try:

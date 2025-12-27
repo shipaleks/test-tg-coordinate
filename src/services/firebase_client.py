@@ -1,13 +1,13 @@
-import os
-import json
 import base64
-from typing import Optional, Any
+import json
+import os
+from typing import Any
 
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore as admin_firestore
 
-_firestore: Optional[Any] = None
+_firestore: Any | None = None
 
 
 def get_firestore() -> Any:

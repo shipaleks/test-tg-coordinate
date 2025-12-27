@@ -1,6 +1,9 @@
 """Shared formatting utilities for parsing model output and building sections."""
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def extract_sources_from_answer(answer_content: str) -> list[tuple[str, str]]:
@@ -77,7 +80,7 @@ def escape_html(text: str) -> str:
 
 
 def label_to_html(label: str) -> str:
-    """Convert patterns like "🔗 *Источники:*" to "🔗 <b>Источники:</b>""" 
+    """Convert patterns like "🔗 *Источники:*" to "🔗 <b>Источники:</b>"""
     return re.sub(r"\*(.+?)\*", r"<b>\\1</b>", label)
 
 
@@ -124,13 +127,13 @@ def normalize_place_name(place: str) -> str:
     """
     if not place:
         return ""
-    
+
     normalized = place.lower().strip()
-    
+
     # First, remove city names at the end (common pattern: "Place Name, Paris")
     # Do this BEFORE removing prefixes to preserve the main place name
-    normalized = re.sub(r",\s*[a-zA-Zа-яА-Яéèêëàâùûôîïç\s]+$", "", normalized)
-    
+    normalized = re.sub(r",\s*[\da-zA-Zа-яА-Яéèêëàâùûôîïç\s]+$", "", normalized)
+
     # Common translations/equivalents for well-known landmarks
     # These are bidirectional mappings to handle cross-language duplicates
     landmark_normalizations = {
@@ -152,10 +155,10 @@ def normalize_place_name(place: str) -> str:
         r"arc\s+de\s+triomphe": "arc triomphe",
         r"триумфальная\s+арка": "arc triomphe",
     }
-    
+
     for pattern, replacement in landmark_normalizations.items():
         normalized = re.sub(pattern, replacement, normalized, flags=re.IGNORECASE)
-    
+
     # Remove common prefixes/articles in multiple languages
     prefixes_to_remove = [
         # French
@@ -180,79 +183,88 @@ def normalize_place_name(place: str) -> str:
         r"^il\s+", r"^lo\s+", r"^la\s+", r"^i\s+", r"^gli\s+", r"^le\s+",
         r"^chiesa\s+di\s+", r"^basilica\s+di\s+",
     ]
-    
+
     for prefix in prefixes_to_remove:
         normalized = re.sub(prefix, "", normalized, flags=re.IGNORECASE)
-    
+
     # Replace special characters with spaces
     normalized = re.sub(r"[-–—_/\\]", " ", normalized)
-    
+
     # Remove punctuation
     normalized = re.sub(r"[.,;:!?'\"()[\]{}]", "", normalized)
-    
+
     # Collapse multiple spaces
     normalized = re.sub(r"\s+", " ", normalized).strip()
-    
+
     # If result is too short (e.g., just a number), use original with basic cleanup
     if len(normalized) < 3:
         # Fallback: basic cleanup without aggressive prefix removal
         normalized = place.lower().strip()
-        normalized = re.sub(r",\s*[a-zA-Zа-яА-Яéèêëàâùûôîïç\s]+$", "", normalized)
+        normalized = re.sub(r",\s*[\da-zA-Zа-яА-Яéèêëàâùûôîïç\s]+$", "", normalized)
         normalized = re.sub(r"[-–—_/\\]", " ", normalized)
         normalized = re.sub(r"[.,;:!?'\"()[\]{}]", "", normalized)
         normalized = re.sub(r"\s+", " ", normalized).strip()
-    
+
     return normalized
 
 
-def is_duplicate_place(new_place: str, previous_places: list[str], threshold: float = 0.7) -> bool:
+def is_duplicate_place(new_place: str, previous_places: list[str], threshold: float = 0.5) -> bool:
     """Check if a place name is a duplicate of any previous places.
-    
+
     Uses normalized comparison and substring matching.
-    
+
     Args:
         new_place: The new place name to check
         previous_places: List of previously mentioned place names
-        threshold: Similarity threshold (not currently used, for future fuzzy matching)
-    
+        threshold: Similarity threshold - lowered from 0.7 to 0.5 to catch more near-duplicates
+
     Returns:
         True if this appears to be a duplicate
     """
     if not new_place or not previous_places:
         return False
-    
+
     new_normalized = normalize_place_name(new_place)
     if not new_normalized:
         return False
-    
+
     # Split into tokens for comparison
     new_tokens = set(new_normalized.split())
-    
+
     for prev in previous_places:
         prev_normalized = normalize_place_name(prev)
         if not prev_normalized:
             continue
-        
+
         # Exact match after normalization
         if new_normalized == prev_normalized:
+            logger.debug(f"Duplicate detected (exact match): '{new_place}' == '{prev}'")
             return True
-        
+
         prev_tokens = set(prev_normalized.split())
-        
-        # Check for significant overlap (more than 70% of tokens match)
+
+        # Check for significant overlap - lowered threshold from 70% to 50% to catch more near-duplicates
+        # This helps prevent subtle variations like "Rue X" vs "Bâtiment Rue X" from passing
         if new_tokens and prev_tokens:
             common_tokens = new_tokens & prev_tokens
             # If either set is mostly contained in the other
             overlap_ratio_new = len(common_tokens) / len(new_tokens)
             overlap_ratio_prev = len(common_tokens) / len(prev_tokens)
-            
+
             if overlap_ratio_new >= threshold or overlap_ratio_prev >= threshold:
+                logger.debug(
+                    f"Duplicate detected (token overlap {overlap_ratio_new:.1%}/{overlap_ratio_prev:.1%}): "
+                    f"'{new_place}' ≈ '{prev}'"
+                )
                 return True
-        
+
         # Check if one is substring of another (handles cases like "Saint-Eustache" vs "Église Saint-Eustache")
-        if new_normalized in prev_normalized or prev_normalized in new_normalized:
-            return True
-    
+        # Also check for very short matches (3+ chars) to catch common place fragments
+        if len(new_normalized) >= 3 and len(prev_normalized) >= 3:
+            if new_normalized in prev_normalized or prev_normalized in new_normalized:
+                logger.debug(f"Duplicate detected (substring): '{new_place}' ⊆ '{prev}'")
+                return True
+
     return False
 
 

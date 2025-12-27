@@ -7,12 +7,11 @@ without touching the rest of the code.
 
 from __future__ import annotations
 
-import time
 import logging
-from typing import Optional, List, Dict, Any
+import time
+from typing import Any
 
 from .firebase_client import get_firestore
-
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +37,9 @@ class FirestoreDatabase:
         user_id: int,
         payment_id: str,
         stars_amount: int,
-        telegram_username: Optional[str] = None,
-        first_name: Optional[str] = None,
-        invoice_payload: Optional[str] = None,
+        telegram_username: str | None = None,
+        first_name: str | None = None,
+        invoice_payload: str | None = None,
     ) -> bool:
         try:
             now = int(time.time())
@@ -115,7 +114,7 @@ class FirestoreDatabase:
             logger.error(f"Firestore is_premium_user failed: {e}")
             return False
 
-    def get_donor_info(self, user_id: int) -> Optional[Dict[str, Any]]:
+    def get_donor_info(self, user_id: int) -> dict[str, Any] | None:
         try:
             snap = self.db.collection("users").document(str(user_id)).get()
             return snap.to_dict() if snap.exists else None
@@ -123,7 +122,7 @@ class FirestoreDatabase:
             logger.error(f"Firestore get_donor_info failed: {e}")
             return None
 
-    def get_donation_history(self, user_id: int) -> List[Dict[str, Any]]:
+    def get_donation_history(self, user_id: int) -> list[dict[str, Any]]:
         try:
             q = (
                 self.db.collection("donations")
@@ -137,7 +136,7 @@ class FirestoreDatabase:
             logger.error(f"Firestore get_donation_history failed: {e}")
             return []
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         try:
             # Best-effort light stats
             total_donations = (
@@ -181,7 +180,7 @@ class FirestoreDatabase:
             if not snap.exists:
                 logger.info(f"has_language_set: user {user_id} document does not exist")
                 return False
-            
+
             user_data = snap.to_dict() or {}
             has_lang = user_data.get("language") is not None
             logger.info(f"has_language_set: user {user_id} has language={user_data.get('language')}, result={has_lang}")

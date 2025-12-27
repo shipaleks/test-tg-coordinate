@@ -1,13 +1,11 @@
-from datetime import datetime
-from typing import Optional
 import logging
+from datetime import datetime
 
-from google.cloud.firestore import Client
-from google.cloud import firestore
 from firebase_admin import firestore as admin_firestore
+from google.cloud import firestore
+from google.cloud.firestore import Client
 
 from .firebase_client import get_firestore
-
 
 USERS_COLLECTION = "users"
 METRICS_DOC_PATH = ("metrics", "counters")
@@ -17,7 +15,7 @@ def _server_timestamp():
     return firestore.SERVER_TIMESTAMP
 
 
-async def ensure_user(user_id: int, username: Optional[str], first_name: Optional[str]) -> None:
+async def ensure_user(user_id: int, username: str | None, first_name: str | None) -> None:
     try:
         db: Client = get_firestore()
         user_ref = db.collection(USERS_COLLECTION).document(str(user_id))
@@ -66,7 +64,7 @@ async def increment_fact_counters(user_id: int, delta: int = 1) -> None:
         logging.getLogger(__name__).warning(f"increment_fact_counters skipped: {e}")
 
 
-async def record_movement(user_id: int, lat: float, lon: float, ts: Optional[datetime] = None, session_id: Optional[str] = None) -> None:
+async def record_movement(user_id: int, lat: float, lon: float, ts: datetime | None = None, session_id: str | None = None) -> None:
     try:
         db: Client = get_firestore()
         coll = db.collection(USERS_COLLECTION).document(str(user_id)).collection("movements")
