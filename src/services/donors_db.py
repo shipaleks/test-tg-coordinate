@@ -124,8 +124,8 @@ class DonorsDatabase:
                             CREATE TABLE IF NOT EXISTS user_preferences (
                             user_id INTEGER PRIMARY KEY,
                             language TEXT DEFAULT 'en',
-                            reasoning TEXT DEFAULT 'none',
-                            model TEXT DEFAULT 'gpt-5.1',
+                            reasoning TEXT DEFAULT 'medium',
+                            model TEXT DEFAULT 'claude-haiku-4-5-20251001',
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                             updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
@@ -179,8 +179,8 @@ class DonorsDatabase:
                                 CREATE TABLE IF NOT EXISTS user_preferences (
                                     user_id INTEGER PRIMARY KEY,
                                     language TEXT DEFAULT 'en',
-                                    reasoning TEXT DEFAULT 'none',
-                                    model TEXT DEFAULT 'gpt-5.1',
+                                    reasoning TEXT DEFAULT 'medium',
+                                    model TEXT DEFAULT 'claude-haiku-4-5-20251001',
                                     created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                                     updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                                 )
@@ -460,7 +460,7 @@ class DonorsDatabase:
                     # Preserve existing reasoning if present
                     conn.execute("""
                         INSERT INTO user_preferences (user_id, language, reasoning, model, updated_at)
-                        VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'none'), COALESCE((SELECT model FROM user_preferences WHERE user_id = ?), 'gpt-5.1'), ?)
+                        VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'medium'), COALESCE((SELECT model FROM user_preferences WHERE user_id = ?), 'claude-haiku-4-5-20251001'), ?)
                         ON CONFLICT(user_id) DO UPDATE SET language=excluded.language, updated_at=excluded.updated_at
                     """, (user_id, language, user_id, user_id, current_time))
 
