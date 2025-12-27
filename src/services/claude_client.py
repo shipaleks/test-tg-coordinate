@@ -114,8 +114,8 @@ class ClaudeClient:
 
     # Model constants
     MODEL_OPUS = "claude-opus-4-5-20251101"
-    MODEL_SONNET = "claude-sonnet-4-20250514"
-    MODEL_HAIKU = "claude-3-5-haiku-20241022"
+    MODEL_SONNET = "claude-sonnet-4-5-20250929"
+    MODEL_HAIKU = "claude-haiku-4-5-20251001"
 
     def __init__(self, api_key: str | None = None):
         """Initialize Claude client.
@@ -632,7 +632,7 @@ Sources:
                 # First, get location name via reverse geocoding to search for specific places
                 location_name = None
                 try:
-                    coords = await self._get_coordinates_from_nominatim(
+                    coords = await self.get_coordinates_from_nominatim(
                         f"{lat},{lon}", user_lat=lat, user_lon=lon
                     )
                     if coords and len(coords) > 2:
