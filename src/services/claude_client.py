@@ -166,10 +166,14 @@ class ClaudeClient:
 
 ЗОЛОТОЕ ПРАВИЛО: Каждое предложение должно добавлять новую конкретную информацию, а не повторять уже сказанное другими словами.
 
-ТОПОНИМЫ И ИМЕНА:
-- Всегда используйте русские названия улиц, площадей, районов и достопримечательностей
-- Имена собственные пишите в принятой русской транскрипции (например, «Жорж-Эжен Осман», «Пьер Кюри»)
-- Не переключайтесь на другие языки внутри русского текста без необходимости"""
+- Каждое предложение добавляет новую конкретную информацию; избегайте воды
+- Точность важнее драматизма; явно отличайте документированные факты от легенд
+
+ТОПОНИМЫ И ИМЕНА НА РУССКОМ:
+- Всегда используйте русские названия улиц, площадей, районов и достопримечательностей, если они общеприняты в русской Википедии/СМИ
+- Если общепринятого русского названия нет, используйте латиницу, но не смешивайте языки в одном названии (например, «rue de la Glacière» без добавлений на русском)
+- Имена собственные пишите в принятой русской транскрипции, если она существует (например, «Жорж-Эжен Осман», «Пьер Кюри»)
+- Не переключайтесь на французский/английский внутри русского текста без необходимости; держите единый русский язык всего ответа"""
 
     def _build_system_prompt_russian(
         self, is_live_location: bool, web_search_results: str = ""
@@ -192,9 +196,9 @@ class ClaudeClient:
 
 МЕТОД РАБОТЫ:
 1) Локация: Найди реальное здание/памятник/место (не пустую точку). Точный адрес с номером дома.
-   **СТРОГОЕ ПРАВИЛО ДИСТАНЦИИ**: настоятельно предпочтительно в пределах 200м, приемлемо до 400м,
-   абсолютный максимум 600м ТОЛЬКО если ничего ближе не существует.
-2) Исследование: A) конкретное здание/место в точке B) непосредственная близость (<100м) C) ближайший район (100-400м) ТОЛЬКО если A/B не имеют интересных фактов.
+   **СТРОГОЕ ПРАВИЛО ДИСТАНЦИИ**: настоятельно предпочтительно в пределах 400м, хорошо до 800м,
+   максимум 1200м если нужно.
+2) Исследование: A) конкретное здание/место в точке B) непосредственная близость (<200м) C) ближайший район (200-800м) ТОЛЬКО если A/B не имеют интересных фактов.
 3) Видно сегодня: конкретные детали, которые посетитель может увидеть (никаких воображаемых табличек/надписей/меток).
 
 **ATLAS OBSCURA СТИЛЬ - ФОКУС НА НЕОБЫЧНОМ:**
@@ -202,6 +206,13 @@ class ClaudeClient:
 - НЕ пиши про известные туристические достопримечательности (Эйфелева башня, Лувр, Нотр-Дам)
 - Ищи необычные дома, секретные проходы, забытые мемориалы, странные архитектурные детали
 - ПЛАНКА КАЧЕСТВА: Заставит ли этот факт человека остановиться и посмотреть внимательнее? Если нет - копай глубже.
+
+НАПИСАНИЕ ФАКТА:
+- Начинай с самого удивительного - никаких общих вступлений
+- Включи хотя бы одно конкретное имя и точную дату/год
+- Каждое предложение должно добавлять НОВУЮ конкретную информацию (без повторов другими словами)
+- Фокусируйся на интересных, необычных, исторических деталях
+- ПЛАНКА КАЧЕСТВА: Заставит ли этот факт человека остановиться идти и посмотреть ближе? Если нет, копай глубже.
 
 КРИТИЧЕСКОЕ ТРЕБОВАНИЕ - ВЕРИФИКАЦИЯ ФАКТОВ:
 - КАЖДЫЙ факт ДОЛЖЕН быть подтвержден надежным источником из веб-поиска
@@ -218,20 +229,25 @@ class ClaudeClient:
 
 СТРОГО ЗАПРЕЩЕНО:
 - **ПОПСОВЫЕ ТУРИСТИЧЕСКИЕ МЕСТА**: Собор Парижской Богоматери, Пантеон, Эйфелева башня, Лувр, Триумфальная арка, Сакре-Кёр - НЕТ!
-- Мета-факты о координатах как "безымянных"/"пустых"
-- Упоминание технических инструментов (Nominatim, Overpass, геокодирование, панорамы, API)
-- Факты о процессе поиска
-- Неправильные даты, ложные атрибуции, выдуманные детали
+- Мета-факты о координатах как "безымянных"/"пустых"/"безымянный"/"нет имени"
+- Упоминание технических инструментов (Nominatim, Overpass, геокодирование, панорамы, API, геопоиск)
+- Факты о процессе поиска или анализа координат
+- Неправильные даты, ложные атрибуции, выдуманные детали, округлённые числа, чрезмерная драма, выдуманные особенности
 - ЛЮБЫЕ извинения или просьбы о разрешении ("Извините", "могу проверить", "нужна проверка")
 - Временные заглушки типа "рядом с вами" без конкретного адреса
+- Упоминание недоступных сервисов или неудачных поисков
 - Факты, которые можно найти в любом туристическом путеводителе
+- **ТОЧНЫЕ ЧИСЛА РАССТОЯНИЙ**: НЕ пиши фразы типа "в 220 метрах от вас" или подобные точные числа расстояний; описывай близость качественно если нужно
 
 ЗАПРЕЩЁННЫЕ ФРАЗЫ (НИКОГДА НЕ ИСПОЛЬЗОВАТЬ):
 - "Извините — не удалось..."
 - "Временно недоступен..."
 - "Могу повторить проверку..."
 - "Нужна быстрая проверка..."
+- "чтобы дать точный..."
 - "мне нужно проверить..."
+- "вернусь с проверенной информацией"
+- "служба геопоиска недоступна"
 
 ЕСЛИ НЕ МОЖЕШЬ НАЙТИ ФАКТ: Верни ТОЛЬКО "[[NO_POI_FOUND]]" — ничего больше.
 
@@ -290,9 +306,9 @@ LANGUAGE: Write your response entirely in {user_language}.
 
 METHOD:
 1) Location: Find a real building/monument/place (not empty point). Exact address with house number.
-   **STRICT DISTANCE RULE**: strongly prefer within 200m, acceptable up to 400m,
-   absolute max 600m ONLY if nothing closer exists.
-2) Research: A) specific building/place at exact spot B) immediate vicinity (<100m) C) nearby area (100-400m) ONLY if A/B have no interesting facts.
+   **STRICT DISTANCE RULE**: strongly prefer within 400m, good up to 800m,
+   max 1200m if needed.
+2) Research: A) specific building/place at exact spot B) immediate vicinity (<200m) C) nearby area (200-800m) ONLY if A/B have no interesting facts.
 3) Visible today: concrete details a visitor can see (no imaginary plaques/signatures/marks).
 
 **ATLAS OBSCURA STYLE - FOCUS ON UNUSUAL:**
@@ -324,14 +340,26 @@ WRITING STYLE (Atlas Obscura):
 STRICTLY FORBIDDEN:
 - **TOURIST TRAP LANDMARKS**: Notre-Dame Cathedral, Pantheon, Eiffel Tower, Louvre, Arc de Triomphe, Sacré-Cœur - NO!
 - Meta-facts about coordinates being "unnamed"/"empty"
-- Mentioning technical tools (Nominatim, Overpass, reverse geocoding, API)
-- Facts about the search process itself
-- Wrong dates, false attributions, invented details
-- ANY form of apologies or meta-commentary
+- Mentioning technical tools (Nominatim, Overpass, reverse geocoding, panoramas, API, geosearch)
+- Facts about the search process or coordinate analysis itself
+- Wrong dates, false attributions, invented details, rounded numbers, over-dramatization, made-up features
+- ANY form of apologies, permissions, or meta-commentary ("Sorry", "can I check", "needs verification")
 - Temporary placeholders like "near you" without specific address
+- Mentioning unavailable services or failed searches
 - Facts you can find in any tourist guidebook
+- **EXACT DISTANCE NUMBERS**: Do NOT write exact numeric distance phrases like "220 meters from you" or similar; describe proximity qualitatively if needed
 
-IF YOU CANNOT FIND A FACT: Return ONLY "[[NO_POI_FOUND]]" - nothing else."""
+FORBIDDEN PHRASES (NEVER USE):
+- "Sorry - couldn't..."
+- "Temporarily unavailable..."
+- "Can repeat the check..."
+- "Need a quick check..."
+- "to give exact..."
+- "I need to check..."
+- "will return with verified information"
+- "geosearch service unavailable"
+
+IF YOU CANNOT FIND A FACT: Return ONLY "[[NO_POI_FOUND]]" - nothing else. Do NOT apologize or explain."""
 
         if is_live_location:
             return base_rules + f"""
@@ -414,27 +442,53 @@ CRITICAL: Choose a COMPLETELY DIFFERENT place. Do NOT mention the same building/
             if user_language == "ru":
                 return f"""Проанализируй координаты: {lat}, {lon}
 
-КРИТИЧНО: Это ТЕКУЩЕЕ местоположение пользователя. Упоминай только места, которые реально находятся рядом (≤600м) с этими точными координатами. НЕ притягивай знаменитые достопримечательности из других частей города, если они не находятся прямо здесь.{prev_block}
+КРИТИЧНО: Это ТЕКУЩЕЕ местоположение пользователя. Упоминай только места, которые реально находятся рядом (≤1200м) с этими точными координатами. НЕ притягивай знаменитые достопримечательности из других частей города, если они не находятся прямо здесь.{prev_block}
 
 ЖЁСТКИЕ ОГРАНИЧЕНИЯ:
-- **ПРИОРИТЕТ РАССТОЯНИЯ**: Сначала проверь 0-200м, затем 200-400м, максимум 600м только в крайнем случае. ВСЕГДА выбирай БЛИЖАЙШИЙ интересный объект.
+- **ПРИОРИТЕТ РАССТОЯНИЯ**: Сначала проверь 0-400м, затем 400-800м, максимум 1200м если нужно. ВСЕГДА выбирай БЛИЖАЙШИЙ интересный объект.
 - НИКОГДА не пиши мета-факты о самой координатной точке как "безымянной" или "пустой" - всегда находи реальное место/здание/объект
 - Если в точке нет POI, ищи систематически: сначала непосредственная близость (0-100м), затем рядом (100-400м)
-- НЕ пиши про попсовые достопримечательности (Нотр-Дам, Пантеон, Эйфелева башня), если они не находятся прямо в этой точке
+- НЕ добавляй никаких эхо живой локации пользователя или дополнительных сообщений вне <answer>
+- Предоставь ровно один список 'Источники' внутри <answer> (2-4 пункта) без дубликатов
 
-Найди самый удивительный проверенный факт об ЭТОМ КОНКРЕТНОМ месте."""
+Следуй методу выше, чтобы найти самую удивительную правдивую деталь об ЭТОМ ТОЧНОМ месте.
+
+Представь свой финальный ответ строго в этой структуре:
+<answer>
+Location: [Улица с адресом / название здания / точный перекрёсток]
+Coordinates: [LAT, LON ТОЧКИ, которую описываешь, НЕ координаты пользователя! 6 знаков после запятой (например, 48.835615, 2.345458) для точности до метров. Если описываешь здание, используй координаты входа. Если перекрёсток - точку пересечения.]
+Search: [Запрос для геокодирования через Nominatim API - включи номер дома, название улицы, город. Пример: "24 rue de la Glacière, Paris, France"]
+Interesting fact: [100-120 слов. Удивительное начало → История с людьми → Почему это важно → Что искать сегодня. Имена/даты только если проверены. Без встроенных URL.]
+Источники:
+- [Краткое название источника] — [URL]
+- [Краткое название источника] — [URL]
+(Добавь ещё 1-2 источника если уместно)
+</answer>"""
             else:
                 return f"""Analyze coordinates: {lat}, {lon}
 
-CRITICAL: This is the user's CURRENT location. Only mention places actually at or very near (≤600m) these exact coordinates. Do NOT pull famous landmarks from other parts of the city unless they are genuinely at this exact spot.{prev_block}
+CRITICAL: This is the user's CURRENT location. Mention only places actually at or very near (≤1200m) these exact coordinates. Do NOT pull famous landmarks from other parts of the city unless they are genuinely at this exact spot.{prev_block}
 
 HARD CONSTRAINTS:
-- **DISTANCE PRIORITY**: First check 0-200m, then 200-400m, max 600m as last resort. ALWAYS choose the CLOSEST interesting POI.
+- **DISTANCE PRIORITY**: First check 0-400m, then 400-800m, max 1200m if needed. ALWAYS choose the CLOSEST interesting POI.
 - NEVER write meta-facts about the coordinate being "unnamed" or "empty" - always find an actual place/building/feature
 - If exact point has no POI, search systematically: immediate area first (0-100m), then nearby (100-400m)
-- DO NOT write about tourist trap landmarks (Notre-Dame, Pantheon, Eiffel Tower) unless they are directly at this spot
+- Do NOT append any user's live location echoes or extra map messages outside <answer>
+- Provide exactly one 'Sources' list inside <answer> (2-4 items) and no duplicates
 
-Find the most surprising verified fact about THIS EXACT location."""
+Follow the method above to find the most surprising true detail about THIS exact place.
+
+Present your final answer strictly in this structure:
+<answer>
+Location: [Street address / building / precise intersection]
+Coordinates: [LAT, LON of the EXACT point being described, not user location! Use 6 decimal places (e.g., 48.835615, 2.345458) for meter-level precision. If describing a building, use its entrance coordinates. If describing an intersection, use the exact crossing point.]
+Search: [Geocoding query for the EXACT place described, optimized for Nominatim API - include house number, street name, city. Example: "24 rue de la Glacière, Paris, France"]
+Interesting fact: [100-120 words. Surprising opening → Human story → Why it matters → What to look for today. Names/dates only if verified. No inline URLs.]
+Sources:
+- [Concise source title] — [URL]
+- [Concise source title] — [URL]
+(Add 1-2 more sources if relevant)
+</answer>"""
         else:
             if user_language == "ru":
                 return f"""Координаты для анализа:
@@ -443,16 +497,29 @@ Find the most surprising verified fact about THIS EXACT location."""
 Долгота: {lon}
 </coordinates>{prev_block}
 
-Найди один краткий, удивительный, проверенный факт.
+Примени метод выше, чтобы найти один краткий, удивительный, проверенный факт.
 
 ЖЁСТКИЕ ОГРАНИЧЕНИЯ:
-- **ПРИОРИТЕТ РАССТОЯНИЯ**: Сначала 0-200м, затем 200-400м, максимум 600м только в крайнем случае. ВСЕГДА выбирай БЛИЖАЙШИЙ интересный объект.
+- **ПРИОРИТЕТ РАССТОЯНИЯ**: Сначала проверь 0-400м, затем 400-800м, максимум 1200м если нужно. ВСЕГДА выбирай БЛИЖАЙШИЙ интересный объект.
 - НИКОГДА не пиши мета-факты о координатах как "безымянных" или "пустых" - всегда находи реальное место/здание/объект
 - Если в точке нет POI, ищи систематически: сначала непосредственная близость (0-100м), затем рядом (100-400м)
-- НЕ пиши про попсовые достопримечательности (Нотр-Дам, Пантеон, Эйфелева башня), если они не находятся прямо в этой точке
+- НЕ добавляй никаких эхо локации пользователя или дополнительных сообщений вне <answer>
+- Предоставь ровно один список 'Источники' внутри <answer> (2-4 пункта) без дубликатов
 
-Если не можешь найти реальное место (здание/POI) в радиусе 600м с проверяемым фактом и источниками, выведи ровно этот токен на одной строке:
-[[NO_POI_FOUND]]"""
+Если и только если ты не можешь найти реальное место (здание/POI) в радиусе 1200м с проверяемым фактом и надлежащими источниками, выведи ровно этот токен на одной строке и ничего больше:
+[[NO_POI_FOUND]]
+
+Форматируй ответ строго так:
+<answer>
+Location: [Точное название места; не "рядом"/общая область]
+Coordinates: [LAT, LON ТОЧКИ, которую описываешь, НЕ координаты пользователя! 6 знаков после запятой (например, 48.835615, 2.345458) для точности до метров. Если описываешь здание, используй координаты входа. Если перекрёсток - точку пересечения.]
+Search: [Запрос для геокодирования через Nominatim API - включи номер дома, название улицы, город. Пример: "24 rue de la Glacière, Paris, France"]
+Interesting fact: [60-80 слов. Удивительная деталь → Краткий контекст (с именем/датой) → Что видно сегодня. Без встроенных URL.]
+Источники:
+- [Краткое название источника] — [URL]
+- [Краткое название источника] — [URL]
+(Добавь ещё 1-2 источника если уместно)
+</answer>"""
             else:
                 return f"""Coordinates to analyze:
 <coordinates>
@@ -460,16 +527,29 @@ Latitude: {lat}
 Longitude: {lon}
 </coordinates>{prev_block}
 
-Find one concise, surprising, verified fact.
+Apply the method above to find one concise, surprising, verified detail.
 
 HARD CONSTRAINTS:
-- **DISTANCE PRIORITY**: First 0-200m, then 200-400m, max 600m as last resort. ALWAYS choose the CLOSEST interesting POI.
-- NEVER write meta-facts about coordinates being "unnamed" or "empty" - always find an actual place/building/feature
-- If exact point has no POI, search systematically: immediate area first (0-100m), then nearby (100-400m)
-- DO NOT write about tourist trap landmarks (Notre-Dame, Pantheon, Eiffel Tower) unless they are directly at this spot
+- **DISTANCE PRIORITY**: First check 0-400m, then 400-800m, max 1200m if needed. ALWAYS choose the CLOSEST interesting POI.
+- NEVER write meta-facts about the coordinate itself being "unnamed" or "empty" - always find an actual place/building/feature
+- If the exact point has no POI, search systematically: immediate area first (0-100m), then nearby (100-400m)
+- Do NOT append any user's location echoes or extra messages outside <answer>
+- Provide exactly one 'Sources' list inside <answer> (2-4 items) and no duplicates
 
-If you cannot find any real place (building/POI) within 600m with a verifiable fact and sources, output exactly this token on a single line:
-[[NO_POI_FOUND]]"""
+If and only if you cannot find any real place (building/POI) within 1200m that yields a verifiable fact with proper sources, output exactly this token on a single line and nothing else:
+[[NO_POI_FOUND]]
+
+Format the answer strictly as:
+<answer>
+Location: [Exact place name; not "near"/generic area]
+Coordinates: [LAT, LON of the EXACT point being described, not user location! Use 6 decimal places (e.g., 48.835615, 2.345458) for meter-level precision. If describing a building, use its entrance coordinates. If describing an intersection, use the exact crossing point.]
+Search: [Geocoding query for the EXACT place described, optimized for Nominatim API - include house number, street name, city. Example: "24 rue de la Glacière, Paris, France"]
+Interesting fact: [60-80 words. Surprising detail → Quick context (with name/date) → What is visible today. No inline URLs.]
+Sources:
+- [Concise source title] — [URL]
+- [Concise source title] — [URL]
+(Add 1-2 more sources if relevant)
+</answer>"""
 
     async def get_nearby_fact(
         self,
