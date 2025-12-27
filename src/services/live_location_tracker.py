@@ -690,162 +690,167 @@ class LiveLocationTracker:
 
                     # Check if we should skip this iteration (NO_POI_FOUND or max duplicate retries)
                     if response and "[[NO_POI_FOUND]]" in response:
-                        continue  # Skip to next interval
+                        logger.warning(f"NO_POI_FOUND for user {session_data.user_id}, will wait before retry")
+                        # Don't continue - let it fall through to sleep to avoid API spam
+                        # Skip fact sending by using continue ONLY IF we're sure we won't skip sleep
 
                     if place is None:
                         # Max duplicate retries reached, skip this interval
-                        continue
+                        logger.warning(f"Max duplicate retries for user {session_data.user_id}, will wait before retry")
+                        # Don't continue - let it fall through to sleep
 
-                    # Increment counter ONLY when we have a real fact to send
-                    session_data.fact_count += 1
-
-                    # Format the response with live location indicator and fact number
-                    from ..handlers.location import (
-                        _escape_markdown,
-                        get_localized_message,
-                    )
-                    escaped_place = _escape_markdown(place)
-                    escaped_fact = _escape_markdown(fact)
-                    formatted_response = await get_localized_message(session_data.user_id, 'live_fact_format', number=session_data.fact_count, place=escaped_place, fact=escaped_fact)
-
-                    # Add sources to the main message if available
-                    if sources_block:
-                        formatted_response = f"{formatted_response}{sources_block}"
-
-                    # Save fact to history to avoid repetition
-                    session_data.fact_history.append(f"{place}: {fact}")
-
-                    # Send the fact with images using extracted search keywords
-                    if search_keywords:
-                        await send_live_fact_with_images(
-                            bot,
-                            session_data.chat_id,
-                            formatted_response,
-                            search_keywords,
-                            place,
-                            lat=poi_lat,  # Use POI coordinates for image search
-                            lon=poi_lon,
-                            sources=sources,
+                    # Only send fact if we have valid content
+                    if not (response and "[[NO_POI_FOUND]]" in response) and place is not None:
+                        # Increment counter ONLY when we have a real fact to send
+                        session_data.fact_count += 1
+    
+                        # Format the response with live location indicator and fact number
+                        from ..handlers.location import (
+                            _escape_markdown,
+                            get_localized_message,
                         )
-                    else:
-                        # Legacy fallback: try to extract search keywords from old format
-                        legacy_search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
-                        if legacy_search_match:
-                            legacy_search_keywords = legacy_search_match.group(1).strip()
+                        escaped_place = _escape_markdown(place)
+                        escaped_fact = _escape_markdown(fact)
+                        formatted_response = await get_localized_message(session_data.user_id, 'live_fact_format', number=session_data.fact_count, place=escaped_place, fact=escaped_fact)
+    
+                        # Add sources to the main message if available
+                        if sources_block:
+                            formatted_response = f"{formatted_response}{sources_block}"
+    
+                        # Save fact to history to avoid repetition
+                        session_data.fact_history.append(f"{place}: {fact}")
+    
+                        # Send the fact with images using extracted search keywords
+                        if search_keywords:
                             await send_live_fact_with_images(
                                 bot,
                                 session_data.chat_id,
                                 formatted_response,
-                                legacy_search_keywords,
+                                search_keywords,
                                 place,
                                 lat=poi_lat,  # Use POI coordinates for image search
                                 lon=poi_lon,
                                 sources=sources,
                             )
                         else:
-                            # No search keywords, send just text
-                            await bot.send_message(
-                                chat_id=session_data.chat_id,
-                                text=formatted_response,
-                                parse_mode="Markdown",
-                            )
-
-                    # Use POI coordinates for navigation venue if available
-                    if poi_lat is not None and poi_lon is not None:
-                        venue_lat, venue_lon = poi_lat, poi_lon
-                    else:
-                        # Try to parse coordinates from response as fallback
-                        # Keep user coordinates for 5km validation (prevents hallucinated distant coordinates)
-                        try:
-                            coordinates = await openai_client.parse_coordinates_from_response(
-                                response, session_data.latitude, session_data.longitude
-                            )
-                            if coordinates:
-                                venue_lat, venue_lon = coordinates
-                            else:
-                                venue_lat, venue_lon = None, None
-                        except Exception:
-                            venue_lat, venue_lon = None, None
-
-                    # Validate: if POI coords are suspiciously close to user's location, they're likely wrong
-                    # Claude sometimes returns user coordinates instead of POI coordinates
-                    # Threshold: 0.002 degrees ≈ 200 meters (at equator, less at higher latitudes)
-                    try:
-                        too_close_to_user = False
-                        if venue_lat is not None and venue_lon is not None:
-                            dy = abs(venue_lat - session_data.latitude)
-                            dx = abs(venue_lon - session_data.longitude)
-                            # Expanded threshold from 1e-6 (0.11m) to 0.002° (~200m) to catch nearby coords
-                            too_close_to_user = (dy < 0.002 and dx < 0.002)
-                            if too_close_to_user:
-                                logger.warning(
-                                    f"Venue coordinates too close to user location "
-                                    f"(venue: {venue_lat}, {venue_lon}; user: {session_data.latitude}, {session_data.longitude}; "
-                                    f"delta: {dy:.6f}, {dx:.6f}). Will try Nominatim fallback."
+                            # Legacy fallback: try to extract search keywords from old format
+                            legacy_search_match = re.search(r"Поиск:\s*(.+?)(?:\n|$)", response)
+                            if legacy_search_match:
+                                legacy_search_keywords = legacy_search_match.group(1).strip()
+                                await send_live_fact_with_images(
+                                    bot,
+                                    session_data.chat_id,
+                                    formatted_response,
+                                    legacy_search_keywords,
+                                    place,
+                                    lat=poi_lat,  # Use POI coordinates for image search
+                                    lon=poi_lon,
+                                    sources=sources,
                                 )
-                        if too_close_to_user and search_keywords:
-                            logger.info(f"Attempting Nominatim lookup with search keywords: {search_keywords}")
-                            nomi = await openai_client.get_coordinates_from_search_keywords(search_keywords, session_data.latitude, session_data.longitude)
-                            if nomi:
-                                venue_lat, venue_lon = nomi
-                                logger.info(f"Successfully adjusted venue via Nominatim from Search: {venue_lat}, {venue_lon}")
                             else:
-                                logger.warning("Nominatim lookup failed, venue will not be sent")
-                                venue_lat, venue_lon = None, None
-                        elif too_close_to_user and not search_keywords:
-                            logger.warning("Venue too close to user but no search keywords available, venue will not be sent")
-                            venue_lat, venue_lon = None, None
-                    except Exception as e:
-                        logger.error(f"Error validating venue coordinates: {e}")
-                        pass
-
-                    if venue_lat is not None and venue_lon is not None:
-                        try:
-                            # Send venue with location for navigation
-                            await bot.send_venue(
-                                chat_id=session_data.chat_id,
-                                latitude=venue_lat,
-                                longitude=venue_lon,
-                                title=place,
-                                address=await get_localized_message(session_data.user_id, 'attraction_address', place=place),
-                            )
-                            logger.info(
-                                f"Sent venue location for background fact navigation: {place} at {venue_lat}, {venue_lon}"
-                            )
-                        except Exception as venue_error:
-                            logger.warning(
-                                f"Failed to send venue for background fact: {venue_error}"
-                            )
-                            # Fallback to simple location
+                                # No search keywords, send just text
+                                await bot.send_message(
+                                    chat_id=session_data.chat_id,
+                                    text=formatted_response,
+                                    parse_mode="Markdown",
+                                )
+    
+                        # Use POI coordinates for navigation venue if available
+                        if poi_lat is not None and poi_lon is not None:
+                            venue_lat, venue_lon = poi_lat, poi_lon
+                        else:
+                            # Try to parse coordinates from response as fallback
+                            # Keep user coordinates for 5km validation (prevents hallucinated distant coordinates)
                             try:
-                                await bot.send_location(
+                                coordinates = await openai_client.parse_coordinates_from_response(
+                                    response, session_data.latitude, session_data.longitude
+                                )
+                                if coordinates:
+                                    venue_lat, venue_lon = coordinates
+                                else:
+                                    venue_lat, venue_lon = None, None
+                            except Exception:
+                                venue_lat, venue_lon = None, None
+    
+                        # Validate: if POI coords are suspiciously close to user's location, they're likely wrong
+                        # Claude sometimes returns user coordinates instead of POI coordinates
+                        # Threshold: 0.002 degrees ≈ 200 meters (at equator, less at higher latitudes)
+                        try:
+                            too_close_to_user = False
+                            if venue_lat is not None and venue_lon is not None:
+                                dy = abs(venue_lat - session_data.latitude)
+                                dx = abs(venue_lon - session_data.longitude)
+                                # Expanded threshold from 1e-6 (0.11m) to 0.002° (~200m) to catch nearby coords
+                                too_close_to_user = (dy < 0.002 and dx < 0.002)
+                                if too_close_to_user:
+                                    logger.warning(
+                                        f"Venue coordinates too close to user location "
+                                        f"(venue: {venue_lat}, {venue_lon}; user: {session_data.latitude}, {session_data.longitude}; "
+                                        f"delta: {dy:.6f}, {dx:.6f}). Will try Nominatim fallback."
+                                    )
+                            if too_close_to_user and search_keywords:
+                                logger.info(f"Attempting Nominatim lookup with search keywords: {search_keywords}")
+                                nomi = await openai_client.get_coordinates_from_search_keywords(search_keywords, session_data.latitude, session_data.longitude)
+                                if nomi:
+                                    venue_lat, venue_lon = nomi
+                                    logger.info(f"Successfully adjusted venue via Nominatim from Search: {venue_lat}, {venue_lon}")
+                                else:
+                                    logger.warning("Nominatim lookup failed, venue will not be sent")
+                                    venue_lat, venue_lon = None, None
+                            elif too_close_to_user and not search_keywords:
+                                logger.warning("Venue too close to user but no search keywords available, venue will not be sent")
+                                venue_lat, venue_lon = None, None
+                        except Exception as e:
+                            logger.error(f"Error validating venue coordinates: {e}")
+                            pass
+    
+                        if venue_lat is not None and venue_lon is not None:
+                            try:
+                                # Send venue with location for navigation
+                                await bot.send_venue(
                                     chat_id=session_data.chat_id,
                                     latitude=venue_lat,
                                     longitude=venue_lon,
+                                    title=place,
+                                    address=await get_localized_message(session_data.user_id, 'attraction_address', place=place),
                                 )
                                 logger.info(
-                                    f"Sent location as fallback for background fact: {venue_lat}, {venue_lon}"
+                                    f"Sent venue location for background fact navigation: {place} at {venue_lat}, {venue_lon}"
                                 )
-                            except Exception as loc_error:
-                                logger.error(
-                                    f"Failed to send location for background fact: {loc_error}"
+                            except Exception as venue_error:
+                                logger.warning(
+                                    f"Failed to send venue for background fact: {venue_error}"
                                 )
-
-                    # Best-effort: increment fact counters after successful send
-                    try:
-                        await fb_increment_fact(session_data.user_id, 1)
-                    except Exception:
-                        pass
-
-                    # Update last_update timestamp to keep session alive
-                    # Even if coordinates didn't change, we successfully sent a fact
-                    session_data.last_update = datetime.now()
-                    # Clear generation flag
-                    session_data.is_generating_fact = False
-
-                    logger.info(
-                        f"Sent live location fact #{session_data.fact_count} to user {session_data.user_id}"
-                    )
+                                # Fallback to simple location
+                                try:
+                                    await bot.send_location(
+                                        chat_id=session_data.chat_id,
+                                        latitude=venue_lat,
+                                        longitude=venue_lon,
+                                    )
+                                    logger.info(
+                                        f"Sent location as fallback for background fact: {venue_lat}, {venue_lon}"
+                                    )
+                                except Exception as loc_error:
+                                    logger.error(
+                                        f"Failed to send location for background fact: {loc_error}"
+                                    )
+    
+                        # Best-effort: increment fact counters after successful send
+                        try:
+                            await fb_increment_fact(session_data.user_id, 1)
+                        except Exception:
+                            pass
+    
+                        # Update last_update timestamp to keep session alive
+                        # Even if coordinates didn't change, we successfully sent a fact
+                        session_data.last_update = datetime.now()
+                        # Clear generation flag
+                        session_data.is_generating_fact = False
+    
+                        logger.info(
+                            f"Sent live location fact #{session_data.fact_count} to user {session_data.user_id}"
+                        )
 
                 except Exception as e:
                     logger.error(
