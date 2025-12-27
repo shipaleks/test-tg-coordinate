@@ -187,6 +187,11 @@ class YandexImageSearch:
             return []
 
         images = self._extract_images(data, max_images * 3)
+
+        # CRITICAL: Normalize all Wikimedia URLs to use Special:FilePath
+        # This fixes Telegram's "webpage_curl_failed" error with thumbnail URLs
+        images = [self._normalize_wikimedia_url(url) for url in images]
+
         # Stronger dedup: collapse by base filename and prefer larger widths
         images = self._deduplicate_and_select(images, need=max_images)
         if images:
