@@ -159,6 +159,27 @@ class DonorsDatabase:
                             "CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences (user_id)"
                         )
 
+                        # Migration: Add reasoning and model columns if they don't exist
+                        cursor = conn.cursor()
+                        cursor.execute("PRAGMA table_info(user_preferences)")
+                        columns = {row[1] for row in cursor.fetchall()}
+
+                        if "reasoning" not in columns:
+                            logger.info(
+                                "Migrating database: adding 'reasoning' column to user_preferences"
+                            )
+                            conn.execute(
+                                "ALTER TABLE user_preferences ADD COLUMN reasoning TEXT DEFAULT 'low'"
+                            )
+
+                        if "model" not in columns:
+                            logger.info(
+                                "Migrating database: adding 'model' column to user_preferences"
+                            )
+                            conn.execute(
+                                "ALTER TABLE user_preferences ADD COLUMN model TEXT DEFAULT 'claude-sonnet-4-5-20250929'"
+                            )
+
                         conn.commit()
                         logger.info("Donors database initialized successfully")
 
@@ -210,8 +231,8 @@ class DonorsDatabase:
                                 CREATE TABLE IF NOT EXISTS user_preferences (
                                     user_id INTEGER PRIMARY KEY,
                                     language TEXT DEFAULT 'en',
-                                    reasoning TEXT DEFAULT 'medium',
-                                    model TEXT DEFAULT 'claude-haiku-4-5-20251001',
+                                    reasoning TEXT DEFAULT 'low',
+                                    model TEXT DEFAULT 'claude-sonnet-4-5-20250929',
                                     created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                                     updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                                 )
@@ -231,6 +252,27 @@ class DonorsDatabase:
                             conn.execute(
                                 "CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences (user_id)"
                             )
+
+                            # Migration: Add reasoning and model columns if they don't exist
+                            cursor = conn.cursor()
+                            cursor.execute("PRAGMA table_info(user_preferences)")
+                            columns = {row[1] for row in cursor.fetchall()}
+
+                            if "reasoning" not in columns:
+                                logger.info(
+                                    "Migrating fallback database: adding 'reasoning' column"
+                                )
+                                conn.execute(
+                                    "ALTER TABLE user_preferences ADD COLUMN reasoning TEXT DEFAULT 'low'"
+                                )
+
+                            if "model" not in columns:
+                                logger.info(
+                                    "Migrating fallback database: adding 'model' column"
+                                )
+                                conn.execute(
+                                    "ALTER TABLE user_preferences ADD COLUMN model TEXT DEFAULT 'claude-sonnet-4-5-20250929'"
+                                )
 
                             conn.commit()
                             logger.info(
