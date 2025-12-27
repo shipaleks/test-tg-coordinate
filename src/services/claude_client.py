@@ -414,23 +414,25 @@ CRITICAL: Choose a COMPLETELY DIFFERENT place. Do NOT mention the same building/
             if user_language == "ru":
                 return f"""Проанализируй координаты: {lat}, {lon}
 
-КРИТИЧНО: Это ТЕКУЩЕЕ местоположение пользователя. Упоминай только места, которые реально находятся рядом (≤500м) с этими точными координатами. НЕ притягивай знаменитые достопримечательности из других частей города.{prev_block}
+КРИТИЧНО: Это ТЕКУЩЕЕ местоположение пользователя. Упоминай только места, которые реально находятся рядом (≤600м) с этими точными координатами. НЕ притягивай знаменитые достопримечательности из других частей города, если они не находятся прямо здесь.{prev_block}
 
 ЖЁСТКИЕ ОГРАНИЧЕНИЯ:
-- ПРИОРИТЕТ РАССТОЯНИЯ: Сначала проверь 0-400м, затем 400-800м, максимум 1200м. Всегда выбирай БЛИЖАЙШИЙ интересный объект.
-- НИКОГДА не пиши мета-факты о самой координатной точке как "безымянной" или "пустой"
-- Если в точке нет POI, ищи систематически: сначала непосредственная близость (0-100м), затем рядом (100-400м).
+- **ПРИОРИТЕТ РАССТОЯНИЯ**: Сначала проверь 0-200м, затем 200-400м, максимум 600м только в крайнем случае. ВСЕГДА выбирай БЛИЖАЙШИЙ интересный объект.
+- НИКОГДА не пиши мета-факты о самой координатной точке как "безымянной" или "пустой" - всегда находи реальное место/здание/объект
+- Если в точке нет POI, ищи систематически: сначала непосредственная близость (0-100м), затем рядом (100-400м)
+- НЕ пиши про попсовые достопримечательности (Нотр-Дам, Пантеон, Эйфелева башня), если они не находятся прямо в этой точке
 
 Найди самый удивительный проверенный факт об ЭТОМ КОНКРЕТНОМ месте."""
             else:
                 return f"""Analyze coordinates: {lat}, {lon}
 
-CRITICAL: This is the user's CURRENT location. Only mention places actually at or very near (≤500m) these exact coordinates. Do NOT pull famous landmarks from other parts of the city.{prev_block}
+CRITICAL: This is the user's CURRENT location. Only mention places actually at or very near (≤600m) these exact coordinates. Do NOT pull famous landmarks from other parts of the city unless they are genuinely at this exact spot.{prev_block}
 
 HARD CONSTRAINTS:
-- DISTANCE PRIORITY: First check 0-400m, then 400-800m, max 1200m if needed. Always choose the CLOSEST interesting POI.
-- NEVER write meta-facts about the coordinate being "unnamed" or "empty"
-- If exact point has no POI, search systematically: immediate area first (0-100m), then nearby (100-400m).
+- **DISTANCE PRIORITY**: First check 0-200m, then 200-400m, max 600m as last resort. ALWAYS choose the CLOSEST interesting POI.
+- NEVER write meta-facts about the coordinate being "unnamed" or "empty" - always find an actual place/building/feature
+- If exact point has no POI, search systematically: immediate area first (0-100m), then nearby (100-400m)
+- DO NOT write about tourist trap landmarks (Notre-Dame, Pantheon, Eiffel Tower) unless they are directly at this spot
 
 Find the most surprising verified fact about THIS EXACT location."""
         else:
@@ -444,10 +446,12 @@ Find the most surprising verified fact about THIS EXACT location."""
 Найди один краткий, удивительный, проверенный факт.
 
 ЖЁСТКИЕ ОГРАНИЧЕНИЯ:
-- ПРИОРИТЕТ РАССТОЯНИЯ: Сначала 0-400м, затем 400-800м, максимум 1200м.
-- НИКОГДА не пиши о координатах как "безымянных" или "пустых"
+- **ПРИОРИТЕТ РАССТОЯНИЯ**: Сначала 0-200м, затем 200-400м, максимум 600м только в крайнем случае. ВСЕГДА выбирай БЛИЖАЙШИЙ интересный объект.
+- НИКОГДА не пиши мета-факты о координатах как "безымянных" или "пустых" - всегда находи реальное место/здание/объект
+- Если в точке нет POI, ищи систематически: сначала непосредственная близость (0-100м), затем рядом (100-400м)
+- НЕ пиши про попсовые достопримечательности (Нотр-Дам, Пантеон, Эйфелева башня), если они не находятся прямо в этой точке
 
-Если не можешь найти реальное место (здание/POI) в радиусе 1200м с проверяемым фактом и источниками, выведи ровно этот токен на одной строке:
+Если не можешь найти реальное место (здание/POI) в радиусе 600м с проверяемым фактом и источниками, выведи ровно этот токен на одной строке:
 [[NO_POI_FOUND]]"""
             else:
                 return f"""Coordinates to analyze:
@@ -459,10 +463,12 @@ Longitude: {lon}
 Find one concise, surprising, verified fact.
 
 HARD CONSTRAINTS:
-- DISTANCE PRIORITY: First 0-400m, then 400-800m, max 1200m.
-- NEVER write about coordinates being "unnamed" or "empty"
+- **DISTANCE PRIORITY**: First 0-200m, then 200-400m, max 600m as last resort. ALWAYS choose the CLOSEST interesting POI.
+- NEVER write meta-facts about coordinates being "unnamed" or "empty" - always find an actual place/building/feature
+- If exact point has no POI, search systematically: immediate area first (0-100m), then nearby (100-400m)
+- DO NOT write about tourist trap landmarks (Notre-Dame, Pantheon, Eiffel Tower) unless they are directly at this spot
 
-If you cannot find any real place (building/POI) within 1200m with a verifiable fact and sources, output exactly this token on a single line:
+If you cannot find any real place (building/POI) within 600m with a verifiable fact and sources, output exactly this token on a single line:
 [[NO_POI_FOUND]]"""
 
     async def get_nearby_fact(
