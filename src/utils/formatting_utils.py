@@ -1,6 +1,9 @@
 """Shared formatting utilities for parsing model output and building sections."""
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def extract_sources_from_answer(answer_content: str) -> list[tuple[str, str]]:
@@ -205,16 +208,16 @@ def normalize_place_name(place: str) -> str:
     return normalized
 
 
-def is_duplicate_place(new_place: str, previous_places: list[str], threshold: float = 0.7) -> bool:
+def is_duplicate_place(new_place: str, previous_places: list[str], threshold: float = 0.5) -> bool:
     """Check if a place name is a duplicate of any previous places.
-    
+
     Uses normalized comparison and substring matching.
-    
+
     Args:
         new_place: The new place name to check
         previous_places: List of previously mentioned place names
-        threshold: Similarity threshold (not currently used, for future fuzzy matching)
-    
+        threshold: Similarity threshold - lowered from 0.7 to 0.5 to catch more near-duplicates
+
     Returns:
         True if this appears to be a duplicate
     """
@@ -235,11 +238,13 @@ def is_duplicate_place(new_place: str, previous_places: list[str], threshold: fl
 
         # Exact match after normalization
         if new_normalized == prev_normalized:
+            logger.debug(f"Duplicate detected (exact match): '{new_place}' == '{prev}'")
             return True
 
         prev_tokens = set(prev_normalized.split())
 
-        # Check for significant overlap (more than 70% of tokens match)
+        # Check for significant overlap - lowered threshold from 70% to 50% to catch more near-duplicates
+        # This helps prevent subtle variations like "Rue X" vs "Bâtiment Rue X" from passing
         if new_tokens and prev_tokens:
             common_tokens = new_tokens & prev_tokens
             # If either set is mostly contained in the other
@@ -247,11 +252,18 @@ def is_duplicate_place(new_place: str, previous_places: list[str], threshold: fl
             overlap_ratio_prev = len(common_tokens) / len(prev_tokens)
 
             if overlap_ratio_new >= threshold or overlap_ratio_prev >= threshold:
+                logger.debug(
+                    f"Duplicate detected (token overlap {overlap_ratio_new:.1%}/{overlap_ratio_prev:.1%}): "
+                    f"'{new_place}' ≈ '{prev}'"
+                )
                 return True
 
         # Check if one is substring of another (handles cases like "Saint-Eustache" vs "Église Saint-Eustache")
-        if new_normalized in prev_normalized or prev_normalized in new_normalized:
-            return True
+        # Also check for very short matches (3+ chars) to catch common place fragments
+        if len(new_normalized) >= 3 and len(prev_normalized) >= 3:
+            if new_normalized in prev_normalized or prev_normalized in new_normalized:
+                logger.debug(f"Duplicate detected (substring): '{new_place}' ⊆ '{prev}'")
+                return True
 
     return False
 
