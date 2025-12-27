@@ -628,7 +628,7 @@ Sources:
         try:
             # Get user preferences
             user_language = "ru"  # Default to Russian
-            user_model = self.MODEL_HAIKU  # Default model (Haiku 4.5)
+            user_model = self.MODEL_SONNET  # Default model (Sonnet 4.5 with low reasoning)
 
             if user_id:
                 try:
@@ -815,13 +815,23 @@ Sources:
             # Call Claude API
             logger.info(f"Calling Claude API (model={user_model})")
 
+            # Prepare API parameters
+            api_params = {
+                "model": user_model,
+                "max_tokens": 2048,
+                "system": system_prompt,
+                "messages": [{"role": "user", "content": user_prompt}],
+            }
+
+            # Add extended thinking for Sonnet (low reasoning by default)
+            if user_model == self.MODEL_SONNET:
+                api_params["thinking"] = {
+                    "type": "enabled",
+                    "budget_tokens": 1000  # Low reasoning budget
+                }
+
             async with self._api_semaphore:
-                response = await self.client.messages.create(
-                    model=user_model,
-                    max_tokens=2048,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": user_prompt}],
-                )
+                response = await self.client.messages.create(**api_params)
 
             # Extract content from response
             content = ""
@@ -841,13 +851,21 @@ Sources:
                 # Try with expanded search prompt
                 expanded_prompt = user_prompt + "\n\nПРИМЕЧАНИЕ: Расширь радиус поиска до 1500м. Найди ЛЮБОЙ интересный исторический объект поблизости." if user_language == "ru" else user_prompt + "\n\nNOTE: Expand search radius to 1500m. Find ANY interesting historical object nearby."
 
+                # Prepare retry parameters (reuse thinking config if applicable)
+                retry_params = {
+                    "model": user_model,
+                    "max_tokens": 2048,
+                    "system": system_prompt,
+                    "messages": [{"role": "user", "content": expanded_prompt}],
+                }
+                if user_model == self.MODEL_SONNET:
+                    retry_params["thinking"] = {
+                        "type": "enabled",
+                        "budget_tokens": 1000
+                    }
+
                 async with self._api_semaphore:
-                    retry_response = await self.client.messages.create(
-                        model=user_model,
-                        max_tokens=2048,
-                        system=system_prompt,
-                        messages=[{"role": "user", "content": expanded_prompt}],
-                    )
+                    retry_response = await self.client.messages.create(**retry_params)
 
                 if retry_response.content:
                     retry_content = ""
