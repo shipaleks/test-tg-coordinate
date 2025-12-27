@@ -195,6 +195,16 @@ class ClaudeClient:
 - Каждый URL в "Источниках" ДОЛЖЕН быть скопирован ДОСЛОВНО из "РЕЗУЛЬТАТЫ ПОИСКА"
 - Если ни один URL из поиска не подходит для твоего факта - лучше верни [[NO_POI_FOUND]]
 - Проверь: каждая ссылка в твоём ответе есть в списке выше? Если нет - это ОШИБКА."""
+        else:
+            # Fallback mode: web search unavailable (rate limited or failed)
+            web_context = """
+
+**РЕЖИМ БЕЗ ВЕБ-ПОИСКА**: Веб-поиск временно недоступен. Используй свои знания об этом месте.
+- НЕ возвращай [[NO_POI_FOUND]] только из-за отсутствия результатов поиска
+- Используй общеизвестные факты о локации из своих знаний
+- В разделе "Источники" укажи ТОЛЬКО проверенные источники, которые ты знаешь (Wikipedia, официальные сайты)
+- Если не знаешь проверенных источников - НЕ УКАЗЫВАЙ раздел "Источники"
+- Фокусируйся на общеизвестных исторических фактах, которые легко проверить"""
 
         base_rules = f"""Ты — автор фактов для Atlas Obscura на русском языке. Твоя миссия: найти самую удивительную, конкретную, проверенную деталь о РЕАЛЬНОМ МЕСТЕ рядом с указанными координатами.
 
@@ -317,6 +327,16 @@ WEB SEARCH RESULTS:
 - Each URL in "Sources" MUST be copied VERBATIM from "WEB SEARCH RESULTS"
 - If no URL from search results fits your fact - better return [[NO_POI_FOUND]]
 - Verify: is each link in your answer present in the list above? If not - this is an ERROR."""
+        else:
+            # Fallback mode: web search unavailable (rate limited or failed)
+            web_context = """
+
+**NO WEB SEARCH MODE**: Web search temporarily unavailable. Use your knowledge of this place.
+- DO NOT return [[NO_POI_FOUND]] just because search results are missing
+- Use well-known facts about the location from your knowledge
+- In "Sources" section, list ONLY verified sources you know (Wikipedia, official sites)
+- If you don't know verified sources - DO NOT include "Sources" section
+- Focus on well-known historical facts that are easy to verify"""
 
         base_rules = f"""You are an Atlas Obscura fact writer. Your mission: find the most surprising, specific, verified detail about a REAL PLACE near the given coordinates.
 
@@ -773,8 +793,10 @@ Sources:
                         all_results[:5]
                     )
                     logger.info(f"Web search returned {len(all_results)} results")
+                else:
+                    logger.warning("Web search returned 0 results - will use fallback mode without strict verification")
             except Exception as e:
-                logger.warning(f"Web search failed: {e}")
+                logger.warning(f"Web search failed: {e} - will use fallback mode without strict verification")
 
             # Build prompts based on language
             if user_language == "ru":

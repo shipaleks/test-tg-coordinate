@@ -33,4 +33,3 @@ tests/test_live_location_silence.py
 tests/test_live_location_tracker.py
 tests/test_location_handler.py
 tests/test_main.py
-tests/test_openai_client.py
