@@ -126,10 +126,11 @@ def normalize_place_name(place: str) -> str:
         return ""
     
     normalized = place.lower().strip()
-    
-    # First, remove city names at the end (common pattern: "Place Name, Paris")
+
+    # First, remove city names at the end (common pattern: "Place Name, Paris" or "Place Name, 75013 Paris")
     # Do this BEFORE removing prefixes to preserve the main place name
-    normalized = re.sub(r",\s*[a-zA-Zа-яА-Яéèêëàâùûôîïç\s]+$", "", normalized)
+    # Include digits to handle postal codes like "75013 Paris"
+    normalized = re.sub(r",\s*[\da-zA-Zа-яА-Яéèêëàâùûôîïç\s]+$", "", normalized)
     
     # Common translations/equivalents for well-known landmarks
     # These are bidirectional mappings to handle cross-language duplicates
@@ -197,7 +198,7 @@ def normalize_place_name(place: str) -> str:
     if len(normalized) < 3:
         # Fallback: basic cleanup without aggressive prefix removal
         normalized = place.lower().strip()
-        normalized = re.sub(r",\s*[a-zA-Zа-яА-Яéèêëàâùûôîïç\s]+$", "", normalized)
+        normalized = re.sub(r",\s*[\da-zA-Zа-яА-Яéèêëàâùûôîïç\s]+$", "", normalized)
         normalized = re.sub(r"[-–—_/\\]", " ", normalized)
         normalized = re.sub(r"[.,;:!?'\"()[\]{}]", "", normalized)
         normalized = re.sub(r"\s+", " ", normalized).strip()
