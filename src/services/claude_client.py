@@ -637,6 +637,65 @@ Sources:
                 except Exception as e:
                     logger.warning(f"Reverse geocoding failed: {e}")
 
+                # Get country info for local language search
+                country = None
+                city = None
+                suburb = ""
+                road = ""
+
+                import httpx
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    response = await client.get(
+                        "https://nominatim.openstreetmap.org/reverse",
+                        params={
+                            "lat": lat,
+                            "lon": lon,
+                            "format": "json",
+                            "addressdetails": 1,
+                        },
+                        headers={"User-Agent": "NearbyFactBot/1.0"},
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        address = data.get("address", {})
+                        country = address.get("country", "")
+                        city = (
+                            address.get("city")
+                            or address.get("town")
+                            or address.get("village")
+                            or ""
+                        )
+                        suburb = address.get("suburb", "")
+                        road = address.get("road", "")
+
+                        # Update location_name if not set
+                        if not location_name and road and city:
+                            location_name = f"{road}, {city}"
+
+                # Determine local language based on country
+                local_lang = None
+                local_queries_map = {
+                    "France": ("fr", "histoire", "bâtiment historique", "lieux insolites"),
+                    "Deutschland": ("de", "Geschichte", "historisches Gebäude", "ungewöhnliche Orte"),
+                    "Germany": ("de", "Geschichte", "historisches Gebäude", "ungewöhnliche Orte"),
+                    "España": ("es", "historia", "edificio histórico", "lugares inusuales"),
+                    "Spain": ("es", "historia", "edificio histórico", "lugares inusuales"),
+                    "Italia": ("it", "storia", "edificio storico", "luoghi insoliti"),
+                    "Italy": ("it", "storia", "edificio storico", "luoghi insoliti"),
+                    "Россия": ("ru", "история", "историческое здание", "необычные места"),
+                    "Russia": ("ru", "история", "историческое здание", "необычные места"),
+                }
+
+                local_terms = None
+                if country:
+                    local_terms = local_queries_map.get(country)
+                    if not local_terms:
+                        # Try partial match
+                        for country_name, terms in local_queries_map.items():
+                            if country_name.lower() in country.lower():
+                                local_terms = terms
+                                break
+
                 # Build search queries based on location name or coordinates
                 search_queries = []
 
@@ -647,14 +706,23 @@ Sources:
 
                     if len(parts) >= 2:
                         street = parts[0]  # "24 rue de la Glacière"
-                        city = parts[1] if len(parts) > 1 else ""  # "Paris"
+                        city_name = parts[1] if len(parts) > 1 else city  # "Paris"
 
-                        # Search for specific street/building + city
+                        # Search in English
                         search_queries = [
-                            f'"{street}" {city} history facts',
-                            f'"{street}" {city} historical building',
-                            f"{city} unusual places hidden secrets",
+                            f'"{street}" {city_name} history facts',
+                            f'"{street}" {city_name} historical building',
                         ]
+
+                        # Add local language searches for better "local knowledge"
+                        if local_terms:
+                            lang_code, hist_term, building_term, unusual_term = local_terms
+                            search_queries.extend([
+                                f'"{street}" {city_name} {hist_term}',
+                                f'"{street}" {city_name} {building_term}',
+                            ])
+
+                        logger.info(f"Search with local language: {local_terms[0] if local_terms else 'en'}")
                     else:
                         # Fallback to city-based search
                         search_queries = [
@@ -662,50 +730,34 @@ Sources:
                             f"{location_name} hidden gems unusual",
                         ]
                 else:
-                    # Fallback: reverse geocode to get city at least
-                    import httpx
-                    async with httpx.AsyncClient(timeout=5.0) as client:
-                        response = await client.get(
-                            "https://nominatim.openstreetmap.org/reverse",
-                            params={
-                                "lat": lat,
-                                "lon": lon,
-                                "format": "json",
-                                "addressdetails": 1,
-                            },
-                            headers={"User-Agent": "NearbyFactBot/1.0"},
-                        )
-                        if response.status_code == 200:
-                            data = response.json()
-                            address = data.get("address", {})
-                            city = (
-                                address.get("city")
-                                or address.get("town")
-                                or address.get("village")
-                                or ""
-                            )
-                            suburb = address.get("suburb", "")
-                            road = address.get("road", "")
+                    # Build queries with specific location info from Nominatim
+                    if road and city:
+                        search_queries = [
+                            f'"{road}" {city} history facts',
+                            f'"{road}" {city} interesting places',
+                        ]
 
-                            # Build queries with specific location info
-                            if road and city:
-                                search_queries = [
-                                    f'"{road}" {city} history facts',
-                                    f'"{road}" {city} interesting places',
-                                    f"{city} {suburb} unusual hidden places",
-                                ]
-                            elif city:
-                                search_queries = [
-                                    f"{city} {suburb} interesting facts history",
-                                    f"{city} unusual places hidden gems",
-                                    f"{city} historical sites secrets",
-                                ]
-                            else:
-                                # Last resort: coordinate-based search
-                                search_queries = [
-                                    f"Paris unusual places {lat} {lon}",
-                                    f"historical sites near {lat},{lon}",
-                                ]
+                        # Add local language queries
+                        if local_terms:
+                            lang_code, hist_term, building_term, unusual_term = local_terms
+                            search_queries.append(f'"{road}" {city} {hist_term}')
+
+                        search_queries.append(f"{city} {suburb} unusual hidden places")
+                    elif city:
+                        search_queries = [
+                            f"{city} {suburb} interesting facts history",
+                            f"{city} unusual places hidden gems",
+                        ]
+
+                        if local_terms:
+                            lang_code, hist_term, building_term, unusual_term = local_terms
+                            search_queries.append(f"{city} {unusual_term}")
+                    else:
+                        # Last resort: coordinate-based search
+                        search_queries = [
+                            f"Paris unusual places {lat} {lon}",
+                            f"historical sites near {lat},{lon}",
+                        ]
 
                 all_results = []
                 for query in search_queries[:3]:
