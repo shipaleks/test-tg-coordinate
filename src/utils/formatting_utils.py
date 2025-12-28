@@ -250,7 +250,7 @@ def normalize_place_name(place: str) -> str:
 
 
 def is_duplicate_place(
-    new_place: str, previous_places: list[str], threshold: float = 0.5
+    new_place: str, previous_places: list[str], threshold: float = 0.7
 ) -> bool:
     """Check if a place name is a duplicate of any previous places.
 
@@ -259,7 +259,7 @@ def is_duplicate_place(
     Args:
         new_place: The new place name to check
         previous_places: List of previously mentioned place names
-        threshold: Similarity threshold - lowered from 0.7 to 0.5 to catch more near-duplicates
+        threshold: Similarity threshold (0.7 = 70% overlap required)
 
     Returns:
         True if this appears to be a duplicate
@@ -286,15 +286,15 @@ def is_duplicate_place(
 
         prev_tokens = set(prev_normalized.split())
 
-        # Check for significant overlap - lowered threshold from 70% to 50% to catch more near-duplicates
-        # This helps prevent subtle variations like "Rue X" vs "Bâtiment Rue X" from passing
+        # Require BOTH sides to have significant overlap (70%+)
+        # This prevents "Square Arago" from blocking all "boulevard Arago" addresses
         if new_tokens and prev_tokens:
             common_tokens = new_tokens & prev_tokens
-            # If either set is mostly contained in the other
             overlap_ratio_new = len(common_tokens) / len(new_tokens)
             overlap_ratio_prev = len(common_tokens) / len(prev_tokens)
 
-            if overlap_ratio_new >= threshold or overlap_ratio_prev >= threshold:
+            # Both must exceed threshold to be considered duplicate
+            if overlap_ratio_new >= threshold and overlap_ratio_prev >= threshold:
                 logger.debug(
                     f"Duplicate detected (token overlap {overlap_ratio_new:.1%}/{overlap_ratio_prev:.1%}): "
                     f"'{new_place}' ≈ '{prev}'"

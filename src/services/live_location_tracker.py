@@ -576,12 +576,27 @@ class LiveLocationTracker:
             desired_interval_seconds = session_data.fact_interval_minutes * 60
 
             # Initial wait: 30 seconds to give user time to start walking
-            initial_sleep = 30
+            # Skip for test intervals (< 1 minute)
+            initial_sleep = 30 if session_data.fact_interval_minutes >= 1 else 0
             for _ in range(initial_sleep):
                 if session_data.stop_requested:
                     logger.info(
                         f"Stop requested during initial wait for user {session_data.user_id}"
                     )
+                    return
+                # Check for expiry during initial wait
+                if datetime.now() >= session_end_time:
+                    logger.info(
+                        f"Session expired during initial wait for user {session_data.user_id}"
+                    )
+                    # Send expiry notification
+                    try:
+                        await bot.send_message(
+                            chat_id=session_data.chat_id,
+                            text="Live location session ended.",
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send expiry notification: {e}")
                     return
                 await asyncio.sleep(1)
 

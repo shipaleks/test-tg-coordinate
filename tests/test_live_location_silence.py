@@ -38,9 +38,11 @@ async def test_live_location_stops_on_silence():
     await asyncio.sleep(0.5)
     await tracker.update_live_location(123, 48.8568, 2.3524)
 
-    # Now simulate silence - manually set last_update to 4 minutes ago
+    # Now simulate silence - manually set last_update beyond adaptive timeout
+    # Adaptive timeout = max((fact_interval * 3) + 30, 40) = max((5 * 3) + 30, 40) = 45 minutes
+    # Set to 50 minutes ago to exceed the timeout
     session = tracker._active_sessions[123]
-    session.last_update = datetime.now() - timedelta(minutes=4)
+    session.last_update = datetime.now() - timedelta(minutes=50)
 
     # Wait for the health monitor to detect silence (runs every 30 seconds)
     # In test, we'll wait up to 35 seconds
@@ -56,10 +58,9 @@ async def test_live_location_stops_on_silence():
     # Check that manual stop message was sent
     bot.send_message.assert_called()
     call_args = bot.send_message.call_args
-    assert (
-        "live_manual_stop" in str(call_args)
-        or "stopped sharing" in call_args[1]["text"].lower()
-    )
+    # Check for Russian "остановлена" (stopped) or English "stopped"
+    text = call_args.kwargs.get("text", "").lower()
+    assert "остановлена" in text or "stopped" in text
 
 
 @pytest.mark.anyio
@@ -92,10 +93,12 @@ async def test_health_monitor_runs_independently():
         # Verify session started
         assert tracker.is_user_tracking(456)
 
-        # Simulate silence after 1 minute
+        # Simulate silence after 1 minute - set last_update beyond adaptive timeout
+        # Adaptive timeout = max((fact_interval * 3) + 30, 40) = max((60 * 3) + 30, 40) = 210 minutes
+        # Set to 215 minutes ago to exceed the timeout
         await asyncio.sleep(1)
         session = tracker._active_sessions[456]
-        session.last_update = datetime.now() - timedelta(minutes=4)
+        session.last_update = datetime.now() - timedelta(minutes=215)
 
         # Health monitor should stop session within 35 seconds
         # even though next fact isn't due for 59 more minutes
