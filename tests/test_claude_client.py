@@ -133,6 +133,9 @@ def test_get_nearby_fact_prompt_format(claude_client):
                 # Check max_tokens
                 assert "max_tokens" in kwargs
                 assert kwargs["max_tokens"] == 2048
+                # Thinking is explicitly disabled by default
+                assert "thinking" in kwargs
+                assert kwargs["thinking"]["type"] == "disabled"
 
                 # Check system prompt contains Atlas Obscura
                 assert "system" in kwargs

@@ -132,6 +132,77 @@ class ClaudeClient:
         # Semaphore to limit concurrent API requests
         self._api_semaphore = asyncio.Semaphore(3)
 
+    def _parse_int_env(self, key: str) -> int | None:
+        value = os.getenv(key)
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            logger.warning(f"Invalid int for {key}: {value}")
+            return None
+
+    def _get_thinking_budget(self, reasoning_level: str | None) -> int | None:
+        if not reasoning_level:
+            return None
+
+        level_key = reasoning_level.upper()
+        env_keys = [
+            f"CLAUDE_THINKING_BUDGET_TOKENS_{level_key}",
+            f"ANTHROPIC_THINKING_BUDGET_TOKENS_{level_key}",
+            "CLAUDE_THINKING_BUDGET_TOKENS",
+            "ANTHROPIC_THINKING_BUDGET_TOKENS",
+        ]
+        for key in env_keys:
+            value = self._parse_int_env(key)
+            if value is not None:
+                return value
+        return None
+
+    def _build_thinking_config(
+        self, reasoning_level: str | None, force_reasoning_none: bool
+    ) -> dict | None:
+        if force_reasoning_none or not reasoning_level or reasoning_level == "none":
+            return {"type": "disabled"}
+
+        default_budgets = {
+            "low": 1024,
+            "medium": 2048,
+            "high": 4096,
+        }
+        budget = self._get_thinking_budget(reasoning_level)
+        if budget is None:
+            budget = default_budgets.get(reasoning_level, 1024)
+
+        if budget < 1024:
+            logger.warning(
+                f"Thinking budget too low ({budget}); clamping to 1024 minimum"
+            )
+            budget = 1024
+
+        return {"type": "enabled", "budget_tokens": budget}
+
+    def _is_thinking_budget_error(self, error: Exception) -> bool:
+        message = str(error).lower()
+        return "thinking.enabled.budget_tokens" in message or (
+            "thinking" in message and "budget" in message and "tokens" in message
+        )
+
+    async def _create_message_with_thinking_fallback(self, request_kwargs: dict):
+        try:
+            return await self.client.messages.create(**request_kwargs)
+        except Exception as e:
+            if self._is_thinking_budget_error(e):
+                current = request_kwargs.get("thinking", {})
+                if current.get("type") != "disabled":
+                    logger.warning(
+                        "Thinking budget error from Claude API; retrying with thinking disabled"
+                    )
+                    retry_kwargs = dict(request_kwargs)
+                    retry_kwargs["thinking"] = {"type": "disabled"}
+                    return await self.client.messages.create(**retry_kwargs)
+            raise
+
     def _get_russian_style_instructions(self) -> str:
         """Get detailed Russian language style instructions for Atlas Obscura quality."""
         return """
@@ -880,36 +951,29 @@ Sources:
             )
 
             # Call Claude API
+            thinking_config = self._build_thinking_config(
+                user_reasoning, force_reasoning_none
+            )
+            thinking_type = (
+                thinking_config.get("type")
+                if isinstance(thinking_config, dict)
+                else "default"
+            )
             logger.info(
-                f"Calling Claude API (model={user_model}, reasoning={user_reasoning})"
+                "Calling Claude API "
+                f"(model={user_model}, reasoning={user_reasoning}, thinking={thinking_type})"
             )
 
-            # Map reasoning level to budget tokens
-            reasoning_budget_map = {
-                "none": 0,  # No extended thinking
-                "low": 1000,  # Quick reasoning
-                "medium": 3000,  # Thorough analysis
-                "high": 8000,  # Deep analysis
-            }
-            budget_tokens = reasoning_budget_map.get(user_reasoning, 1000)
-
-            # Prepare API parameters
-            api_params = {
-                "model": user_model,
-                "max_tokens": 2048,
-                "system": system_prompt,
-                "messages": [{"role": "user", "content": user_prompt}],
-            }
-
-            # Add extended thinking for Opus and Sonnet (based on user preference)
-            if user_model in [self.MODEL_OPUS, self.MODEL_SONNET] and budget_tokens > 0:
-                api_params["thinking"] = {
-                    "type": "enabled",
-                    "budget_tokens": budget_tokens,
-                }
-
             async with self._api_semaphore:
-                response = await self.client.messages.create(**api_params)
+                request_kwargs = {
+                    "model": user_model,
+                    "max_tokens": 2048,
+                    "system": system_prompt,
+                    "messages": [{"role": "user", "content": user_prompt}],
+                }
+                if thinking_config is not None:
+                    request_kwargs["thinking"] = thinking_config
+                response = await self._create_message_with_thinking_fallback(request_kwargs)
 
             # Extract content from response
             content = ""
@@ -936,24 +1000,19 @@ Sources:
                 )
 
                 # Prepare retry parameters (reuse thinking config if applicable)
-                retry_params = {
+                retry_kwargs = {
                     "model": user_model,
                     "max_tokens": 2048,
                     "system": system_prompt,
                     "messages": [{"role": "user", "content": expanded_prompt}],
                 }
-                # Apply same reasoning budget for retry
-                if (
-                    user_model in [self.MODEL_OPUS, self.MODEL_SONNET]
-                    and budget_tokens > 0
-                ):
-                    retry_params["thinking"] = {
-                        "type": "enabled",
-                        "budget_tokens": budget_tokens,
-                    }
+                if thinking_config is not None:
+                    retry_kwargs["thinking"] = thinking_config
 
                 async with self._api_semaphore:
-                    retry_response = await self.client.messages.create(**retry_params)
+                    retry_response = await self._create_message_with_thinking_fallback(
+                        retry_kwargs
+                    )
 
                 if retry_response.content:
                     retry_content = ""
