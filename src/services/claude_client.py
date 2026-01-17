@@ -136,6 +136,77 @@ class ClaudeClient:
         # Semaphore to limit concurrent API requests
         self._api_semaphore = asyncio.Semaphore(3)
 
+    def _parse_int_env(self, key: str) -> int | None:
+        value = os.getenv(key)
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            logger.warning(f"Invalid int for {key}: {value}")
+            return None
+
+    def _get_thinking_budget(self, reasoning_level: str | None) -> int | None:
+        if not reasoning_level:
+            return None
+
+        level_key = reasoning_level.upper()
+        env_keys = [
+            f"CLAUDE_THINKING_BUDGET_TOKENS_{level_key}",
+            f"ANTHROPIC_THINKING_BUDGET_TOKENS_{level_key}",
+            "CLAUDE_THINKING_BUDGET_TOKENS",
+            "ANTHROPIC_THINKING_BUDGET_TOKENS",
+        ]
+        for key in env_keys:
+            value = self._parse_int_env(key)
+            if value is not None:
+                return value
+        return None
+
+    def _build_thinking_config(
+        self, reasoning_level: str | None, force_reasoning_none: bool
+    ) -> dict | None:
+        if force_reasoning_none or not reasoning_level or reasoning_level == "none":
+            return {"type": "disabled"}
+
+        default_budgets = {
+            "low": 1024,
+            "medium": 2048,
+            "high": 4096,
+        }
+        budget = self._get_thinking_budget(reasoning_level)
+        if budget is None:
+            budget = default_budgets.get(reasoning_level, 1024)
+
+        if budget < 1024:
+            logger.warning(
+                f"Thinking budget too low ({budget}); clamping to 1024 minimum"
+            )
+            budget = 1024
+
+        return {"type": "enabled", "budget_tokens": budget}
+
+    def _is_thinking_budget_error(self, error: Exception) -> bool:
+        message = str(error).lower()
+        return "thinking.enabled.budget_tokens" in message or (
+            "thinking" in message and "budget" in message and "tokens" in message
+        )
+
+    async def _create_message_with_thinking_fallback(self, request_kwargs: dict):
+        try:
+            return await self.client.messages.create(**request_kwargs)
+        except Exception as e:
+            if self._is_thinking_budget_error(e):
+                current = request_kwargs.get("thinking", {})
+                if current.get("type") != "disabled":
+                    logger.warning(
+                        "Thinking budget error from Claude API; retrying with thinking disabled"
+                    )
+                    retry_kwargs = dict(request_kwargs)
+                    retry_kwargs["thinking"] = {"type": "disabled"}
+                    return await self.client.messages.create(**retry_kwargs)
+            raise
+
     def _get_russian_style_instructions(self) -> str:
         """Get detailed Russian language style instructions for Atlas Obscura quality."""
         return """
@@ -609,6 +680,7 @@ Sources:
             # Get user preferences
             user_language = "ru"  # Default to Russian
             user_model = self.MODEL_OPUS  # Default model
+            user_reasoning = "none"  # Default reasoning
 
             if user_id:
                 try:
@@ -623,6 +695,12 @@ Sources:
                     elif stored_model == self.MODEL_HAIKU:
                         user_model = self.MODEL_HAIKU
                     # else: defaults to MODEL_OPUS
+
+                    # Check user reasoning preference (mapped in async wrapper)
+                    try:
+                        user_reasoning = await donors_db.get_user_reasoning(user_id)
+                    except Exception as e:
+                        logger.warning(f"Failed to get user reasoning: {e}")
                 except Exception as e:
                     logger.warning(f"Failed to get user preferences: {e}")
 
@@ -791,15 +869,27 @@ Sources:
             )
 
             # Call Claude API
-            logger.info(f"Calling Claude API (model={user_model})")
+            thinking_config = self._build_thinking_config(
+                user_reasoning, force_reasoning_none
+            )
+            thinking_type = (
+                thinking_config.get("type") if isinstance(thinking_config, dict) else "default"
+            )
+            logger.info(
+                "Calling Claude API "
+                f"(model={user_model}, reasoning={user_reasoning}, thinking={thinking_type})"
+            )
 
             async with self._api_semaphore:
-                response = await self.client.messages.create(
-                    model=user_model,
-                    max_tokens=2048,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": user_prompt}],
-                )
+                request_kwargs = {
+                    "model": user_model,
+                    "max_tokens": 2048,
+                    "system": system_prompt,
+                    "messages": [{"role": "user", "content": user_prompt}],
+                }
+                if thinking_config is not None:
+                    request_kwargs["thinking"] = thinking_config
+                response = await self._create_message_with_thinking_fallback(request_kwargs)
 
             # Extract content from response
             content = ""
@@ -820,11 +910,16 @@ Sources:
                 expanded_prompt = user_prompt + "\n\nПРИМЕЧАНИЕ: Расширь радиус поиска до 1500м. Найди ЛЮБОЙ интересный исторический объект поблизости." if user_language == "ru" else user_prompt + "\n\nNOTE: Expand search radius to 1500m. Find ANY interesting historical object nearby."
 
                 async with self._api_semaphore:
-                    retry_response = await self.client.messages.create(
-                        model=user_model,
-                        max_tokens=2048,
-                        system=system_prompt,
-                        messages=[{"role": "user", "content": expanded_prompt}],
+                    retry_kwargs = {
+                        "model": user_model,
+                        "max_tokens": 2048,
+                        "system": system_prompt,
+                        "messages": [{"role": "user", "content": expanded_prompt}],
+                    }
+                    if thinking_config is not None:
+                        retry_kwargs["thinking"] = thinking_config
+                    retry_response = await self._create_message_with_thinking_fallback(
+                        retry_kwargs
                     )
 
                 if retry_response.content:
