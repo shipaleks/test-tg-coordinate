@@ -990,74 +990,45 @@ Sources:
             if "[[NO_POI_FOUND]]" in content:
                 logger.info("NO_POI_FOUND detected, retrying with expanded search")
 
-                # Try with expanded search prompt
-                expanded_prompt = (
-                    user_prompt
-                    + "\n\nПРИМЕЧАНИЕ: Расширь радиус поиска до 1500м. Найди ЛЮБОЙ интересный исторический объект поблизости."
-                    if user_language == "ru"
-                    else user_prompt
-                    + "\n\nNOTE: Expand search radius to 1500m. Find ANY interesting historical object nearby."
-                )
+                # Adaptive radius expansion: 1500m → 2500m → 3500m for live locations
+                radius_steps = [1500]
+                if is_live_location:
+                    radius_steps.extend([2500, 3500])
 
-                # Prepare retry parameters (reuse thinking config if applicable)
-                retry_kwargs = {
-                    "model": user_model,
-                    "max_tokens": 2048,
-                    "system": system_prompt,
-                    "messages": [{"role": "user", "content": expanded_prompt}],
-                }
-                if thinking_config is not None:
-                    retry_kwargs["thinking"] = thinking_config
-
-                async with self._api_semaphore:
-                    retry_response = await self._create_message_with_thinking_fallback(
-                        retry_kwargs
+                for radius in radius_steps:
+                    expanded_prompt = (
+                        user_prompt
+                        + f"\n\nПРИМЕЧАНИЕ: Расширь радиус поиска до {radius}м. Найди ЛЮБОЙ интересный исторический объект поблизости."
+                        if user_language == "ru"
+                        else user_prompt
+                        + f"\n\nNOTE: Expand search radius to {radius}m. Find ANY interesting historical object nearby."
                     )
 
-                if retry_response.content:
-                    retry_content = ""
-                    for block in retry_response.content:
-                        if hasattr(block, "text"):
-                            retry_content += block.text
-                    if retry_content and "[[NO_POI_FOUND]]" not in retry_content:
-                        content = retry_content
-                    elif is_live_location:
-                        logger.info(
-                            "NO_POI_FOUND persists after 1500m retry, expanding to 2500m"
-                        )
-                        expanded_prompt_2 = (
-                            user_prompt
-                            + "\n\nПРИМЕЧАНИЕ: Расширь радиус поиска до 2500м. Найди ЛЮБОЙ интересный исторический объект поблизости."
-                            if user_language == "ru"
-                            else user_prompt
-                            + "\n\nNOTE: Expand search radius to 2500m. Find ANY interesting historical object nearby."
-                        )
-                        retry_kwargs_2 = {
-                            "model": user_model,
-                            "max_tokens": 2048,
-                            "system": system_prompt,
-                            "messages": [{"role": "user", "content": expanded_prompt_2}],
-                        }
-                        if thinking_config is not None:
-                            retry_kwargs_2["thinking"] = thinking_config
+                    # Prepare retry parameters (reuse thinking config if applicable)
+                    retry_kwargs = {
+                        "model": user_model,
+                        "max_tokens": 2048,
+                        "system": system_prompt,
+                        "messages": [{"role": "user", "content": expanded_prompt}],
+                    }
+                    if thinking_config is not None:
+                        retry_kwargs["thinking"] = thinking_config
 
-                        async with self._api_semaphore:
-                            retry_response_2 = (
-                                await self._create_message_with_thinking_fallback(
-                                    retry_kwargs_2
-                                )
+                    async with self._api_semaphore:
+                        retry_response = (
+                            await self._create_message_with_thinking_fallback(
+                                retry_kwargs
                             )
+                        )
 
-                        if retry_response_2.content:
-                            retry_content_2 = ""
-                            for block in retry_response_2.content:
-                                if hasattr(block, "text"):
-                                    retry_content_2 += block.text
-                            if (
-                                retry_content_2
-                                and "[[NO_POI_FOUND]]" not in retry_content_2
-                            ):
-                                content = retry_content_2
+                    if retry_response.content:
+                        retry_content = ""
+                        for block in retry_response.content:
+                            if hasattr(block, "text"):
+                                retry_content += block.text
+                        if retry_content and "[[NO_POI_FOUND]]" not in retry_content:
+                            content = retry_content
+                            break
 
             logger.info(f"Generated fact for location {lat},{lon}")
             return content.strip()
