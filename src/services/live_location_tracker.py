@@ -699,6 +699,7 @@ class LiveLocationTracker:
                     sources = []
                     sources_block = ""
                     response = None
+                    fallback_attempted = False
 
                     for duplicate_retry in range(MAX_DUPLICATE_RETRIES + 1):
                         # Build previous_facts with stronger emphasis on place names
@@ -733,7 +734,23 @@ class LiveLocationTracker:
                             logger.info(
                                 f"No POI found for live location (attempt skipped) for user {session_data.user_id}"
                             )
-                            break  # Exit retry loop, will skip to next interval
+                            if not fallback_attempted:
+                                fallback_attempted = True
+                                logger.info(
+                                    f"Attempting static fallback for live location user {session_data.user_id}"
+                                )
+                                response = await openai_client.get_nearby_fact(
+                                    session_data.latitude,
+                                    session_data.longitude,
+                                    is_live_location=False,
+                                    previous_facts=extended_previous_facts,
+                                    user_id=session_data.user_id,
+                                    force_reasoning_none=True,
+                                )
+                                if response and "[[NO_POI_FOUND]]" in response:
+                                    break  # Exit retry loop, will skip to next interval
+                            else:
+                                break  # Exit retry loop, will skip to next interval
 
                         # Parse the response to extract place and fact
                         from ..handlers.location import get_localized_message
@@ -875,6 +892,36 @@ class LiveLocationTracker:
                             f"Max duplicate retries for user {session_data.user_id}, will wait before retry"
                         )
                         # Don't continue - let it fall through to sleep
+
+                    # If NO_POI_FOUND after fallback, notify user instead of staying silent
+                    if response and "[[NO_POI_FOUND]]" in response:
+                        try:
+                            from ..handlers.location import get_localized_message
+
+                            session_data.fact_count += 1
+                            error_fact = await get_localized_message(
+                                session_data.user_id, "error_no_info"
+                            )
+                            error_response = await get_localized_message(
+                                session_data.user_id,
+                                "live_fact_format",
+                                number=session_data.fact_count,
+                                place="",
+                                fact=error_fact,
+                            )
+                            await bot.send_message(
+                                chat_id=session_data.chat_id,
+                                text=error_response,
+                                parse_mode="Markdown",
+                            )
+                            logger.info(
+                                f"Sent NO_POI fallback message for user {session_data.user_id}"
+                            )
+                        except Exception as send_error:
+                            logger.error(
+                                f"Failed to send NO_POI fallback message: {send_error}"
+                            )
+                        # Skip sending a real fact this interval, then fall through to sleep
 
                     # Only send fact if we have valid content
                     if (
@@ -1098,6 +1145,11 @@ class LiveLocationTracker:
                         )
                     except Exception as send_error:
                         logger.error(f"Failed to send error message: {send_error}")
+
+                finally:
+                    # Always clear generation flag and refresh activity timestamp
+                    session_data.is_generating_fact = False
+                    session_data.last_update = datetime.now()
 
                 # Wait for the next interval, compensating for generation time
                 elapsed = (datetime.now() - send_start_time).total_seconds()
