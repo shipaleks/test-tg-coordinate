@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Bot Voyage** (nearby-fact-bot) is a Telegram bot that provides location-based facts using **Anthropic Claude** (Opus 4.5 / Sonnet 4.5 / Haiku 4.5) with Brave Search web verification. It supports both static location queries and real-time live location tracking with multi-language support.
+**Bot Voyage** (nearby-fact-bot) is a Telegram bot that provides location-based facts using **Anthropic Claude** (Opus 4.6 / Sonnet 4.5 / Haiku 4.5) with Brave Search web verification. It supports both static location queries and real-time live location tracking with multi-language support.
 
 **Version**: 2.0.0
 **Python**: 3.12 (minimum 3.11)
@@ -42,7 +42,7 @@ The architecture supports:
 - Multiple database backends (SQLite, PostgreSQL, Firestore)
 - Telegram Stars payment system for premium features
 - Configurable AI reasoning levels (none/low/medium/high)
-- Three Claude models: Opus 4.5, Sonnet 4.5, Haiku 4.5
+- Three Claude models: Opus 4.6 (adaptive thinking), Sonnet 4.5, Haiku 4.5
 
 ### Project Structure
 
@@ -134,17 +134,18 @@ docs/                                  # Documentation, images, videos
 - Custom language input (accepts codes like "es", "de" or names)
 - `/reset` command for language reset
 - Hidden `/reason` command for premium users:
-  - Model selection: Claude Opus 4.5, Sonnet 4.5, Haiku 4.5
+  - Model selection: Claude Opus 4.6, Sonnet 4.5, Haiku 4.5
   - Reasoning levels: none/low/medium/high
+  - Opus 4.6 uses adaptive thinking with effort parameter; older models use budget_tokens
   - Checkmarks for current selections
 - User preference persistence in database
 
 #### `src/services/claude_client.py` (1758 lines - Core AI Engine)
 **AI fact generation with verification**
 - **Models**:
-  - `MODEL_OPUS = "claude-opus-4-5-20251101"` (default for all facts)
-  - `MODEL_SONNET = "claude-sonnet-4-5-20250929"`
-  - `MODEL_HAIKU = "claude-haiku-4-5-20251001"`
+  - `MODEL_OPUS = "claude-opus-4-6"` (best quality, adaptive thinking)
+  - `MODEL_SONNET = "claude-sonnet-4-5-20250929"` (default model)
+  - `MODEL_HAIKU = "claude-haiku-4-5-20251001"` (fastest)
 - **StaticLocationHistory** class: in-memory cache for anti-repetition
   - Coordinate-based keying (search keywords)
   - 24-hour TTL, max 1000 entries, auto-cleanup
@@ -157,10 +158,11 @@ docs/                                  # Documentation, images, videos
 - **Web search integration**: Brave Search API via `WebSearchService`
   - Results formatted into prompts for verification
   - Fallback mode when search unavailable
-- **Thinking/reasoning config**: Configurable budget tokens
-  - Defaults: low=1024, medium=2048, high=4096
-  - Environment variable overrides: `CLAUDE_THINKING_BUDGET_TOKENS_{LEVEL}`
-  - Auto-fallback on thinking budget errors
+- **Thinking/reasoning config**: Model-dependent thinking modes
+  - **Opus 4.6**: Adaptive thinking (`thinking: {type: "adaptive"}`) with effort parameter via `output_config: {effort: "low"|"medium"|"high"}`
+  - **Sonnet/Haiku 4.5**: Manual thinking (`thinking: {type: "enabled", budget_tokens: N}`) with defaults: low=1024, medium=2048, high=4096
+  - Environment variable overrides for budget_tokens: `CLAUDE_THINKING_BUDGET_TOKENS_{LEVEL}`
+  - Auto-fallback on thinking errors (strips thinking config and output_config)
 - **Multi-tier coordinate lookup**:
   1. Direct parsing from `<answer>` response
   2. Nominatim geocoding (OSM) with smart fallbacks
@@ -219,7 +221,7 @@ docs/                                  # Documentation, images, videos
 - User preferences: `get/set_user_language()`, `get/set_user_reasoning()`, `get/set_user_model()`
 - `has_language_set()`, `reset_user_language()`
 - Auto-upgrade: donors from reasoning='none' -> 'low' (hidden bonus)
-- Legacy model mapping: `gpt-5` -> `claude-opus-4-5-20251101`, `gpt-5.1-mini` -> `claude-sonnet-4-20250514`
+- Legacy model mapping: `gpt-5` -> `claude-opus-4-6`, `claude-opus-4-5-20251101` -> `claude-opus-4-6`
 - Singleton pattern via `get_async_donors_db()`
 
 #### `src/services/donors_db.py` (806 lines)
@@ -227,7 +229,7 @@ docs/                                  # Documentation, images, videos
 - Tables: donors, donations, user_preferences
 - Railway detection: checks `RAILWAY_ENVIRONMENT`, `RAILWAY_PROJECT_ID`, `RAILWAY_SERVICE_ID`, etc.
 - Path selection: Railway volume (`/data`) -> custom `VOLUME_PATH` -> `/tmp` -> local directory
-- Default language: `'en'`, default model: `'claude-haiku-4-5-20251001'`, default reasoning: `'low'`
+- Default language: `'en'`, default model: `'claude-sonnet-4-5-20250929'`, default reasoning: `'low'`
 - Payment ID deduplication (UNIQUE constraint)
 - Premium status: `premium_expires > current_time` (25 years per star)
 - Thread-safe with `threading.Lock`
@@ -338,7 +340,7 @@ docs/                                  # Documentation, images, videos
 - **AsyncIO** - Concurrent live location processing
 
 **AI & Search**
-- **Anthropic Claude API** (anthropic 0.50+) - Claude Opus 4.5, Sonnet 4.5, Haiku 4.5
+- **Anthropic Claude API** (anthropic 0.50+) - Claude Opus 4.6 (adaptive thinking), Sonnet 4.5, Haiku 4.5
 - **Brave Search API** - Web search for fact verification (2000 queries/month free)
 - **Extended thinking** - Configurable reasoning budgets (1024-4096 tokens)
 
@@ -449,7 +451,7 @@ CREATE TABLE user_preferences (
   user_id BIGINT PRIMARY KEY,
   language TEXT DEFAULT 'en',
   reasoning TEXT DEFAULT 'low',
-  model TEXT DEFAULT 'claude-haiku-4-5-20251001',
+  model TEXT DEFAULT 'claude-sonnet-4-5-20250929',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -468,7 +470,7 @@ CREATE TABLE user_preferences (
   "premium_expires": "timestamp",
   "language": "en",
   "reasoning": "low",
-  "model": "claude-haiku-4-5-20251001"
+  "model": "claude-sonnet-4-5-20250929"
 }
 ```
 
@@ -766,15 +768,23 @@ Interesting fact: [text]
 
 **Static Locations**: `StaticLocationHistory` caches previous facts by search keywords. Previous facts sent to AI prompt so it picks different places.
 
-### Thinking Budget Configuration
+### Thinking Configuration
 
-Extended thinking is controlled per-user via reasoning levels:
+Extended thinking is controlled per-user via reasoning levels. The implementation differs by model:
+
+**Opus 4.6** (adaptive thinking):
 - `none` -> thinking disabled
-- `low` -> 1024 token budget (default for donors)
+- `low` -> `thinking: {type: "adaptive"}` + `output_config: {effort: "low"}`
+- `medium` -> `thinking: {type: "adaptive"}` + `output_config: {effort: "medium"}`
+- `high` -> `thinking: {type: "adaptive"}` + `output_config: {effort: "high"}`
+
+**Sonnet 4.5 / Haiku 4.5** (manual budget_tokens):
+- `none` -> thinking disabled
+- `low` -> 1024 token budget (default for all users)
 - `medium` -> 2048 token budget
 - `high` -> 4096 token budget
 
-Minimum enforced: 1024 tokens. Auto-fallback to disabled on API errors.
+Minimum enforced for budget_tokens: 1024. Auto-fallback to disabled on API errors.
 
 ## Troubleshooting
 

@@ -111,7 +111,7 @@ class ClaudeClient:
     """Client for interacting with Anthropic Claude API to generate location facts."""
 
     # Model constants
-    MODEL_OPUS = "claude-opus-4-5-20251101"
+    MODEL_OPUS = "claude-opus-4-6"
     MODEL_SONNET = "claude-sonnet-4-5-20250929"
     MODEL_HAIKU = "claude-haiku-4-5-20251001"
 
@@ -160,11 +160,31 @@ class ClaudeClient:
         return None
 
     def _build_thinking_config(
-        self, reasoning_level: str | None, force_reasoning_none: bool
-    ) -> dict | None:
-        if force_reasoning_none or not reasoning_level or reasoning_level == "none":
-            return {"type": "disabled"}
+        self,
+        reasoning_level: str | None,
+        force_reasoning_none: bool,
+        model: str | None = None,
+    ) -> tuple[dict | None, dict | None]:
+        """Build thinking config and optional output_config for the API call.
 
+        Returns:
+            Tuple of (thinking_config, output_config). output_config is only set
+            for Opus 4.6 adaptive thinking with effort control.
+        """
+        if force_reasoning_none or not reasoning_level or reasoning_level == "none":
+            return {"type": "disabled"}, None
+
+        # Opus 4.6 uses adaptive thinking with effort parameter
+        if model == self.MODEL_OPUS:
+            effort_mapping = {
+                "low": "low",
+                "medium": "medium",
+                "high": "high",
+            }
+            effort = effort_mapping.get(reasoning_level, "high")
+            return {"type": "adaptive"}, {"effort": effort}
+
+        # Older models use budget_tokens
         default_budgets = {
             "low": 1024,
             "medium": 2048,
@@ -180,26 +200,28 @@ class ClaudeClient:
             )
             budget = 1024
 
-        return {"type": "enabled", "budget_tokens": budget}
+        return {"type": "enabled", "budget_tokens": budget}, None
 
-    def _is_thinking_budget_error(self, error: Exception) -> bool:
+    def _is_thinking_error(self, error: Exception) -> bool:
         message = str(error).lower()
-        return "thinking.enabled.budget_tokens" in message or (
-            "thinking" in message and "budget" in message and "tokens" in message
+        return (
+            "thinking" in message
+            and ("budget" in message or "adaptive" in message or "type" in message)
         )
 
     async def _create_message_with_thinking_fallback(self, request_kwargs: dict):
         try:
             return await self.client.messages.create(**request_kwargs)
         except Exception as e:
-            if self._is_thinking_budget_error(e):
+            if self._is_thinking_error(e):
                 current = request_kwargs.get("thinking", {})
                 if current.get("type") != "disabled":
                     logger.warning(
-                        "Thinking budget error from Claude API; retrying with thinking disabled"
+                        "Thinking error from Claude API; retrying with thinking disabled"
                     )
                     retry_kwargs = dict(request_kwargs)
                     retry_kwargs["thinking"] = {"type": "disabled"}
+                    retry_kwargs.pop("output_config", None)
                     return await self.client.messages.create(**retry_kwargs)
             raise
 
@@ -951,8 +973,8 @@ Sources:
             )
 
             # Call Claude API
-            thinking_config = self._build_thinking_config(
-                user_reasoning, force_reasoning_none
+            thinking_config, output_config = self._build_thinking_config(
+                user_reasoning, force_reasoning_none, model=user_model
             )
             thinking_type = (
                 thinking_config.get("type")
@@ -973,6 +995,8 @@ Sources:
                 }
                 if thinking_config is not None:
                     request_kwargs["thinking"] = thinking_config
+                if output_config is not None:
+                    request_kwargs["output_config"] = output_config
                 response = await self._create_message_with_thinking_fallback(request_kwargs)
 
             # Extract content from response
