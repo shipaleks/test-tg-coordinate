@@ -137,8 +137,8 @@ class DonorsDatabase:
                             CREATE TABLE IF NOT EXISTS user_preferences (
                             user_id INTEGER PRIMARY KEY,
                             language TEXT DEFAULT 'en',
-                            reasoning TEXT DEFAULT 'medium',
-                            model TEXT DEFAULT 'claude-haiku-4-5-20251001',
+                            reasoning TEXT DEFAULT 'low',
+                            model TEXT DEFAULT 'claude-sonnet-4-5-20250929',
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                             updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
@@ -599,7 +599,7 @@ class DonorsDatabase:
                     conn.execute(
                         """
                         INSERT INTO user_preferences (user_id, language, reasoning, model, updated_at)
-                        VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'medium'), COALESCE((SELECT model FROM user_preferences WHERE user_id = ?), 'claude-haiku-4-5-20251001'), ?)
+                        VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'low'), COALESCE((SELECT model FROM user_preferences WHERE user_id = ?), 'claude-sonnet-4-5-20250929'), ?)
                         ON CONFLICT(user_id) DO UPDATE SET language=excluded.language, updated_at=excluded.updated_at
                     """,
                         (user_id, language, user_id, user_id, current_time),

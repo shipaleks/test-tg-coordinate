@@ -200,14 +200,16 @@ class AsyncDonorsWrapper:
 
         # Map legacy model names to Claude models
         MODEL_MAPPING = {
-            # Legacy OpenAI models → Claude Opus
-            "gpt-5": "claude-opus-4-5-20251101",
-            "gpt-5.1": "claude-opus-4-5-20251101",
-            "gpt-5-mini": "claude-opus-4-5-20251101",
-            "gpt-5.1-mini": "claude-sonnet-4-20250514",
+            # Legacy OpenAI models → Claude
+            "gpt-5": "claude-opus-4-6",
+            "gpt-5.1": "claude-opus-4-6",
+            "gpt-5-mini": "claude-opus-4-6",
+            "gpt-5.1-mini": "claude-sonnet-4-5-20250929",
+            # Previous Claude model → current
+            "claude-opus-4-5-20251101": "claude-opus-4-6",
             # Claude model aliases
-            "claude-opus": "claude-opus-4-5-20251101",
-            "claude-sonnet": "claude-sonnet-4-20250514",
+            "claude-opus": "claude-opus-4-6",
+            "claude-sonnet": "claude-sonnet-4-5-20250929",
         }
         return MODEL_MAPPING.get(model, model)  # Return mapped or original
 

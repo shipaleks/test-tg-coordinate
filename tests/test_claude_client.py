@@ -133,9 +133,10 @@ def test_get_nearby_fact_prompt_format(claude_client):
                 # Check max_tokens
                 assert "max_tokens" in kwargs
                 assert kwargs["max_tokens"] == 2048
-                # Thinking is explicitly disabled by default
+                # Default reasoning is "low" -> extended thinking enabled with budget
                 assert "thinking" in kwargs
-                assert kwargs["thinking"]["type"] == "disabled"
+                assert kwargs["thinking"]["type"] == "enabled"
+                assert kwargs["thinking"]["budget_tokens"] == 1024
 
                 # Check system prompt contains Atlas Obscura
                 assert "system" in kwargs
@@ -181,8 +182,8 @@ def test_get_nearby_fact_live_location_model(claude_client):
                 call_args = mock_create.call_args
                 kwargs = call_args.kwargs
 
-                # Live location also uses Opus by default
-                assert kwargs["model"] == "claude-opus-4-5-20251101"
+                # Live location also uses Sonnet 4.5 by default (same as static)
+                assert kwargs["model"] == "claude-sonnet-4-5-20250929"
 
 
 def test_parse_coordinates_from_response(claude_client):

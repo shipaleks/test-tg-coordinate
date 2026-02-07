@@ -29,7 +29,7 @@ async def reason_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     # Model rows - Claude Opus 4.5, Sonnet 4.5, Haiku 4.5
     claude_models = [
-        ("claude-opus-4-5-20251101", "Opus 4.5 (Best Quality)"),
+        ("claude-opus-4-6", "Opus 4.6 (Best Quality)"),
         ("claude-sonnet-4-5-20250929", "Sonnet 4.5 (Balanced)"),
         ("claude-haiku-4-5-20251001", "Haiku 4.5 (Fastest)"),
     ]
@@ -108,7 +108,7 @@ async def handle_reason_model_callback(
 
     # Model rows
     claude_models = [
-        ("claude-opus-4-5-20251101", "Opus 4.5 (Best Quality)"),
+        ("claude-opus-4-6", "Opus 4.6 (Best Quality)"),
         ("claude-sonnet-4-5-20250929", "Sonnet 4.5 (Balanced)"),
         ("claude-haiku-4-5-20251001", "Haiku 4.5 (Fastest)"),
     ]
