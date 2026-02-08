@@ -204,9 +204,8 @@ class ClaudeClient:
 
     def _is_thinking_error(self, error: Exception) -> bool:
         message = str(error).lower()
-        return (
-            "thinking" in message
-            and ("budget" in message or "adaptive" in message or "type" in message)
+        return "thinking" in message and (
+            "budget" in message or "adaptive" in message or "type" in message
         )
 
     async def _create_message_with_thinking_fallback(self, request_kwargs: dict):
@@ -502,9 +501,7 @@ FORBIDDEN PHRASES (NEVER USE):
 IF YOU CANNOT FIND A FACT: Return ONLY "[[NO_POI_FOUND]]" - nothing else. Do NOT apologize or explain."""
 
         if is_live_location:
-            return (
-                base_rules
-                + f"""
+            return base_rules + f"""
 
 OUTPUT FORMAT (live location, 100-120 words):
 <answer>
@@ -520,11 +517,8 @@ Sources:
 VERIFY BEFORE SENDING: Is each URL in Sources present in WEB SEARCH RESULTS above? If even one URL is invented - this is a CRITICAL ERROR!
 
 Write in {user_language}."""
-            )
         else:
-            return (
-                base_rules
-                + f"""
+            return base_rules + f"""
 
 OUTPUT FORMAT (static location, 60-80 words):
 <answer>
@@ -540,7 +534,6 @@ Sources:
 VERIFY BEFORE SENDING: Is each URL in Sources present in WEB SEARCH RESULTS above? If even one URL is invented - this is a CRITICAL ERROR!
 
 Write in {user_language}."""
-            )
 
     def _build_user_prompt(
         self,
@@ -997,7 +990,9 @@ Sources:
                     request_kwargs["thinking"] = thinking_config
                 if output_config is not None:
                     request_kwargs["output_config"] = output_config
-                response = await self._create_message_with_thinking_fallback(request_kwargs)
+                response = await self._create_message_with_thinking_fallback(
+                    request_kwargs
+                )
 
             # Extract content from response
             content = ""

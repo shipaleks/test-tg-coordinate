@@ -38,8 +38,7 @@ class PostgresDatabase:
 
             # Create tables
             async with self.pool.acquire() as conn:
-                await conn.execute(
-                    """
+                await conn.execute("""
                     CREATE TABLE IF NOT EXISTS donors (
                         user_id BIGINT PRIMARY KEY,
                         telegram_username TEXT,
@@ -50,11 +49,9 @@ class PostgresDatabase:
                         premium_expires BIGINT DEFAULT 0,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
-                """
-                )
+                """)
 
-                await conn.execute(
-                    """
+                await conn.execute("""
                     CREATE TABLE IF NOT EXISTS donations (
                         id SERIAL PRIMARY KEY,
                         user_id BIGINT REFERENCES donors(user_id),
@@ -63,11 +60,9 @@ class PostgresDatabase:
                         payment_date BIGINT,
                         invoice_payload TEXT
                     )
-                """
-                )
+                """)
 
-                await conn.execute(
-                    """
+                await conn.execute("""
                     CREATE TABLE IF NOT EXISTS user_preferences (
                         user_id BIGINT PRIMARY KEY,
                         language TEXT DEFAULT 'en',
@@ -76,8 +71,7 @@ class PostgresDatabase:
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
-                """
-                )
+                """)
                 # Ensure reasoning column exists
                 try:
                     await conn.execute(

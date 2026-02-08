@@ -102,8 +102,7 @@ class DonorsDatabase:
                 # Try to create/connect to the database
                 try:
                     with sqlite3.connect(self.db_path) as conn:
-                        conn.execute(
-                            """
+                        conn.execute("""
                             CREATE TABLE IF NOT EXISTS donors (
                             user_id INTEGER PRIMARY KEY,
                             telegram_username TEXT,
@@ -114,11 +113,9 @@ class DonorsDatabase:
                             premium_expires INTEGER DEFAULT 0,
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
-                        """
-                        )
+                        """)
 
-                        conn.execute(
-                            """
+                        conn.execute("""
                             CREATE TABLE IF NOT EXISTS donations (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             user_id INTEGER,
@@ -128,12 +125,10 @@ class DonorsDatabase:
                             invoice_payload TEXT,
                             FOREIGN KEY (user_id) REFERENCES donors (user_id)
                         )
-                        """
-                        )
+                        """)
 
                         # User preferences table for language settings
-                        conn.execute(
-                            """
+                        conn.execute("""
                             CREATE TABLE IF NOT EXISTS user_preferences (
                             user_id INTEGER PRIMARY KEY,
                             language TEXT DEFAULT 'en',
@@ -142,8 +137,7 @@ class DonorsDatabase:
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                             updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
-                        """
-                        )
+                        """)
 
                         # Create indexes for better performance
                         conn.execute(
@@ -197,8 +191,7 @@ class DonorsDatabase:
 
                         # Retry with local database
                         with sqlite3.connect(self.db_path) as conn:
-                            conn.execute(
-                                """
+                            conn.execute("""
                                 CREATE TABLE IF NOT EXISTS donors (
                                     user_id INTEGER PRIMARY KEY,
                                     telegram_username TEXT,
@@ -209,11 +202,9 @@ class DonorsDatabase:
                                     premium_expires INTEGER DEFAULT 0,
                                     created_at INTEGER DEFAULT CURRENT_TIMESTAMP
                                 )
-                            """
-                            )
+                            """)
 
-                            conn.execute(
-                                """
+                            conn.execute("""
                                 CREATE TABLE IF NOT EXISTS donations (
                                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                                     user_id INTEGER,
@@ -223,11 +214,9 @@ class DonorsDatabase:
                                     invoice_payload TEXT,
                                     FOREIGN KEY (user_id) REFERENCES donors (user_id)
                                 )
-                            """
-                            )
+                            """)
 
-                            conn.execute(
-                                """
+                            conn.execute("""
                                 CREATE TABLE IF NOT EXISTS user_preferences (
                                     user_id INTEGER PRIMARY KEY,
                                     language TEXT DEFAULT 'en',
@@ -236,8 +225,7 @@ class DonorsDatabase:
                                     created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                                     updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                                 )
-                            """
-                            )
+                            """)
 
                             # Create indexes
                             conn.execute(
