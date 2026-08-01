@@ -67,7 +67,7 @@ class PostgresDatabase:
                         user_id BIGINT PRIMARY KEY,
                         language TEXT DEFAULT 'en',
                         reasoning TEXT DEFAULT 'low',
-                        model TEXT DEFAULT 'claude-sonnet-4-5-20250929',
+                        model TEXT DEFAULT 'claude-sonnet-5',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -81,7 +81,7 @@ class PostgresDatabase:
                     pass
                 try:
                     await conn.execute(
-                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS model TEXT DEFAULT 'claude-sonnet-4-5-20250929'"
+                        "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS model TEXT DEFAULT 'claude-sonnet-5'"
                     )
                 except Exception:
                     pass
@@ -352,13 +352,13 @@ class PostgresDatabase:
                     "SELECT reasoning FROM user_preferences WHERE user_id = $1",
                     user_id,
                 )
-                return (level or "none").strip()
+                return (level or "low").strip()
         except Exception as e:
             logger.error(f"Failed to get user reasoning: {e}")
-            return "none"
+            return "low"
 
     async def set_user_reasoning(self, user_id: int, level: str) -> bool:
-        """Set user's preferred reasoning effort (minimal/low/medium/high)."""
+        """Set user's preferred reasoning effort (none/low/medium/high)."""
         try:
             async with self.pool.acquire() as conn:
                 # Preserve existing language if present
@@ -376,6 +376,40 @@ class PostgresDatabase:
                 return True
         except Exception as e:
             logger.error(f"Failed to set user reasoning: {e}")
+            return False
+
+    async def get_user_model(self, user_id: int) -> str:
+        """Get user's preferred model (Claude model ID)."""
+        try:
+            async with self.pool.acquire() as conn:
+                model = await conn.fetchval(
+                    "SELECT model FROM user_preferences WHERE user_id = $1",
+                    user_id,
+                )
+                return (model or "claude-sonnet-5").strip()
+        except Exception as e:
+            logger.error(f"Failed to get user model: {e}")
+            return "claude-sonnet-5"
+
+    async def set_user_model(self, user_id: int, model: str) -> bool:
+        """Set user's preferred model (Claude model ID)."""
+        try:
+            async with self.pool.acquire() as conn:
+                # Preserve existing language/reasoning if present
+                await conn.execute(
+                    """
+                    INSERT INTO user_preferences (user_id, language, reasoning, model, updated_at)
+                    VALUES ($1, COALESCE((SELECT language FROM user_preferences WHERE user_id=$1), 'ru'), COALESCE((SELECT reasoning FROM user_preferences WHERE user_id=$1), 'low'), $2, CURRENT_TIMESTAMP)
+                    ON CONFLICT (user_id)
+                    DO UPDATE SET model = $2, updated_at = CURRENT_TIMESTAMP
+                    """,
+                    user_id,
+                    model,
+                )
+                logger.info(f"Set model {model} for user {user_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to set user model: {e}")
             return False
 
 

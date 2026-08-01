@@ -212,10 +212,10 @@ class FirestoreDatabase:
             snap = self.db.collection("users").document(str(user_id)).get()
             if snap.exists:
                 val = (snap.to_dict() or {}).get("reasoning")
-                return (val or "none").strip()
+                return (val or "low").strip()
         except Exception:
             pass
-        return "none"
+        return "low"
 
     def set_user_reasoning(self, user_id: int, level: str) -> bool:
         try:
@@ -231,10 +231,10 @@ class FirestoreDatabase:
             snap = self.db.collection("users").document(str(user_id)).get()
             if snap.exists:
                 val = (snap.to_dict() or {}).get("model")
-                return (val or "gpt-5.1").strip()
+                return (val or "claude-sonnet-5").strip()
         except Exception:
             pass
-        return "gpt-5.1"
+        return "claude-sonnet-5"
 
     def set_user_model(self, user_id: int, model: str) -> bool:
         try:
