@@ -1,5 +1,7 @@
 """Async wrapper for database operations to handle both PostgreSQL and SQLite."""
 
+import asyncio
+import inspect
 import logging
 import os
 from typing import Any
@@ -58,6 +60,19 @@ class AsyncDonorsWrapper:
                 self.db_path = self._db.db_path
             self._initialized = True
 
+    async def _call_db(self, method_name: str, *args: Any) -> Any:
+        """Dispatch a call to the active backend without blocking the loop.
+
+        Postgres methods are native coroutines and are awaited directly;
+        the SQLite and Firestore backends do blocking I/O, so their calls
+        run in a worker thread.
+        """
+        await self._ensure_initialized()
+        method = getattr(self._db, method_name)
+        if inspect.iscoroutinefunction(method):
+            return await method(*args)
+        return await asyncio.to_thread(method, *args)
+
     async def add_donation(
         self,
         user_id: int,
@@ -68,117 +83,64 @@ class AsyncDonorsWrapper:
         invoice_payload: str | None = None,
     ) -> bool:
         """Add donation (async)."""
-        await self._ensure_initialized()
-
-        if self._use_firestore or self._is_postgres:
-            return await self._db.add_donation(
-                user_id,
-                payment_id,
-                stars_amount,
-                telegram_username,
-                first_name,
-                invoice_payload,
-            )
-        else:
-            return self._db.add_donation(
-                user_id,
-                payment_id,
-                stars_amount,
-                telegram_username,
-                first_name,
-                invoice_payload,
-            )
+        return await self._call_db(
+            "add_donation",
+            user_id,
+            payment_id,
+            stars_amount,
+            telegram_username,
+            first_name,
+            invoice_payload,
+        )
 
     async def is_premium_user(self, user_id: int) -> bool:
         """Check premium status (async)."""
-        await self._ensure_initialized()
-
-        if self._is_postgres:
-            return await self._db.is_premium_user(user_id)
-        else:
-            return self._db.is_premium_user(user_id)
+        return await self._call_db("is_premium_user", user_id)
 
     async def get_donor_info(self, user_id: int) -> dict[str, Any] | None:
         """Get donor info (async)."""
-        await self._ensure_initialized()
-
-        if self._is_postgres:
-            return await self._db.get_donor_info(user_id)
-        else:
-            return self._db.get_donor_info(user_id)
+        return await self._call_db("get_donor_info", user_id)
 
     async def get_donation_history(self, user_id: int) -> list[dict[str, Any]]:
         """Get donation history (async)."""
-        await self._ensure_initialized()
-
-        if self._is_postgres:
-            return await self._db.get_donation_history(user_id)
-        else:
-            return self._db.get_donation_history(user_id)
+        return await self._call_db("get_donation_history", user_id)
 
     async def get_stats(self) -> dict[str, Any]:
         """Get statistics (async)."""
-        await self._ensure_initialized()
-
-        if self._is_postgres:
-            return await self._db.get_stats()
-        else:
-            return self._db.get_stats()
+        return await self._call_db("get_stats")
 
     async def get_user_language(self, user_id: int) -> str:
         """Get user language (async)."""
-        await self._ensure_initialized()
-
-        if self._is_postgres:
-            return await self._db.get_user_language(user_id)
-        else:
-            return self._db.get_user_language(user_id)
+        return await self._call_db("get_user_language", user_id)
 
     async def set_user_language(self, user_id: int, language: str) -> bool:
         """Set user language (async)."""
-        await self._ensure_initialized()
-
-        if self._is_postgres:
-            return await self._db.set_user_language(user_id, language)
-        else:
-            return self._db.set_user_language(user_id, language)
+        return await self._call_db("set_user_language", user_id, language)
 
     async def has_language_set(self, user_id: int) -> bool:
         """Check if language is set (async)."""
-        await self._ensure_initialized()
-        if self._is_postgres:
-            try:
-                return await self._db.has_language_set(user_id)  # type: ignore[attr-defined]
-            except Exception as e:
-                # If we cannot check explicitly, default to False so the menu is shown
-                logger.warning(
-                    f"Postgres has_language_set check failed for user {user_id}: {e}. Defaulting to False."
-                )
-                return False
-        else:
-            return self._db.has_language_set(user_id)  # type: ignore[attr-defined]
+        try:
+            return await self._call_db("has_language_set", user_id)
+        except Exception as e:
+            # If we cannot check explicitly, default to False so the menu is shown
+            logger.warning(
+                f"has_language_set check failed for user {user_id}: {e}. Defaulting to False."
+            )
+            return False
 
     async def reset_user_language(self, user_id: int) -> bool:
         """Reset language (async)."""
-        await self._ensure_initialized()
-        if self._is_postgres:
-            try:
-                return await self._db.reset_user_language(user_id)  # type: ignore[attr-defined]
-            except Exception:
-                return await self.set_user_language(user_id, "ru")
-        else:
-            return self._db.reset_user_language(user_id)  # type: ignore[attr-defined]
+        try:
+            return await self._call_db("reset_user_language", user_id)
+        except Exception:
+            return await self.set_user_language(user_id, "ru")
 
     async def get_user_reasoning(self, user_id: int) -> str:
         """Get user's preferred reasoning level (async).
 
         Auto-upgrades donors from 'none' to 'low' as a bonus reward.
         """
-        await self._ensure_initialized()
-        if self._is_postgres:
-            level = await self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
-        else:
-            level = self._db.get_user_reasoning(user_id)  # type: ignore[attr-defined]
+        level = await self._call_db("get_user_reasoning", user_id)
 
         # Map legacy reasoning levels (for backward compatibility)
         REASONING_MAPPING = {
@@ -204,28 +166,16 @@ class AsyncDonorsWrapper:
 
     async def set_user_reasoning(self, user_id: int, level: str) -> bool:
         """Set user's preferred reasoning level (async)."""
-        await self._ensure_initialized()
-        if self._is_postgres:
-            return await self._db.set_user_reasoning(user_id, level)  # type: ignore[attr-defined]
-        else:
-            return self._db.set_user_reasoning(user_id, level)  # type: ignore[attr-defined]
+        return await self._call_db("set_user_reasoning", user_id, level)
 
     async def get_user_model(self, user_id: int) -> str:
-        await self._ensure_initialized()
-        if self._is_postgres:
-            model = await self._db.get_user_model(user_id)  # type: ignore[attr-defined]
-        else:
-            model = self._db.get_user_model(user_id)  # type: ignore[attr-defined]
+        model = await self._call_db("get_user_model", user_id)
 
         # Map legacy model names to current Claude models
         return MODEL_MAPPING.get(model, model)  # Return mapped or original
 
     async def set_user_model(self, user_id: int, model: str) -> bool:
-        await self._ensure_initialized()
-        if self._is_postgres:
-            return await self._db.set_user_model(user_id, model)  # type: ignore[attr-defined]
-        else:
-            return self._db.set_user_model(user_id, model)  # type: ignore[attr-defined]
+        return await self._call_db("set_user_model", user_id, model)
 
 
 # Global instance
