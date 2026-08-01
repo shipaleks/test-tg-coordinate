@@ -15,13 +15,15 @@ from telegram import (
 )
 from telegram.ext import ContextTypes
 
-from ..services.async_donors_wrapper import get_async_donors_db
 from ..services.claude_client import get_claude_client as get_openai_client
 from ..services.firebase_stats import increment_fact_counters as fb_increment_fact
 from ..services.firebase_stats import record_movement as fb_record_movement
 from ..services.live_location_tracker import get_live_location_tracker
 from ..utils.formatting_utils import (
     escape_html as _escape_html,
+)
+from ..utils.formatting_utils import (
+    escape_markdown as _escape_markdown,
 )
 from ..utils.formatting_utils import (
     extract_sources_from_answer as _extract_sources_from_answer,
@@ -38,129 +40,11 @@ from ..utils.formatting_utils import (
 from ..utils.formatting_utils import (
     strip_sources_section as _strip_sources_section,
 )
+from ..utils.i18n import LOCATION_MESSAGES, get_localized_message
+
+__all__ = ["LOCATION_MESSAGES", "get_localized_message"]
 
 logger = logging.getLogger(__name__)
-
-# Localized messages for location handler
-LOCATION_MESSAGES = {
-    "ru": {
-        "image_fallback": "",
-        "live_location_received": "🔴 *Живая локация получена!*\n\n📍 Отслеживание на {minutes} минут\n\nКак часто присылать интересные факты?",
-        "interval_5min": "Каждые 5 минут",
-        "interval_10min": "Каждые 10 минут",
-        "interval_30min": "Каждые 30 минут",
-        "interval_60min": "Каждые 60 минут",
-        "live_activated": "🔴 *Живая локация активирована!*\n\n📍 Отслеживание: {minutes} минут\n⏰ Факты каждые: {interval} минут\n\n🚀 Первый факт придёт примерно через 3–5 минут, затем — автоматически по расписанию.\n\nОстановите sharing чтобы завершить сессию.",
-        "static_upsell": "💡 *Совет:* Это был разовый факт.\n\nХотите получать факты автоматически во время прогулки? Включите *живую локацию* — не нужно нажимать каждый раз!",
-        "static_upsell_button": "📱 Как включить живую локацию",
-        "place_label": "📍 *Место:*",
-        "fact_label": "💡 *Факт:*",
-        "sources_label": "🔗 *Источники:*",
-        "live_fact_label": "🔴 *Факт #{number}*",
-        "attraction_address": "Достопримечательность: {place}",
-        "static_fact_format": "📍 *Место:* {place}\n\n💡 *Факт:* {fact}",
-        "live_fact_format": "🔴 *Факт #{number}*\n\n📍 *Место:* {place}\n\n💡 *Факт:* {fact}",
-        "error_no_info": "😔 *Упс!*\n\nНе удалось найти интересную информацию о данном месте.\nПопробуйте немного сместиться или отправить другую локацию.",
-        "near_you": "рядом с вами",
-        "live_stopped": "✅ *Живая локация остановлена*\n\nСпасибо за использование Bot Voyage! 🗺️✨\nЗапустите новую живую локацию в любое время, чтобы продолжить исследование!",
-        "live_expired": "✅ *Сессия живой локации завершена*\n\nПериод отслеживания истек. Запустите новую живую локацию, чтобы продолжить получать факты! 🗺️✨",
-        "live_manual_stop": "✅ *Трансляция остановлена*\n\nВы прекратили делиться геопозицией.\nСпасибо за прогулку с нами! 🚶‍♂️🗺️",
-    },
-    "en": {
-        "image_fallback": "",
-        "live_location_received": "🔴 *Live location received!*\n\n📍 Tracking for {minutes} minutes\n\nHow often should I send interesting facts?",
-        "interval_5min": "Every 5 minutes",
-        "interval_10min": "Every 10 minutes",
-        "interval_30min": "Every 30 minutes",
-        "interval_60min": "Every 60 minutes",
-        "live_activated": "🔴 *Live location activated!*\n\n📍 Tracking: {minutes} minutes\n⏰ Facts every: {interval} minutes\n\n🚀 The first fact will arrive in about 3–5 minutes, then continue automatically.\n\nStop sharing to end the session.",
-        "static_upsell": "💡 *Tip:* This was a one-time fact.\n\nWant facts automatically during your walk? Enable *live location* — no need to tap each time!",
-        "static_upsell_button": "📱 How to enable live location",
-        "place_label": "📍 *Place:*",
-        "fact_label": "💡 *Fact:*",
-        "sources_label": "🔗 *Sources:*",
-        "live_fact_label": "🔴 *Fact #{number}*",
-        "attraction_address": "Attraction: {place}",
-        "static_fact_format": "📍 *Place:* {place}\n\n💡 *Fact:* {fact}",
-        "live_fact_format": "🔴 *Fact #{number}*\n\n📍 *Place:* {place}\n\n💡 *Fact:* {fact}",
-        "error_no_info": "😔 *Oops!*\n\nCouldn't find interesting information about this location.\nTry moving slightly or sending a different location.",
-        "near_you": "near you",
-        "live_stopped": "✅ *Live location stopped*\n\nThank you for using Bot Voyage! 🗺️✨\nStart a new live location anytime to continue exploring!",
-        "live_expired": "✅ *Live location session ended*\n\nThe tracking period has expired. Start a new live location to continue receiving facts! 🗺️✨",
-        "live_manual_stop": "✅ *Broadcast stopped*\n\nYou stopped sharing your location.\nThank you for walking with us! 🚶‍♂️🗺️",
-    },
-    "fr": {
-        "image_fallback": "",
-        "live_location_received": "🔴 *Position en direct reçue !*\n\n📍 Suivi pendant {minutes} minutes\n\nÀ quelle fréquence souhaitez-vous recevoir des faits intéressants ?",
-        "interval_5min": "Toutes les 5 minutes",
-        "interval_10min": "Toutes les 10 minutes",
-        "interval_30min": "Toutes les 30 minutes",
-        "interval_60min": "Toutes les 60 minutes",
-        "live_activated": "🔴 *Position en direct activée !*\n\n📍 Suivi : {minutes} minutes\n⏰ Faits toutes les : {interval} minutes\n\n🚀 Le premier fait arrivera dans ~3–5 minutes, puis automatiquement.\n\nArrêtez le partage pour terminer la session.",
-        "static_upsell": "💡 *Conseil :* C'était un fait ponctuel.\n\nVoulez-vous recevoir des faits automatiquement pendant votre promenade ? Activez la *position en direct* — plus besoin de cliquer à chaque fois !",
-        "static_upsell_button": "📱 Comment activer la position en direct",
-        "place_label": "📍 *Lieu :*",
-        "fact_label": "💡 *Fait :*",
-        "sources_label": "🔗 *Sources :*",
-        "live_fact_label": "🔴 *Fait #{number}*",
-        "attraction_address": "Attraction : {place}",
-        "static_fact_format": "📍 *Lieu :* {place}\n\n💡 *Fait :* {fact}",
-        "live_fact_format": "🔴 *Fait #{number}*\n\n📍 *Lieu :* {place}\n\n💡 *Fait :* {fact}",
-        "error_no_info": "😔 *Oups !*\n\nImpossible de trouver des informations intéressantes sur cet endroit.\nEssayez de vous déplacer légèrement ou d'envoyer une autre position.",
-        "near_you": "près de vous",
-        "live_stopped": "✅ *Position en direct arrêtée*\n\nMerci d'avoir utilisé Bot Voyage ! 🗺️✨\nDémarrez une nouvelle position en direct à tout moment pour continuer à explorer !",
-        "live_expired": "✅ *Session de position en direct terminée*\n\nLa période de suivi a expiré. Démarrez une nouvelle position en direct pour continuer à recevoir des faits ! 🗺️✨",
-        "live_manual_stop": "✅ *Diffusion arrêtée*\n\nVous avez cessé de partager votre position.\nMerci de vous promener avec nous ! 🚶‍♂️🗺️",
-    },
-    # Add more languages as needed
-}
-
-
-async def get_localized_message(user_id: int, key: str, **kwargs) -> str:
-    """Get localized message for user."""
-    try:
-        donors_db = await get_async_donors_db()
-        user_language = await donors_db.get_user_language(user_id)
-        messages = LOCATION_MESSAGES.get(user_language, LOCATION_MESSAGES["en"])
-        message = messages.get(key, LOCATION_MESSAGES["en"].get(key, key))
-        return message.format(**kwargs) if kwargs else message
-    except Exception as e:
-        logger.warning(f"Error getting localized message: {e}")
-        # Fallback to English
-        message = LOCATION_MESSAGES["en"].get(key, key)
-        return message.format(**kwargs) if kwargs else message
-
-
-def _escape_markdown(text: str) -> str:
-    """Escape minimal Markdown characters for Telegram 'Markdown' mode.
-
-    We only escape characters that commonly break formatting in legacy Markdown:
-    asterisk, underscore, backtick, and square brackets/parentheses used in links.
-    Do NOT escape dots or punctuation to avoid visible backslashes in output.
-
-    Special handling: preserve service tags like [[NO_POI_FOUND]] without escaping.
-    """
-    # First, protect service tags by temporarily replacing them
-    service_tags = ["[[NO_POI_FOUND]]"]
-    protected_text = text
-    replacements = {}
-
-    for i, tag in enumerate(service_tags):
-        if tag in protected_text:
-            placeholder = f"__SERVICE_TAG_{i}__"
-            replacements[placeholder] = tag
-            protected_text = protected_text.replace(tag, placeholder)
-
-    # Now escape markdown characters
-    chars_to_escape = ["*", "_", "`", "[", "]"]
-    for char in chars_to_escape:
-        protected_text = protected_text.replace(char, "\\" + char)
-
-    # Restore service tags
-    for placeholder, original_tag in replacements.items():
-        protected_text = protected_text.replace(placeholder, original_tag)
-
-    return protected_text
 
 
 async def _send_text_resilient(

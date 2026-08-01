@@ -39,6 +39,7 @@ from src.handlers.location import (
 )
 from src.services.async_donors_wrapper import get_async_donors_db
 from src.services.firebase_stats import ensure_user as fb_ensure_user
+from src.utils.i18n import ONBOARDING_STEPS, WELCOME_MESSAGES
 
 # Load environment variables from .env file
 load_dotenv()
@@ -48,86 +49,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-# Localized welcome messages (focus on Live Location)
-LOCALIZED_MESSAGES = {
-    "ru": {
-        "welcome": (
-            "🗺️ Привет! Я *Bot Voyage*. Покажу неожиданные факты вокруг тебя.\n\n"
-            "ℹ️ Живая локация — это когда ты делишься местоположением в реальном времени на выбранный срок. Telegram можно закрыть — факты придут пушами.\n\n"
-            "🔴 Включим? Нажми ниже — покажу в 3 шага."
-        ),
-        "buttons": {
-            "info": "📱💡 Как включить живую локацию",
-            "one_time": "📍 Отправить локацию",
-            "language": "🌐 Язык / Language",
-            "donate": "⭐💝 Поддержать проект",
-        },
-        "info_text": (
-            "📱 *Как включить живую локацию:*\n\n"
-            "1️⃣ Скрепка 📎 → 📍 Location → 🔴 Share Live Location\n"
-            "2️⃣ Выберите время (обычно 60 мин удобно)\n"
-            "3️⃣ Гуляйте — факты будут приходить сами (каждые 5–60 мин)\n\n"
-            "*💡 Почему живая локация лучше?*\n"
-            "• Персональный экскурсовод в кармане\n"
-            "• Факты приходят сами по мере движения\n"
-            "• Не нужно постоянно отправлять локацию\n"
-            "• Идеально для туристических прогулок\n\n"
-            "Если что — разовая локация тоже работает, просто отправьте её через 📎."
-        ),
-    },
-    "en": {
-        "welcome": (
-            "🗺️ Hi, I'm *Bot Voyage*. I'll show surprising facts around you.\n\n"
-            "ℹ️ Live location means you share your real‑time location for a chosen time. You can close Telegram — I'll keep sending facts as push notifications.\n\n"
-            "🔴 Turn it on? Tap below — 3 short steps."
-        ),
-        "buttons": {
-            "info": "📱💡 How to enable Live Location",
-            "one_time": "📍 Send location",
-            "language": "🌐 Language / Язык",
-            "donate": "⭐💝 Support project",
-        },
-        "info_text": (
-            "📱 *How to enable Live Location:*\n\n"
-            "1️⃣ Paperclip 📎 → 📍 Location → 🔴 Share Live Location\n"
-            "2️⃣ Pick a duration (60 min is a good default)\n"
-            "3️⃣ Walk — facts will arrive automatically (every 5–60 min)\n\n"
-            "*💡 Why is live location better?*\n"
-            "• Personal tour guide in your pocket\n"
-            "• Facts come automatically as you move\n"
-            "• No need to constantly send location\n"
-            "• Perfect for tourist walks\n\n"
-            "One-time location also works — just send your location via 📎 if needed."
-        ),
-    },
-    "fr": {
-        "welcome": (
-            "🗺️ Bonjour, je suis *Bot Voyage*. Je montre des faits inattendus autour de vous.\n\n"
-            "ℹ️ La position en direct = partager votre position en temps réel pendant une durée choisie. Vous pouvez fermer Telegram — j'enverrai quand même les faits.\n\n"
-            "🔴 On l'active ? 3 étapes ci‑dessous."
-        ),
-        "buttons": {
-            "info": "📱💡 Activer la position en direct",
-            "one_time": "📍 Envoyer ma position",
-            "language": "🌐 Langue / Language",
-            "donate": "⭐💝 Soutenir le projet",
-        },
-        "info_text": (
-            "📱 *Activer la position en direct :*\n\n"
-            "1️⃣ Trombone 📎 → 📍 Location → 🔴 Share Live Location\n"
-            "2️⃣ Durée conseillée : 60 min\n"
-            "3️⃣ Les faits arrivent automatiquement (5–60 min)\n\n"
-            "*💡 Pourquoi la position en direct est-elle meilleure ?*\n"
-            "• Guide touristique personnel dans votre poche\n"
-            "• Les faits arrivent automatiquement en vous déplaçant\n"
-            "• Pas besoin d'envoyer constamment votre position\n"
-            "• Parfait pour les promenades touristiques\n\n"
-            "La position unique fonctionne aussi via 📎 si besoin."
-        ),
-    },
-    # Add more languages as needed
-}
 
 
 async def send_welcome_message(
@@ -141,7 +62,7 @@ async def send_welcome_message(
         language = await donors_db.get_user_language(user_id)
 
     # Get localized messages (default to English)
-    messages = LOCALIZED_MESSAGES.get(language, LOCALIZED_MESSAGES["en"])
+    messages = WELCOME_MESSAGES.get(language, WELCOME_MESSAGES["en"])
 
     welcome_text = messages["welcome"]
     buttons = messages["buttons"]
@@ -187,7 +108,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             await tracker.stop_live_location(user.id)
             # Inform user that we reset the session
             try:
-                from src.handlers.location import get_localized_message as _msg
+                from src.utils.i18n import get_localized_message as _msg
 
                 reset_text = await _msg(user.id, "live_manual_stop")
             except Exception:
@@ -252,33 +173,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     chat_id = update.effective_chat.id
 
     # Localized sequence: definition + 3 steps (no buttons)
-    steps = {
-        "ru": [
-            "Что такое живая локация: ты делишься местоположением в реальном времени на выбранный срок. Telegram можно закрыть — факты придут пушами.",
-            "Шаг 1/3. Нажми 📎 внизу.",
-            "Шаг 2/3. Открой вкладку 📍 Геопозиция/Location снизу.",
-            "Шаг 3/3. Выбери 🟢 Транслировать геопозицию/Share My Live Location.",
-        ],
-        "en": [
-            "Live location = share your real‑time location for a chosen time. You can close Telegram — I’ll keep sending facts.",
-            "Step 1/3. Tap 📎 below.",
-            "Step 2/3. Open the 📍 Location tab at the bottom.",
-            "Step 3/3. Choose 🟢 Share My Live Location.",
-        ],
-        "fr": [
-            "Position en direct = partager votre position en temps réel pendant une durée choisie. Vous pouvez fermer Telegram — j’enverrai quand même les faits.",
-            "Étape 1/3. Touchez 📎 en bas.",
-            "Étape 2/3. Ouvrez l’onglet 📍 Localisation/Location en bas.",
-            "Étape 3/3. Choisissez 🟢 Partager la position en direct/Share My Live Location.",
-        ],
-    }
-    labels = {
-        "ru": {"next": "Далее", "done": "Готово", "go": "Поехали"},
-        "en": {"next": "Next", "done": "Done", "go": "Let’s go"},
-        "fr": {"next": "Suivant", "done": "Terminé", "go": "C’est parti"},
-    }
-    lang_steps = steps.get(language, steps["en"])
-    labels.get(language, labels["en"])
+    lang_steps = ONBOARDING_STEPS.get(language, ONBOARDING_STEPS["en"])
 
     # No video or GIF: send only text + step images
 

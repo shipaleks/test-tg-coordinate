@@ -331,3 +331,35 @@ def extract_place_names_from_history(fact_history: list[str]) -> list[str]:
             if place:
                 places.append(place)
     return places
+
+
+def escape_markdown(text: str) -> str:
+    """Escape minimal Markdown characters for Telegram 'Markdown' mode.
+
+    We only escape characters that commonly break formatting in legacy Markdown:
+    asterisk, underscore, backtick, and square brackets/parentheses used in links.
+    Do NOT escape dots or punctuation to avoid visible backslashes in output.
+
+    Special handling: preserve service tags like [[NO_POI_FOUND]] without escaping.
+    """
+    # First, protect service tags by temporarily replacing them
+    service_tags = ["[[NO_POI_FOUND]]"]
+    protected_text = text
+    replacements = {}
+
+    for i, tag in enumerate(service_tags):
+        if tag in protected_text:
+            placeholder = f"__SERVICE_TAG_{i}__"
+            replacements[placeholder] = tag
+            protected_text = protected_text.replace(tag, placeholder)
+
+    # Now escape markdown characters
+    chars_to_escape = ["*", "_", "`", "[", "]"]
+    for char in chars_to_escape:
+        protected_text = protected_text.replace(char, "\\" + char)
+
+    # Restore service tags
+    for placeholder, original_tag in replacements.items():
+        protected_text = protected_text.replace(placeholder, original_tag)
+
+    return protected_text
