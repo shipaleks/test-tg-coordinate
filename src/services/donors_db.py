@@ -133,7 +133,7 @@ class DonorsDatabase:
                             user_id INTEGER PRIMARY KEY,
                             language TEXT DEFAULT 'en',
                             reasoning TEXT DEFAULT 'low',
-                            model TEXT DEFAULT 'claude-sonnet-4-5-20250929',
+                            model TEXT DEFAULT 'claude-sonnet-5',
                             created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                             updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                         )
@@ -171,7 +171,7 @@ class DonorsDatabase:
                                 "Migrating database: adding 'model' column to user_preferences"
                             )
                             conn.execute(
-                                "ALTER TABLE user_preferences ADD COLUMN model TEXT DEFAULT 'claude-sonnet-4-5-20250929'"
+                                "ALTER TABLE user_preferences ADD COLUMN model TEXT DEFAULT 'claude-sonnet-5'"
                             )
 
                         conn.commit()
@@ -221,7 +221,7 @@ class DonorsDatabase:
                                     user_id INTEGER PRIMARY KEY,
                                     language TEXT DEFAULT 'en',
                                     reasoning TEXT DEFAULT 'low',
-                                    model TEXT DEFAULT 'claude-sonnet-4-5-20250929',
+                                    model TEXT DEFAULT 'claude-sonnet-5',
                                     created_at INTEGER DEFAULT CURRENT_TIMESTAMP,
                                     updated_at INTEGER DEFAULT CURRENT_TIMESTAMP
                                 )
@@ -259,7 +259,7 @@ class DonorsDatabase:
                                     "Migrating fallback database: adding 'model' column"
                                 )
                                 conn.execute(
-                                    "ALTER TABLE user_preferences ADD COLUMN model TEXT DEFAULT 'claude-sonnet-4-5-20250929'"
+                                    "ALTER TABLE user_preferences ADD COLUMN model TEXT DEFAULT 'claude-sonnet-5'"
                                 )
 
                             conn.commit()
@@ -587,7 +587,7 @@ class DonorsDatabase:
                     conn.execute(
                         """
                         INSERT INTO user_preferences (user_id, language, reasoning, model, updated_at)
-                        VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'low'), COALESCE((SELECT model FROM user_preferences WHERE user_id = ?), 'claude-sonnet-4-5-20250929'), ?)
+                        VALUES (?, ?, COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'low'), COALESCE((SELECT model FROM user_preferences WHERE user_id = ?), 'claude-sonnet-5'), ?)
                         ON CONFLICT(user_id) DO UPDATE SET language=excluded.language, updated_at=excluded.updated_at
                     """,
                         (user_id, language, user_id, user_id, current_time),
@@ -654,13 +654,13 @@ class DonorsDatabase:
                         "SELECT reasoning FROM user_preferences WHERE user_id = ?",
                         (user_id,),
                     ).fetchone()
-                    return (row[0] if row and row[0] else "none").strip()
+                    return (row[0] if row and row[0] else "low").strip()
         except Exception as e:
             logger.error(f"Failed to get user reasoning for user {user_id}: {e}")
-            return "none"
+            return "low"
 
     def get_user_model(self, user_id: int) -> str:
-        """Get user's preferred model (gpt-5.1)."""
+        """Get user's preferred model (Claude model ID)."""
         try:
             with self._lock:
                 with sqlite3.connect(self.db_path) as conn:
@@ -668,10 +668,10 @@ class DonorsDatabase:
                         "SELECT model FROM user_preferences WHERE user_id = ?",
                         (user_id,),
                     ).fetchone()
-                    return (row[0] if row and row[0] else "gpt-5.1").strip()
+                    return (row[0] if row and row[0] else "claude-sonnet-5").strip()
         except Exception as e:
             logger.error(f"Failed to get user model for user {user_id}: {e}")
-            return "gpt-5.1"
+            return "claude-sonnet-5"
 
     def set_user_reasoning(self, user_id: int, level: str) -> bool:
         """Set user's preferred reasoning level."""
@@ -695,7 +695,7 @@ class DonorsDatabase:
             return False
 
     def set_user_model(self, user_id: int, model: str) -> bool:
-        """Set user's preferred model (gpt-5.1 or gpt-5.1-mini)."""
+        """Set user's preferred model (Claude model ID)."""
         try:
             current_time = int(time.time())
             with self._lock:
@@ -703,7 +703,7 @@ class DonorsDatabase:
                     conn.execute(
                         """
                         INSERT INTO user_preferences (user_id, language, reasoning, model, updated_at)
-                        VALUES (?, COALESCE((SELECT language FROM user_preferences WHERE user_id = ?), 'ru'), COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'high'), ?, ?)
+                        VALUES (?, COALESCE((SELECT language FROM user_preferences WHERE user_id = ?), 'ru'), COALESCE((SELECT reasoning FROM user_preferences WHERE user_id = ?), 'low'), ?, ?)
                         ON CONFLICT(user_id) DO UPDATE SET model=excluded.model, updated_at=excluded.updated_at
                         """,
                         (user_id, user_id, user_id, model, current_time),
