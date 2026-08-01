@@ -23,7 +23,10 @@
       "Bash(find:*)",
       "Bash(touch:*)",
       "Bash(pip install:*)",
-      "Bash(unset WEBHOOK_URL)"
+      "Bash(unset WEBHOOK_URL)",
+      "mcp__Claude_Code_Remote__subscribe_pr_activity",
+      "mcp__Claude_Code_Remote__send_later",
+      "mcp__Claude_Code_Remote__unsubscribe_pr_activity"
     ],
     "deny": []
   }
