@@ -7,7 +7,7 @@
 ### 📍 Instant Facts
 - Send your **static location** via attachment.
 - Receive an interesting fact about a nearby landmark in seconds (10-15s).
-- Uses **OpenAI GPT-5.1** with web search to ensure accuracy.
+- Uses **Anthropic Claude** with Brave Search web verification to ensure accuracy.
 
 ### 🔴 Live Location (Tour Mode)
 - Share your **Live Location** for a hands-free tour experience.
@@ -24,16 +24,16 @@
 - Change language anytime via the main menu.
 
 ### 🧠 Advanced AI Logic
-- Powered by **GPT-5.1** (Reasoning models).
-- **Reasoning Levels**: Adjusts AI depth (minimal/low/medium/high) based on user tier or settings.
-- **Web Search**: Mandatory verification step to reduce hallucinations.
+- Powered by the **Claude 5 family**: Sonnet 5 (default), Opus 5 and Haiku 4.5 (premium options).
+- **Reasoning Levels**: Adjusts AI depth (none/low/medium/high). Claude 5 models use adaptive thinking with an effort parameter; Haiku 4.5 uses thinking token budgets.
+- **Web Search**: Mandatory verification step to reduce hallucinations (Brave Search with Yandex fallback).
 
 ## 🛠️ Tech Stack
 
 - **Language**: Python 3.12
 - **Framework**: `python-telegram-bot` (AsyncIO)
-- **AI Engine**: OpenAI GPT-5.1 & GPT-5.1-mini
-- **Database**: 
+- **AI Engine**: Anthropic Claude — Opus 5 / Sonnet 5 / Haiku 4.5
+- **Database**:
   - **Firestore**: User profiles & settings (production)
   - **PostgreSQL**: Donation tracking & analytics
   - **SQLite**: Local development fallback
@@ -45,7 +45,8 @@
 ### Prerequisites
 - Python 3.12+
 - Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
-- OpenAI API Key (with access to GPT-5 models)
+- Anthropic API Key (https://console.anthropic.com/)
+- Brave Search API Key (https://brave.com/search/api/)
 - Firebase Credentials (optional, for production)
 
 ### Local Development
@@ -64,7 +65,7 @@
 
 3. **Install dependencies**
    ```bash
-   pip install -r requirements.txt
+   pip install -e ".[dev]"
    ```
 
 4. **Configure environment**
@@ -74,7 +75,8 @@
    ```
    Required variables:
    - `TELEGRAM_BOT_TOKEN`: Your bot token.
-   - `OPENAI_API_KEY`: Your OpenAI key.
+   - `ANTHROPIC_API_KEY`: Your Anthropic key.
+   - `BRAVE_API_KEY`: Your Brave Search key.
 
 5. **Run the bot**
    ```bash
@@ -90,8 +92,9 @@ The project is Dockerized and ready for cloud deployment.
 
 1. **Environment Variables**: Set the following in your project settings:
    - `TELEGRAM_BOT_TOKEN`
-   - `OPENAI_API_KEY`
-   - `WEBHOOK_URL`: Your public URL (e.g., `https://your-app.koyeb.app`)
+   - `ANTHROPIC_API_KEY`
+   - `BRAVE_API_KEY`
+   - `WEBHOOK_URL`: Your public URL (e.g., `https://your-app.railway.app`)
    - `PORT`: (Default: 8000)
 
 2. **Healthcheck**:
@@ -104,10 +107,9 @@ The project is Dockerized and ready for cloud deployment.
 
 ```
 ├── docs/               # Documentation & guides
-├── infra/              # Infrastructure configs
 ├── src/
 │   ├── handlers/       # Telegram command & message handlers
-│   ├── services/       # External services (OpenAI, Firebase, DB)
+│   ├── services/       # External services (Claude, search, Firebase, DB)
 │   ├── utils/          # Helper functions
 │   └── main.py         # Entry point
 ├── tests/              # Pytest suite
@@ -123,7 +125,3 @@ Contributions are welcome! Please verify your changes with existing tests:
 ```bash
 python -m pytest tests/ -v
 ```
-
-## 📄 License
-
-[MIT](LICENSE)
