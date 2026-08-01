@@ -111,8 +111,8 @@ class ClaudeClient:
     """Client for interacting with Anthropic Claude API to generate location facts."""
 
     # Model constants
-    MODEL_OPUS = "claude-opus-4-6"
-    MODEL_SONNET = "claude-sonnet-4-5-20250929"
+    MODEL_OPUS = "claude-opus-5"
+    MODEL_SONNET = "claude-sonnet-5"
     MODEL_HAIKU = "claude-haiku-4-5-20251001"
 
     def __init__(self, api_key: str | None = None):
@@ -174,8 +174,9 @@ class ClaudeClient:
         if force_reasoning_none or not reasoning_level or reasoning_level == "none":
             return {"type": "disabled"}, None
 
-        # Opus 4.6 uses adaptive thinking with effort parameter
-        if model == self.MODEL_OPUS:
+        # Claude 5 models (Opus 5, Sonnet 5) reject budget_tokens: they use
+        # adaptive thinking with an effort parameter instead.
+        if model in (self.MODEL_OPUS, self.MODEL_SONNET):
             effort_mapping = {
                 "low": "low",
                 "medium": "medium",
@@ -184,7 +185,7 @@ class ClaudeClient:
             effort = effort_mapping.get(reasoning_level, "high")
             return {"type": "adaptive"}, {"effort": effort}
 
-        # Older models use budget_tokens
+        # Pre-4.6 models (Haiku 4.5) use budget_tokens
         default_budgets = {
             "low": 1024,
             "medium": 2048,
@@ -204,8 +205,11 @@ class ClaudeClient:
 
     def _is_thinking_error(self, error: Exception) -> bool:
         message = str(error).lower()
-        return "thinking" in message and (
-            "budget" in message or "adaptive" in message or "type" in message
+        return ("thinking" in message or "output_config" in message) and (
+            "budget" in message
+            or "adaptive" in message
+            or "type" in message
+            or "effort" in message
         )
 
     async def _create_message_with_thinking_fallback(self, request_kwargs: dict):
@@ -701,7 +705,7 @@ Sources:
         is_live_location: bool = False,
         previous_facts: list = None,
         user_id: int = None,
-        force_reasoning_none: bool = False,  # Kept for API compatibility, not used
+        force_reasoning_none: bool = False,  # Disables thinking for this request
     ) -> str:
         """Get an interesting fact about a location.
 
@@ -711,7 +715,7 @@ Sources:
             is_live_location: If True, generate more detailed fact
             previous_facts: List of previously sent facts to avoid repetition
             user_id: User ID to check premium status and language
-            force_reasoning_none: Unused, kept for API compatibility
+            force_reasoning_none: If True, thinking is disabled for this request
 
         Returns:
             A location name and an interesting fact about it
@@ -722,7 +726,7 @@ Sources:
         try:
             # Get user preferences
             user_language = "ru"  # Default to Russian
-            user_model = self.MODEL_SONNET  # Default model (Sonnet 4.5)
+            user_model = self.MODEL_SONNET  # Default model (Sonnet 5)
             user_reasoning = "low"  # Default reasoning level
 
             if user_id:
@@ -982,7 +986,7 @@ Sources:
             async with self._api_semaphore:
                 request_kwargs = {
                     "model": user_model,
-                    "max_tokens": 2048,
+                    "max_tokens": 8192,
                     "system": system_prompt,
                     "messages": [{"role": "user", "content": user_prompt}],
                 }
@@ -1026,12 +1030,14 @@ Sources:
                     # Prepare retry parameters (reuse thinking config if applicable)
                     retry_kwargs = {
                         "model": user_model,
-                        "max_tokens": 2048,
+                        "max_tokens": 8192,
                         "system": system_prompt,
                         "messages": [{"role": "user", "content": expanded_prompt}],
                     }
                     if thinking_config is not None:
                         retry_kwargs["thinking"] = thinking_config
+                    if output_config is not None:
+                        retry_kwargs["output_config"] = output_config
 
                     async with self._api_semaphore:
                         retry_response = (

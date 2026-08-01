@@ -9,6 +9,25 @@ from .postgres_db import PostgresDatabase, get_postgres_db
 
 logger = logging.getLogger(__name__)
 
+# Forward-maps model IDs persisted in user rows to the current lineup.
+# Rows are permanent: DB reads go through this mapping forever, so every
+# ID that was ever offered in /reason (or shipped as a default) needs an
+# entry pointing at a currently-served model.
+MODEL_MAPPING = {
+    # Legacy OpenAI models → Claude
+    "gpt-5": "claude-opus-5",
+    "gpt-5.1": "claude-opus-5",
+    "gpt-5-mini": "claude-opus-5",
+    "gpt-5.1-mini": "claude-sonnet-5",
+    # Previous Claude models → current
+    "claude-opus-4-5-20251101": "claude-opus-5",
+    "claude-opus-4-6": "claude-opus-5",
+    "claude-sonnet-4-5-20250929": "claude-sonnet-5",
+    # Claude model aliases
+    "claude-opus": "claude-opus-5",
+    "claude-sonnet": "claude-sonnet-5",
+}
+
 
 class AsyncDonorsWrapper:
     """Unified async interface for both PostgreSQL and SQLite databases."""
@@ -198,19 +217,7 @@ class AsyncDonorsWrapper:
         else:
             model = self._db.get_user_model(user_id)  # type: ignore[attr-defined]
 
-        # Map legacy model names to Claude models
-        MODEL_MAPPING = {
-            # Legacy OpenAI models → Claude
-            "gpt-5": "claude-opus-4-6",
-            "gpt-5.1": "claude-opus-4-6",
-            "gpt-5-mini": "claude-opus-4-6",
-            "gpt-5.1-mini": "claude-sonnet-4-5-20250929",
-            # Previous Claude model → current
-            "claude-opus-4-5-20251101": "claude-opus-4-6",
-            # Claude model aliases
-            "claude-opus": "claude-opus-4-6",
-            "claude-sonnet": "claude-sonnet-4-5-20250929",
-        }
+        # Map legacy model names to current Claude models
         return MODEL_MAPPING.get(model, model)  # Return mapped or original
 
     async def set_user_model(self, user_id: int, model: str) -> bool:

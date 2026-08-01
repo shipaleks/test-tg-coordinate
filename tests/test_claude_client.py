@@ -127,16 +127,16 @@ def test_get_nearby_fact_prompt_format(claude_client):
                 call_args = mock_create.call_args
                 kwargs = call_args.kwargs
 
-                # Check model parameter (default is now Sonnet 4.5)
-                assert kwargs["model"] == "claude-sonnet-4-5-20250929"
+                # Check model parameter (default is now Sonnet 5)
+                assert kwargs["model"] == "claude-sonnet-5"
 
                 # Check max_tokens
                 assert "max_tokens" in kwargs
-                assert kwargs["max_tokens"] == 2048
-                # Default reasoning is "low" -> extended thinking enabled with budget
+                assert kwargs["max_tokens"] == 8192
+                # Default reasoning is "low" -> adaptive thinking with low effort
                 assert "thinking" in kwargs
-                assert kwargs["thinking"]["type"] == "enabled"
-                assert kwargs["thinking"]["budget_tokens"] == 1024
+                assert kwargs["thinking"] == {"type": "adaptive"}
+                assert kwargs["output_config"] == {"effort": "low"}
 
                 # Check system prompt contains Atlas Obscura
                 assert "system" in kwargs
@@ -182,8 +182,90 @@ def test_get_nearby_fact_live_location_model(claude_client):
                 call_args = mock_create.call_args
                 kwargs = call_args.kwargs
 
-                # Live location also uses Sonnet 4.5 by default (same as static)
-                assert kwargs["model"] == "claude-sonnet-4-5-20250929"
+                # Live location also uses Sonnet 5 by default (same as static)
+                assert kwargs["model"] == "claude-sonnet-5"
+
+    anyio.run(_test)
+
+
+def test_build_thinking_config_claude5_adaptive(claude_client):
+    """Claude 5 models use adaptive thinking with an effort parameter."""
+    for model in (claude_client.MODEL_OPUS, claude_client.MODEL_SONNET):
+        thinking, output_config = claude_client._build_thinking_config(
+            "medium", False, model=model
+        )
+        assert thinking == {"type": "adaptive"}
+        assert output_config == {"effort": "medium"}
+
+    # Reasoning "none" disables thinking and sends no output_config
+    thinking, output_config = claude_client._build_thinking_config(
+        "none", False, model=claude_client.MODEL_OPUS
+    )
+    assert thinking == {"type": "disabled"}
+    assert output_config is None
+
+
+def test_build_thinking_config_haiku_budget_tokens(claude_client):
+    """Haiku 4.5 (pre-4.6 model) keeps manual budget_tokens thinking."""
+    thinking, output_config = claude_client._build_thinking_config(
+        "medium", False, model=claude_client.MODEL_HAIKU
+    )
+    assert thinking == {"type": "enabled", "budget_tokens": 2048}
+    assert output_config is None
+
+
+def test_no_poi_retry_keeps_thinking_and_output_config(claude_client):
+    """NO_POI retries must carry the same thinking/effort config as the first call."""
+
+    async def _test():
+        no_poi_block = MagicMock()
+        no_poi_block.text = "[[NO_POI_FOUND]]"
+        no_poi_response = MagicMock()
+        no_poi_response.content = [no_poi_block]
+
+        ok_block = MagicMock()
+        ok_block.text = "Локация: Test\nИнтересный факт: Test fact"
+        ok_response = MagicMock()
+        ok_response.content = [ok_block]
+
+        mock_create = AsyncMock(side_effect=[no_poi_response, ok_response])
+
+        with patch.object(claude_client.client.messages, "create", mock_create):
+            with patch.object(
+                claude_client.web_search,
+                "search",
+                new_callable=AsyncMock,
+                return_value=[],
+            ):
+                await claude_client.get_nearby_fact(
+                    55.751244, 37.618423, is_live_location=False
+                )
+
+        assert mock_create.call_count == 2
+        retry_kwargs = mock_create.call_args_list[1].kwargs
+        assert retry_kwargs["thinking"] == {"type": "adaptive"}
+        assert retry_kwargs["output_config"] == {"effort": "low"}
+
+    anyio.run(_test)
+
+
+def test_model_mapping_forward_maps_to_current_lineup(claude_client):
+    """Every legacy stored model ID must map to a currently served model."""
+    from src.services.async_donors_wrapper import MODEL_MAPPING
+
+    current_models = {
+        claude_client.MODEL_OPUS,
+        claude_client.MODEL_SONNET,
+        claude_client.MODEL_HAIKU,
+    }
+    # All mapping targets must pass the allow-list in get_nearby_fact
+    assert set(MODEL_MAPPING.values()) <= current_models
+
+    # Previously offered IDs are forward-mapped to the new generation
+    assert MODEL_MAPPING["claude-opus-4-6"] == claude_client.MODEL_OPUS
+    assert MODEL_MAPPING["claude-sonnet-4-5-20250929"] == claude_client.MODEL_SONNET
+    assert MODEL_MAPPING["gpt-5.1"] == claude_client.MODEL_OPUS
+    assert MODEL_MAPPING["gpt-5.1-mini"] == claude_client.MODEL_SONNET
 
 
 def test_parse_coordinates_from_response(claude_client):
