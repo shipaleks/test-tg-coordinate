@@ -530,16 +530,9 @@ Note: rows written before the Claude 5 migration may still hold legacy model IDs
      - Test: ANTHROPIC_API_KEY=test-key pytest tests/ -v
    ```
 
-2. **Deploy Job** (Conditional: main branch + push only)
-   ```yaml
-   depends_on: test
-   steps:
-     - Install Railway CLI
-     - Deploy: railway deploy --service nearby-fact-bot
-     - Requires: RAILWAY_TOKEN secret
-   ```
+**Pipeline Flow**: Code -> Lint -> Format -> Test
 
-**Pipeline Flow**: Code -> Lint -> Format -> Test -> Deploy (main only)
+Deployment is NOT part of CI: Railway's GitHub integration auto-deploys `main` on push.
 
 ## Deployment Architectures
 
@@ -575,7 +568,7 @@ PORT=8000
 - **Mode**: Webhook
 - **Database**: SQLite with volume persistence (`/data/donors.db`)
 - **Health check**: aiohttp server on port+1, running on the bot's event loop
-- **Auto-deploy**: GitHub push to main -> CI -> Railway deploy
+- **Auto-deploy**: GitHub push to main -> Railway GitHub integration (not CI)
 
 ### PostgreSQL Production
 ```bash
