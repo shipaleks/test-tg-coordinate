@@ -24,7 +24,7 @@ DONATION_MESSAGES = {
         "donor_status": "🎁 *Донатер проекта*\n📊 Всего звезд: {total_stars}⭐\n🧠 Улучшенный reasoning (больше проверок) активирован",
         "support_helps": "Ваша поддержка помогает:",
         "help_points": [
-            "🤖 Оплачивать OpenAI API для качественных фактов",
+            "🤖 Оплачивать Claude API для качественных фактов",
             "🚀 Развивать новые функции бота",
             "📡 Поддерживать сервер 24/7",
         ],
@@ -39,7 +39,7 @@ DONATION_MESSAGES = {
         "donor_status": "🎁 *Project supporter*\n📊 Total stars: {total_stars}⭐\n🧠 Enhanced reasoning (more verification) activated",
         "support_helps": "Your support helps:",
         "help_points": [
-            "🤖 Pay for OpenAI API for quality facts",
+            "🤖 Pay for the Claude API for quality facts",
             "🚀 Develop new bot features",
             "📡 Maintain 24/7 server",
         ],
@@ -54,7 +54,7 @@ DONATION_MESSAGES = {
         "donor_status": "🎁 *Soutien du projet*\n📊 Total étoiles : {total_stars}⭐\n🧠 Reasoning amélioré (plus de vérifications) activé",
         "support_helps": "Votre soutien aide à :",
         "help_points": [
-            "🤖 Payer l'API OpenAI pour des faits de qualité",
+            "🤖 Payer l'API Claude pour des faits de qualité",
             "🚀 Développer de nouvelles fonctionnalités",
             "📡 Maintenir le serveur 24h/24",
         ],
@@ -506,7 +506,7 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             else:
                 test_results.append("👤 *Your status:* Not a donor yet")
                 test_results.append(
-                    "🧠 *Model access:* Standard (GPT-4.1 static, o4-mini live)"
+                    "🧠 *Model access:* Standard (Claude Sonnet 5, low reasoning)"
                 )
 
                 # Check if there are any donations for this user in donations table
