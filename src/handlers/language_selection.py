@@ -13,27 +13,28 @@ from ..services.async_donors_wrapper import get_async_donors_db
 
 logger = logging.getLogger(__name__)
 
+# Models offered in the /reason settings menu: (model_id, label)
+CLAUDE_MODELS = [
+    ("claude-opus-5", "Opus 5 (Best Quality)"),
+    ("claude-sonnet-5", "Sonnet 5 (Balanced)"),
+    ("claude-haiku-4-5-20251001", "Haiku 4.5 (Fastest)"),
+]
 
-async def reason_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Hidden command to set model (Claude Opus/Sonnet/Haiku) and reasoning level."""
-    user = update.effective_user
-    donors_db = await get_async_donors_db()
-    current_model = await donors_db.get_user_model(user.id)
-    current_reasoning = await donors_db.get_user_reasoning(user.id)
+# Reasoning levels offered in the /reason settings menu: (level_id, label)
+REASONING_LEVELS = [
+    ("none", "None (Instant)"),
+    ("low", "Low (Quick)"),
+    ("medium", "Medium (Thorough)"),
+    ("high", "High (Deep Analysis)"),
+]
 
-    # Build inline keyboard - Models + Reasoning levels
-    rows = []
 
-    # Section header: Models
-    rows.append([InlineKeyboardButton("🤖 Models:", callback_data="noop")])
-
-    # Model rows - Claude Opus 4.5, Sonnet 4.5, Haiku 4.5
-    claude_models = [
-        ("claude-opus-4-6", "Opus 4.6 (Best Quality)"),
-        ("claude-sonnet-4-5-20250929", "Sonnet 4.5 (Balanced)"),
-        ("claude-haiku-4-5-20251001", "Haiku 4.5 (Fastest)"),
-    ]
-    for model_id, model_name in claude_models:
+def _build_settings_menu(
+    current_model: str, current_reasoning: str
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Build the /reason settings message text and keyboard."""
+    rows = [[InlineKeyboardButton("🤖 Models:", callback_data="noop")]]
+    for model_id, model_name in CLAUDE_MODELS:
         mark = "✅" if model_id == current_model else "○"
         rows.append(
             [
@@ -43,17 +44,8 @@ async def reason_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             ]
         )
 
-    # Section header: Reasoning levels
     rows.append([InlineKeyboardButton("🧠 Reasoning:", callback_data="noop")])
-
-    # Reasoning level rows
-    reasoning_levels = [
-        ("none", "None (Instant)"),
-        ("low", "Low (Quick)"),
-        ("medium", "Medium (Thorough)"),
-        ("high", "High (Deep Analysis)"),
-    ]
-    for level_id, level_name in reasoning_levels:
+    for level_id, level_name in REASONING_LEVELS:
         mark = "✅" if level_id == current_reasoning else "○"
         rows.append(
             [
@@ -63,12 +55,25 @@ async def reason_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             ]
         )
 
-    reply_markup = InlineKeyboardMarkup(rows)
-    await update.message.reply_text(
+    text = (
         "⚙️ **Settings** (Internal Testing)\n\n"
         f"Model: {current_model}\n"
         f"Reasoning: {current_reasoning}\n\n"
-        "Select options below:",
+        "Select options below:"
+    )
+    return text, InlineKeyboardMarkup(rows)
+
+
+async def reason_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Hidden command to set model (Claude Opus/Sonnet/Haiku) and reasoning level."""
+    user = update.effective_user
+    donors_db = await get_async_donors_db()
+    current_model = await donors_db.get_user_model(user.id)
+    current_reasoning = await donors_db.get_user_reasoning(user.id)
+
+    text, reply_markup = _build_settings_menu(current_model, current_reasoning)
+    await update.message.reply_text(
+        text,
         reply_markup=reply_markup,
         parse_mode="Markdown",
     )
@@ -101,54 +106,10 @@ async def handle_reason_model_callback(
     current_model = await donors_db.get_user_model(user.id)
     current_reasoning = await donors_db.get_user_reasoning(user.id)
 
-    rows = []
-
-    # Section header: Models
-    rows.append([InlineKeyboardButton("🤖 Models:", callback_data="noop")])
-
-    # Model rows
-    claude_models = [
-        ("claude-opus-4-6", "Opus 4.6 (Best Quality)"),
-        ("claude-sonnet-4-5-20250929", "Sonnet 4.5 (Balanced)"),
-        ("claude-haiku-4-5-20251001", "Haiku 4.5 (Fastest)"),
-    ]
-    for model_id, model_name in claude_models:
-        mark = "✅" if model_id == current_model else "○"
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    f"{mark} {model_name}", callback_data=f"set_model:{model_id}"
-                )
-            ]
-        )
-
-    # Section header: Reasoning levels
-    rows.append([InlineKeyboardButton("🧠 Reasoning:", callback_data="noop")])
-
-    # Reasoning level rows
-    reasoning_levels = [
-        ("none", "None (Instant)"),
-        ("low", "Low (Quick)"),
-        ("medium", "Medium (Thorough)"),
-        ("high", "High (Deep Analysis)"),
-    ]
-    for level_id, level_name in reasoning_levels:
-        mark = "✅" if level_id == current_reasoning else "○"
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    f"{mark} {level_name}", callback_data=f"set_reason:{level_id}"
-                )
-            ]
-        )
-
-    # Update both message text and keyboard
+    text, reply_markup = _build_settings_menu(current_model, current_reasoning)
     await query.edit_message_text(
-        "⚙️ **Settings** (Internal Testing)\n\n"
-        f"Model: {current_model}\n"
-        f"Reasoning: {current_reasoning}\n\n"
-        "Select options below:",
-        reply_markup=InlineKeyboardMarkup(rows),
+        text,
+        reply_markup=reply_markup,
         parse_mode="Markdown",
     )
 
