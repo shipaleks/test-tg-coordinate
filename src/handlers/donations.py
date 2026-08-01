@@ -512,17 +512,21 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 # Check if there are any donations for this user in donations table
                 # Skip SQLite specific checks for PostgreSQL
                 if not os.environ.get("DATABASE_URL"):
+                    import asyncio
                     import sqlite3
 
-                    with sqlite3.connect(donors_db.db_path) as conn:
-                        donations_count = conn.execute(
-                            "SELECT COUNT(*) FROM donations WHERE user_id = ?",
-                            (user_id,),
-                        ).fetchone()[0]
-                        if donations_count > 0:
-                            test_results.append(
-                                f"⚠️ *Found {donations_count} donations in donations table but no donor record!*"
-                            )
+                    def _count_user_donations() -> int:
+                        with sqlite3.connect(donors_db.db_path) as conn:
+                            return conn.execute(
+                                "SELECT COUNT(*) FROM donations WHERE user_id = ?",
+                                (user_id,),
+                            ).fetchone()[0]
+
+                    donations_count = await asyncio.to_thread(_count_user_donations)
+                    if donations_count > 0:
+                        test_results.append(
+                            f"⚠️ *Found {donations_count} donations in donations table but no donor record!*"
+                        )
 
             # Get overall stats
             stats = await donors_db.get_stats()
@@ -532,18 +536,23 @@ async def dbtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
             # Check raw table counts for debugging (SQLite only)
             if not os.environ.get("DATABASE_URL"):
+                import asyncio
                 import sqlite3
 
-                with sqlite3.connect(donors_db.db_path) as conn:
-                    donors_count = conn.execute(
-                        "SELECT COUNT(*) FROM donors"
-                    ).fetchone()[0]
-                    donations_count = conn.execute(
-                        "SELECT COUNT(*) FROM donations"
-                    ).fetchone()[0]
-                    test_results.append(
-                        f"🔍 *Raw counts:* {donors_count} donors, {donations_count} donations in tables"
-                    )
+                def _count_rows() -> tuple[int, int]:
+                    with sqlite3.connect(donors_db.db_path) as conn:
+                        donors = conn.execute("SELECT COUNT(*) FROM donors").fetchone()[
+                            0
+                        ]
+                        donations = conn.execute(
+                            "SELECT COUNT(*) FROM donations"
+                        ).fetchone()[0]
+                        return donors, donations
+
+                donors_count, donations_count = await asyncio.to_thread(_count_rows)
+                test_results.append(
+                    f"🔍 *Raw counts:* {donors_count} donors, {donations_count} donations in tables"
+                )
 
             test_results.append("✅ All database operations working correctly")
 
