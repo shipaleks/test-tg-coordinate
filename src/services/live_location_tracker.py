@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 from telegram import Bot, InputMediaPhoto
 
+from ..utils.formatting_utils import escape_markdown as _escape_markdown
 from ..utils.formatting_utils import (
     extract_place_names_from_history as _extract_place_names,
 )
@@ -19,11 +20,9 @@ from ..utils.formatting_utils import (
     remove_bare_links_from_text as _remove_bare_links_from_text,
 )
 from ..utils.formatting_utils import strip_sources_section as _strip_live_sources
+from ..utils.i18n import get_localized_message
 from .claude_client import get_claude_client as get_openai_client
 from .firebase_stats import increment_fact_counters as fb_increment_fact
-
-# Avoid importing handlers at module import time to prevent circular deps.
-# We'll import get_localized_message lazily inside functions.
 
 # Maximum retry attempts when AI returns a duplicate place
 MAX_DUPLICATE_RETRIES = 2
@@ -178,9 +177,6 @@ async def send_live_fact_with_images(
                     ):
                         try:
                             # Reconstruct sources section
-                            from ..handlers.location import (
-                                get_localized_message as _get_msg,
-                            )
                             from ..utils.formatting_utils import (
                                 sanitize_url as _sanitize_url,
                             )
@@ -189,7 +185,9 @@ async def send_live_fact_with_images(
                             # For live location, chat_id is usually the user_id for private chats
                             user_id = chat_id if chat_id > 0 else 0
 
-                            src_label = await _get_msg(user_id, "sources_label")
+                            src_label = await get_localized_message(
+                                user_id, "sources_label"
+                            )
                             bullets = []
                             for title, url in sources[:4]:
                                 # Remove square brackets and escape other Markdown characters in title
@@ -279,7 +277,6 @@ async def send_live_fact_with_images(
                 # Check if text was sent successfully by trying to send it again
                 try:
                     # Import localization function to avoid circular imports
-                    from ..handlers.location import get_localized_message
 
                     fallback_message = await get_localized_message(
                         0, "image_fallback"
@@ -618,7 +615,6 @@ class LiveLocationTracker:
                     )
                     # Send notification to user that session has ended
                     try:
-                        from ..handlers.location import get_localized_message
 
                         stop_message = await get_localized_message(
                             session_data.user_id, "live_expired"
@@ -653,7 +649,6 @@ class LiveLocationTracker:
                     )
                     # Send notification that we detected manual stop
                     try:
-                        from ..handlers.location import get_localized_message
 
                         stop_message = await get_localized_message(
                             session_data.user_id, "live_manual_stop"
@@ -753,7 +748,6 @@ class LiveLocationTracker:
                                 break  # Exit retry loop, will skip to next interval
 
                         # Parse the response to extract place and fact
-                        from ..handlers.location import get_localized_message
 
                         place = await get_localized_message(
                             session_data.user_id, "near_you"
@@ -811,14 +805,11 @@ class LiveLocationTracker:
                             # Build sources block
                             sources = _extract_live_sources(answer_content)
                             if sources:
-                                from ..handlers.location import (
-                                    get_localized_message as _get_msg,
-                                )
                                 from ..utils.formatting_utils import (
                                     sanitize_url as _sanitize_url,
                                 )
 
-                                src_label = await _get_msg(
+                                src_label = await get_localized_message(
                                     session_data.user_id, "sources_label"
                                 )
                                 bullets = []
@@ -896,7 +887,6 @@ class LiveLocationTracker:
                     # If NO_POI_FOUND after fallback, notify user instead of staying silent
                     if response and "[[NO_POI_FOUND]]" in response:
                         try:
-                            from ..handlers.location import get_localized_message
 
                             session_data.fact_count += 1
                             error_fact = await get_localized_message(
@@ -932,10 +922,6 @@ class LiveLocationTracker:
                         session_data.fact_count += 1
 
                         # Format the response with live location indicator and fact number
-                        from ..handlers.location import (
-                            _escape_markdown,
-                            get_localized_message,
-                        )
 
                         escaped_place = _escape_markdown(place)
                         escaped_fact = _escape_markdown(fact)
@@ -1124,7 +1110,6 @@ class LiveLocationTracker:
                     session_data.is_generating_fact = False
 
                     # Send error message with fact number
-                    from ..handlers.location import get_localized_message
 
                     error_fact = await get_localized_message(
                         session_data.user_id, "error_no_info"
@@ -1232,7 +1217,6 @@ class LiveLocationTracker:
 
                     # Send notification to user about session timeout
                     try:
-                        from ..handlers.location import get_localized_message
 
                         timeout_message = await get_localized_message(
                             session_data.user_id, "live_manual_stop"

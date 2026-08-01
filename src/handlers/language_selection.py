@@ -10,6 +10,7 @@ from telegram import (
 from telegram.ext import ContextTypes
 
 from ..services.async_donors_wrapper import get_async_donors_db
+from ..utils.i18n import LANGUAGE_MESSAGES as WELCOME_MESSAGES
 
 logger = logging.getLogger(__name__)
 
@@ -124,43 +125,6 @@ LANGUAGES = {
 }
 
 # Welcome messages in different languages
-WELCOME_MESSAGES = {
-    "ru": {
-        "welcome": "🌍 **Выберите ваш язык:**\n\nВыбранный язык будет использоваться для всех фактов и сообщений бота.",
-        "custom_prompt": "Введите код языка (например: es, de, it) или название языка:",
-        "language_set": "✅ Язык установлен: {flag} {name}",
-        "language_reset": "🔄 Язык сброшен. Используйте /start для выбора нового языка.",
-        "invalid_language": "❌ Некорректный язык. Попробуйте еще раз.",
-    },
-    "en": {
-        "welcome": "🌍 **Choose your language:**\n\nThe selected language will be used for all facts and bot messages.",
-        "custom_prompt": "Enter language code (e.g.: es, de, it) or language name:",
-        "language_set": "✅ Language set: {flag} {name}",
-        "language_reset": "🔄 Language reset. Use /start to choose a new language.",
-        "invalid_language": "❌ Invalid language. Please try again.",
-    },
-    "fr": {
-        "welcome": "🌍 **Choisissez votre langue :**\n\nLa langue sélectionnée sera utilisée pour tous les faits et messages du bot.",
-        "custom_prompt": "Entrez le code de langue (ex : es, de, it) ou le nom de la langue :",
-        "language_set": "✅ Langue définie : {flag} {name}",
-        "language_reset": "🔄 Langue réinitialisée. Utilisez /start pour choisir une nouvelle langue.",
-        "invalid_language": "❌ Langue invalide. Veuillez réessayer.",
-    },
-    "pt": {
-        "welcome": "🌍 **Escolha seu idioma:**\n\nO idioma selecionado será usado para todos os fatos e mensagens do bot.",
-        "custom_prompt": "Digite o código do idioma (ex: es, de, it) ou nome do idioma:",
-        "language_set": "✅ Idioma definido: {flag} {name}",
-        "language_reset": "🔄 Idioma redefinido. Use /start para escolher um novo idioma.",
-        "invalid_language": "❌ Idioma inválido. Tente novamente.",
-    },
-    "uk": {
-        "welcome": "🌍 **Оберіть вашу мову:**\n\nОбрана мова буде використовуватися для всіх фактів та повідомлень бота.",
-        "custom_prompt": "Введіть код мови (наприклад: es, de, it) або назву мови:",
-        "language_set": "✅ Мову встановлено: {flag} {name}",
-        "language_reset": "🔄 Мову скинуто. Використовуйте /start для вибору нової мови.",
-        "invalid_language": "❌ Некоректна мова. Спробуйте ще раз.",
-    },
-}
 
 
 async def show_language_selection(
