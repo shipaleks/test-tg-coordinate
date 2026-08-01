@@ -31,7 +31,8 @@
    In Railway dashboard, go to Variables tab and add:
    ```
    TELEGRAM_BOT_TOKEN=your_bot_token_from_botfather
-   OPENAI_API_KEY=your_openai_api_key
+   ANTHROPIC_API_KEY=your_anthropic_api_key
+   BRAVE_API_KEY=your_brave_api_key
    WEBHOOK_URL=https://your-app-name.up.railway.app/webhook
    PORT=8000
    ```
@@ -68,7 +69,7 @@
 
 ✅ MVP Implementation Complete:
 - ✅ Location message handling
-- ✅ OpenAI integration for facts generation
+- ✅ Claude integration for facts generation
 - ✅ Error handling and user feedback
 - ✅ Comprehensive testing
 - ✅ CI/CD pipeline configured
