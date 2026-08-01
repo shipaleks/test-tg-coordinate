@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Bot Voyage** (nearby-fact-bot) is a Telegram bot that provides location-based facts using **Anthropic Claude** (Opus 4.6 / Sonnet 4.5 / Haiku 4.5) with Brave Search web verification. It supports both static location queries and real-time live location tracking with multi-language support.
+**Bot Voyage** (nearby-fact-bot) is a Telegram bot that provides location-based facts using the **Claude 5 family** (Opus 5 / Sonnet 5 / Haiku 4.5) with Brave Search web verification. It supports both static location queries and real-time live location tracking with multi-language support.
 
 **Version**: 2.0.0
 **Python**: 3.12 (minimum 3.11)
-**Main Dependencies**: python-telegram-bot 21.7, anthropic 0.50+, httpx 0.27+, aiohttp 3.10.11
+**Main Dependencies**: python-telegram-bot 21.7, anthropic 0.116+, httpx 0.27+, aiohttp 3.10.11
 
 ## Development Commands
 
@@ -42,43 +42,44 @@ The architecture supports:
 - Multiple database backends (SQLite, PostgreSQL, Firestore)
 - Telegram Stars payment system for premium features
 - Configurable AI reasoning levels (none/low/medium/high)
-- Three Claude models: Opus 4.6 (adaptive thinking), Sonnet 4.5, Haiku 4.5
+- Three Claude models: Opus 5 and Sonnet 5 (adaptive thinking + effort), Haiku 4.5 (budget_tokens)
 
 ### Project Structure
 
 ```
 src/
   __init__.py
-  main.py                              # Entry point, bot configuration (615 lines)
+  main.py                              # Entry point, bot configuration (497 lines)
   handlers/
     __init__.py
-    location.py                        # Location processing, fact delivery (1049 lines)
-    donations.py                       # Telegram Stars payments (643 lines)
-    language_selection.py              # Language + reasoning/model selection (419 lines)
+    location.py                        # Location processing, fact delivery (933 lines)
+    donations.py                       # Telegram Stars payments (605 lines)
+    language_selection.py              # Language + reasoning/model selection (343 lines)
   services/
     __init__.py
-    claude_client.py                   # Core AI engine - Claude API (1758 lines)
-    live_location_tracker.py           # Real-time session management (1272 lines)
+    claude_client.py                   # Core AI engine - Claude API (1138 lines)
+    prompts.py                         # System/user prompt construction mixin (479 lines)
+    wikimedia_images.py                # Wikipedia/Commons image pipeline mixin (235 lines)
+    live_location_tracker.py           # Real-time session management (1256 lines)
     web_search.py                      # Brave Search + Yandex fallback (250 lines)
-    async_donors_wrapper.py            # Database abstraction layer (233 lines)
-    donors_db.py                       # SQLite backend (806 lines)
-    postgres_db.py                     # PostgreSQL backend (398 lines)
+    async_donors_wrapper.py            # Database abstraction layer (191 lines)
+    donors_db.py                       # SQLite backend (794 lines)
+    postgres_db.py                     # PostgreSQL backend (426 lines)
     firebase_db.py                     # Firestore backend (264 lines)
     firebase_stats.py                  # Firebase analytics (128 lines)
     firebase_client.py                 # Firestore client init (48 lines)
-    image_search.py                    # Wikipedia image retrieval (467 lines)
     yandex_image_search.py             # Yandex image search (739 lines)
     yandex_web_search.py               # Yandex web search fallback (227 lines)
-    openai_client.py                   # Legacy OpenAI client (2766 lines, unused)
     env_db.py                          # Environment-based DB config (148 lines)
     postgres_wrapper.py                # PostgreSQL wrapper utilities (162 lines)
   utils/
     __init__.py
-    formatting_utils.py                # Text processing, dedup logic (333 lines)
+    i18n.py                            # Centralized localization dictionaries (309 lines)
+    formatting_utils.py                # Text processing, dedup logic (365 lines)
     migrate_to_postgres.py             # SQLite -> PostgreSQL migration (147 lines)
 tests/
   __init__.py
-  test_claude_client.py                # AI client tests (496 lines)
+  test_claude_client.py                # AI client tests (634 lines)
   test_location_handler.py             # Location handler tests (402 lines)
   test_live_location_tracker.py        # Session management tests (306 lines)
   test_live_location_expiry.py         # Session expiry tests (165 lines)
@@ -89,22 +90,21 @@ docs/                                  # Documentation, images, videos
 .github/workflows/ci.yml              # CI/CD pipeline
 ```
 
-**Total**: ~12,800 lines source code, ~1,800 lines tests
+**Total**: ~9,700 lines source code, ~1,900 lines tests
 
 ### Key Modules
 
-#### `src/main.py` (615 lines)
+#### `src/main.py` (497 lines)
 **Entry point and bot configuration**
 - Command handlers: `/start`, `/donate`, `/live`, `/stats`, `/dbtest`, `/reason`, `/debuguser`, `/reset`
 - Webhook vs polling mode switching based on `WEBHOOK_URL` environment variable
-- Localized welcome messages (Russian, English, French) with keyboard interfaces
-- PostgreSQL auto-migration on startup (if `DATABASE_URL` set)
-- Health check server on port+1 (`/`, `/health`, `/healthz`) for Railway/Koyeb
+- Localized welcome messages (from `utils/i18n.py`) with keyboard interfaces
+- Startup tasks (`_run_startup_tasks`): PostgreSQL auto-migration (if `DATABASE_URL` set) and optional language reset (`RESET_LANG_ON_DEPLOY`), run on the loop PTB reuses
+- Async aiohttp health check server on port+1 (`/`, `/health`, `/healthz`) for Railway/Koyeb, started via PTB `post_init` / stopped via `post_shutdown` (webhook mode only)
 - Language selection flow for new users
 - Live session reset on `/start` (safety measure)
-- Optional language reset on deploy (`RESET_LANG_ON_DEPLOY`)
 
-#### `src/handlers/location.py` (1049 lines)
+#### `src/handlers/location.py` (933 lines)
 **Core location processing and fact delivery**
 - **Static locations**: Immediate fact generation with Claude
 - **Live locations**: Interval selection flow (5/10/30/60 min) -> background fact delivery with numbering
@@ -114,10 +114,10 @@ docs/                                  # Documentation, images, videos
 - Media group sending with smart truncation (1024 char Telegram limit)
 - Multi-fallback image strategy: media group -> 2 images -> text only -> individual images
 - Venue/location sharing for navigation integration
-- Localized messages for Russian, English, French
+- Localized messages via `utils/i18n.py` (re-exported for backward compatibility)
 - `[[NO_POI_FOUND]]` handling with user-friendly error messages
 
-#### `src/handlers/donations.py` (643 lines)
+#### `src/handlers/donations.py` (605 lines)
 **Telegram Stars payment integration**
 - `/donate` command with preset amounts: 100, 250, 500 (main), 50, 150, 1000, 2000 (extended)
 - Pre-checkout validation with idempotency checks (payload, user_id, amount)
@@ -128,29 +128,29 @@ docs/                                  # Documentation, images, videos
 - Multi-language payment UI (Russian, English, French)
 - XTR currency (Telegram Stars), empty provider_token
 
-#### `src/handlers/language_selection.py` (419 lines)
+#### `src/handlers/language_selection.py` (343 lines)
 **Multi-language support and premium settings**
 - Language selection keyboard: Russian, English, French, Portuguese-Brazil, Ukrainian
 - Custom language input (accepts codes like "es", "de" or names)
 - `/reset` command for language reset
 - Hidden `/reason` command for premium users:
-  - Model selection: Claude Opus 4.6, Sonnet 4.5, Haiku 4.5
-  - Reasoning levels: none/low/medium/high
-  - Opus 4.6 uses adaptive thinking with effort parameter; older models use budget_tokens
-  - Checkmarks for current selections
+  - Model selection (`CLAUDE_MODELS` constant): Claude Opus 5, Sonnet 5, Haiku 4.5
+  - Reasoning levels (`REASONING_LEVELS` constant): none/low/medium/high
+  - Claude 5 models use adaptive thinking with effort parameter; Haiku 4.5 uses budget_tokens
+  - Shared `_build_settings_menu()` renders the keyboard with checkmarks
 - User preference persistence in database
 
-#### `src/services/claude_client.py` (1758 lines - Core AI Engine)
-**AI fact generation with verification**
+#### `src/services/claude_client.py` (1138 lines - Core AI Engine)
+**AI fact generation with verification** — composes `PromptBuilderMixin` (services/prompts.py) and `WikimediaImagesMixin` (services/wikimedia_images.py)
 - **Models**:
-  - `MODEL_OPUS = "claude-opus-4-6"` (best quality, adaptive thinking)
-  - `MODEL_SONNET = "claude-sonnet-4-5-20250929"` (default model)
-  - `MODEL_HAIKU = "claude-haiku-4-5-20251001"` (fastest)
+  - `MODEL_OPUS = "claude-opus-5"` (best quality, premium option)
+  - `MODEL_SONNET = "claude-sonnet-5"` (default model)
+  - `MODEL_HAIKU = "claude-haiku-4-5-20251001"` (fastest, premium option)
 - **StaticLocationHistory** class: in-memory cache for anti-repetition
   - Coordinate-based keying (search keywords)
   - 24-hour TTL, max 1000 entries, auto-cleanup
   - Returns last 5 facts per location for context
-- **System prompts**: Separate Russian and English prompt systems
+- **System prompts** (`services/prompts.py`): Separate Russian and English prompt systems
   - Atlas Obscura style: hidden, forgotten, counterintuitive details
   - Strict fact verification against web search results
   - Source URL validation (only from search results, no invented URLs)
@@ -158,15 +158,17 @@ docs/                                  # Documentation, images, videos
 - **Web search integration**: Brave Search API via `WebSearchService`
   - Results formatted into prompts for verification
   - Fallback mode when search unavailable
-- **Thinking/reasoning config**: Model-dependent thinking modes
-  - **Opus 4.6**: Adaptive thinking (`thinking: {type: "adaptive"}`) with effort parameter via `output_config: {effort: "low"|"medium"|"high"}`
-  - **Sonnet/Haiku 4.5**: Manual thinking (`thinking: {type: "enabled", budget_tokens: N}`) with defaults: low=1024, medium=2048, high=4096
-  - Environment variable overrides for budget_tokens: `CLAUDE_THINKING_BUDGET_TOKENS_{LEVEL}`
-  - Auto-fallback on thinking errors (strips thinking config and output_config)
+- **Thinking/reasoning config** (`_build_thinking_config`): Model-dependent thinking modes
+  - **Opus 5 / Sonnet 5**: Adaptive thinking (`thinking: {type: "adaptive"}`) with effort parameter via `output_config: {effort: "low"|"medium"|"high"}`; `budget_tokens` is rejected by these models
+  - **Haiku 4.5**: Manual thinking (`thinking: {type: "enabled", budget_tokens: N}`) with defaults: low=1024, medium=2048, high=4096
+  - Environment variable overrides for budget_tokens (Haiku only): `CLAUDE_THINKING_BUDGET_TOKENS_{LEVEL}`
+  - Auto-fallback on thinking errors (retries with explicit `disabled` and drops output_config)
+- **Refusal handling**: `stop_reason == "refusal"` is checked before parsing content (Claude 5 safety classifiers); Opus 5 requests opt into server-side refusal fallbacks (`betas=["server-side-fallback-2026-07-01"]`, `fallbacks="default"` via `client.beta.messages.create`)
+- **max_tokens**: 8192 (adaptive thinking shares the output cap)
 - **Multi-tier coordinate lookup**:
   1. Direct parsing from `<answer>` response
   2. Nominatim geocoding (OSM) with smart fallbacks
-- **Image pipeline**: Wikipedia/Wikimedia Commons with QID/P18 caching
+- **Image pipeline** (`services/wikimedia_images.py`): Wikipedia/Wikimedia Commons with QID/P18 caching
   - Wikimedia entity lookup and file info extraction
   - Multiple search strategies with parallel async tasks
 - **Response format** (structured):
@@ -182,7 +184,7 @@ docs/                                  # Documentation, images, videos
   ```
 - Concurrency control: asyncio.Semaphore(3) for API requests
 
-#### `src/services/live_location_tracker.py` (1272 lines)
+#### `src/services/live_location_tracker.py` (1256 lines)
 **Real-time location session management**
 - **LiveLocationData** dataclass:
   - `user_id`, `chat_id`, `latitude`, `longitude`, `last_update`
@@ -213,34 +215,34 @@ docs/                                  # Documentation, images, videos
 - Yandex Web Search as automatic fallback on HTTP 429 (rate limit)
 - Returns structured results: title, url, description, age
 
-#### `src/services/async_donors_wrapper.py` (233 lines)
+#### `src/services/async_donors_wrapper.py` (191 lines)
 **Database abstraction layer - unified async interface for 3 backends**
 - Auto-detects backend: Firestore (`USE_FIRESTORE_DB`) -> PostgreSQL (`DATABASE_URL`) -> SQLite (default)
-- Async wrapper around sync SQLite operations
+- Single `_call_db()` dispatcher: awaits Postgres coroutines; runs sync SQLite/Firestore calls via `asyncio.to_thread` so the event loop never blocks
 - Methods: `add_donation()`, `is_premium_user()`, `get_donor_info()`, `get_donation_history()`, `get_stats()`
 - User preferences: `get/set_user_language()`, `get/set_user_reasoning()`, `get/set_user_model()`
 - `has_language_set()`, `reset_user_language()`
 - Auto-upgrade: donors from reasoning='none' -> 'low' (hidden bonus)
-- Legacy model mapping: `gpt-5` -> `claude-opus-4-6`, `claude-opus-4-5-20251101` -> `claude-opus-4-6`
+- Module-level `MODEL_MAPPING` forward-maps every previously offered model ID (gpt-5*, claude-opus-4-5/4-6, claude-sonnet-4-5, aliases) to the current Claude 5 lineup — rows are permanent because stored user rows are read through it forever
 - Singleton pattern via `get_async_donors_db()`
 
-#### `src/services/donors_db.py` (806 lines)
+#### `src/services/donors_db.py` (794 lines)
 **SQLite database for local/Railway deployment**
 - Tables: donors, donations, user_preferences
 - Railway detection: checks `RAILWAY_ENVIRONMENT`, `RAILWAY_PROJECT_ID`, `RAILWAY_SERVICE_ID`, etc.
 - Path selection: Railway volume (`/data`) -> custom `VOLUME_PATH` -> `/tmp` -> local directory
-- Default language: `'en'`, default model: `'claude-sonnet-4-5-20250929'`, default reasoning: `'low'`
+- Default language: `'en'`, default model: `'claude-sonnet-5'`, default reasoning: `'low'` (same defaults in every backend)
 - Payment ID deduplication (UNIQUE constraint)
 - Premium status: `premium_expires > current_time` (25 years per star)
 - Thread-safe with `threading.Lock`
 - Full CRUD for donors, donations, and user preferences
 
-#### `src/services/postgres_db.py` (398 lines)
+#### `src/services/postgres_db.py` (426 lines)
 **PostgreSQL production database**
 - Connection pool: asyncpg (min_size=1, max_size=10)
 - Same schema as SQLite with indexes on user_id, payment_id
 - Auto-migration on initialization
-- Full async support for all operations
+- Full async support for all operations, including `get/set_user_model()` and `get/set_user_reasoning()`
 
 #### `src/services/firebase_db.py` (264 lines)
 **Firestore document storage (GCP-native)**
@@ -258,15 +260,6 @@ docs/                                  # Documentation, images, videos
 - `get_stats_for_user(user_id)` - User-specific analytics
 - `get_global_stats()` - Global metrics (total_facts, total_movements)
 
-#### `src/services/image_search.py` (467 lines)
-**Wikipedia image retrieval**
-- `ImageSearchEngine` class
-- Multiple search strategies: entity extraction, source URL images, place name search, geo-search
-- Image ranking by relevance
-- Deduplication of results
-- Async parallel search tasks
-- Thumbnail and full-size support
-
 #### `src/services/yandex_image_search.py` (739 lines)
 **Alternative image search implementation**
 - Yandex image search API
@@ -278,12 +271,21 @@ docs/                                  # Documentation, images, videos
 - Used when Brave Search hits rate limits (HTTP 429)
 - Same result format as Brave Search for compatibility
 
-#### `src/utils/formatting_utils.py` (333 lines)
+#### `src/utils/i18n.py` (309 lines)
+**Centralized localization — single source of truth for all user-facing messages**
+- Dictionaries: `WELCOME_MESSAGES`, `ONBOARDING_STEPS`, `LANGUAGE_MESSAGES`, `LOCATION_MESSAGES`, `DONATION_MESSAGES` (ru/en/fr; language selection also pt/uk)
+- `get_message(messages, language, key, **kwargs)` - lookup with English fallback + formatting
+- `get_user_language(user_id)` - async, reads preference from DB (lazy service import keeps the module import-safe from anywhere)
+- `get_localized_message(user_id, key, **kwargs)` - user-scoped lookup in `LOCATION_MESSAGES`
+- Lives in `utils/` so services can localize without importing handlers (no circular deps)
+
+#### `src/utils/formatting_utils.py` (365 lines)
 **Text processing utilities**
 - `extract_sources_from_answer(answer_content)` - Parse Sources/Источники sections into [(title, url)]
 - `strip_sources_section(text)` - Remove trailing sources block
 - `sanitize_url(url)` - Telegram Markdown-safe URL escaping
 - `escape_html(text)` - HTML entity escaping
+- `escape_markdown(text)` - Minimal Telegram Markdown escaping (preserves service tags like [[NO_POI_FOUND]])
 - `label_to_html(label)` - Convert Markdown bold to HTML
 - `extract_bare_links(text)` - Find domain URLs in text
 - `remove_bare_links_from_text(text)` - Remove (example.com) patterns
@@ -302,7 +304,7 @@ docs/                                  # Documentation, images, videos
 2. **Live Location**: User shares live location -> interval selection (5/10/30/60 min) -> initial fact -> background loop with numbered facts -> duplicate prevention -> venue/location -> session cleanup on stop/expire
 3. **Donations**: `/donate` command -> amount selection -> Telegram Stars invoice (XTR) -> pre-checkout validation -> payment success -> premium status (25 years per star)
 4. **Language Selection**: New user -> `/start` -> language keyboard -> preference saved -> localized experience
-5. **Reasoning/Model**: Premium user -> `/reason` -> level selection (none/low/medium/high) + model (Opus/Sonnet/Haiku) -> preferences saved
+5. **Reasoning/Model**: Premium user -> `/reason` -> level selection (none/low/medium/high) + model (Opus 5/Sonnet 5/Haiku 4.5) -> preferences saved
 
 ### Live Location System
 
@@ -340,9 +342,9 @@ docs/                                  # Documentation, images, videos
 - **AsyncIO** - Concurrent live location processing
 
 **AI & Search**
-- **Anthropic Claude API** (anthropic 0.50+) - Claude Opus 4.6 (adaptive thinking), Sonnet 4.5, Haiku 4.5
+- **Anthropic Claude API** (anthropic 0.116+) - Claude Opus 5, Sonnet 5 (adaptive thinking + effort), Haiku 4.5
 - **Brave Search API** - Web search for fact verification (2000 queries/month free)
-- **Extended thinking** - Configurable reasoning budgets (1024-4096 tokens)
+- **Thinking control** - Adaptive thinking with effort levels on Claude 5 models; budget_tokens (1024-4096) on Haiku 4.5
 
 **Database Backends** (Auto-switchable)
 - **SQLite** - Local/Railway deployment with volume persistence
@@ -364,18 +366,17 @@ docs/                                  # Documentation, images, videos
 - **Railway/Koyeb** - Production deployment with auto-scaling
 - **Docker** - Containerized deployment (python:3.12-slim)
 - **GitHub Actions** - CI/CD pipeline (lint -> format -> test -> deploy)
-- **pytest + pytest-anyio** - Async testing with mocks
+- **pytest + anyio** - Async testing with mocks (anyio ships its own pytest plugin)
 - **ruff + black** - Linting (88 char lines) and code formatting
 
 **Utilities**
-- **asyncio-throttle 1.0.2** - Rate limiting for concurrent requests
 - **python-dotenv 1.0.1** - Environment variable management
-- **sqlalchemy 2.0.36** - ORM with async support
+- **google-cloud-firestore** - Firestore client (direct import in firebase_stats.py)
 
 ### Testing Structure
 
-**Test Files** (7 files, ~1,800 lines total)
-- `test_claude_client.py` (496 lines) - Claude fact generation, coordinate extraction, image search, caching, model selection
+**Test Files** (7 files, ~1,900 lines total)
+- `test_claude_client.py` (634 lines) - Claude fact generation, thinking config, refusal handling, MODEL_MAPPING lockstep, coordinate extraction, image search, caching
 - `test_location_handler.py` (402 lines) - Static/live location flows, media groups, response parsing
 - `test_live_location_tracker.py` (306 lines) - Session management, fact delivery, cleanup
 - `test_live_location_expiry.py` (165 lines) - Session timeout, expiry handling
@@ -384,12 +385,12 @@ docs/                                  # Documentation, images, videos
 - `test_fact_accuracy_prompts.py` (161 lines) - Prompt quality, fact verification requirements
 
 **Testing Approach**
-- AsyncIO testing with pytest-anyio
+- AsyncIO testing with anyio (`anyio.run(...)` inside sync test functions)
 - Mock external APIs (Telegram, Anthropic, Firebase, Brave Search)
 - Session management verification
 - Error handling scenarios
 - Duplicate prevention logic
-- Run with: `OPENAI_API_KEY=test-key pytest tests/ -v` (legacy env var used in CI)
+- Run with: `ANTHROPIC_API_KEY=test-key pytest tests/ -v` (matches CI)
 
 ### Environment Variables
 
@@ -413,7 +414,7 @@ docs/                                  # Documentation, images, videos
 - `HOWTO_STEP2_FILE_ID` - Cached Telegram file ID for onboarding step 2 image
 - `HOWTO_STEP3_FILE_ID` - Cached Telegram file ID for onboarding step 3 image
 
-**Optional - AI Configuration**
+**Optional - AI Configuration** (budget tokens apply to Haiku 4.5 only; Claude 5 models use adaptive thinking + effort)
 - `CLAUDE_THINKING_BUDGET_TOKENS_LOW` - Custom token budget for low reasoning (default: 1024)
 - `CLAUDE_THINKING_BUDGET_TOKENS_MEDIUM` - Custom token budget for medium (default: 2048)
 - `CLAUDE_THINKING_BUDGET_TOKENS_HIGH` - Custom token budget for high (default: 4096)
@@ -451,10 +452,17 @@ CREATE TABLE user_preferences (
   user_id BIGINT PRIMARY KEY,
   language TEXT DEFAULT 'en',
   reasoning TEXT DEFAULT 'low',
-  model TEXT DEFAULT 'claude-sonnet-4-5-20250929',
+  model TEXT DEFAULT 'claude-sonnet-5',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+```
+
+Note: rows written before the Claude 5 migration may still hold legacy model IDs
+(`claude-opus-4-6`, `claude-sonnet-4-5-20250929`, `gpt-5*`); reads go through
+`MODEL_MAPPING` in `async_donors_wrapper.py`, which forward-maps them.
+
+```sql
 ```
 
 ### Firestore Collections
@@ -470,7 +478,7 @@ CREATE TABLE user_preferences (
   "premium_expires": "timestamp",
   "language": "en",
   "reasoning": "low",
-  "model": "claude-sonnet-4-5-20250929"
+  "model": "claude-sonnet-5"
 }
 ```
 
@@ -519,7 +527,7 @@ CREATE TABLE user_preferences (
      - Install dependencies: pip install -e ".[dev]"
      - Lint: ruff check src/ tests/
      - Format check: black --check src/ tests/
-     - Test: OPENAI_API_KEY=test-key pytest tests/ -v
+     - Test: ANTHROPIC_API_KEY=test-key pytest tests/ -v
    ```
 
 2. **Deploy Job** (Conditional: main branch + push only)
@@ -532,8 +540,6 @@ CREATE TABLE user_preferences (
    ```
 
 **Pipeline Flow**: Code -> Lint -> Format -> Test -> Deploy (main only)
-
-Note: The CI uses `OPENAI_API_KEY=test-key` as a legacy env var. The actual codebase uses `ANTHROPIC_API_KEY` for the Claude API.
 
 ## Deployment Architectures
 
@@ -568,7 +574,7 @@ PORT=8000
 ```
 - **Mode**: Webhook
 - **Database**: SQLite with volume persistence (`/data/donors.db`)
-- **Health check**: Separate HTTP server on port+1
+- **Health check**: aiohttp server on port+1, running on the bot's event loop
 - **Auto-deploy**: GitHub push to main -> CI -> Railway deploy
 
 ### PostgreSQL Production
@@ -602,7 +608,7 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 5. **Ukrainian (uk)** - Supported via language selection
 
 ### Localization Coverage
-- **Welcome messages in main.py**: Russian, English, French (3 languages)
+- **Welcome/onboarding messages**: Russian, English, French (3 languages)
 - **Location handler messages**: Russian, English, French (3 languages)
 - **Donation messages**: Russian, English, French (3 languages)
 - **Language selection UI**: All 5 languages + custom input
@@ -610,17 +616,18 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 
 ### Localization System
 
-**Message Dictionaries** (in handlers)
+**All message dictionaries live in `src/utils/i18n.py`** (WELCOME_MESSAGES, ONBOARDING_STEPS, LANGUAGE_MESSAGES, LOCATION_MESSAGES, DONATION_MESSAGES):
 ```python
-LOCALIZED_MESSAGES = {
+WELCOME_MESSAGES = {
     "ru": {"welcome": "...", "buttons": {...}, "info_text": "..."},
     "en": {"welcome": "...", "buttons": {...}, "info_text": "..."},
     "fr": {"welcome": "...", "buttons": {...}, "info_text": "..."},
 }
 ```
 
-**Helper Functions**
+**Helper Functions** (also in `utils/i18n.py`)
 - `get_localized_message(user_id, key, **kwargs)` - Retrieve localized text for user
+- `get_message(messages, language, key, **kwargs)` - Dictionary-agnostic lookup
 - Language detection from database preferences
 - Fallback to English if language not set
 
@@ -731,7 +738,7 @@ async def test_live_location_cleanup():
 - `/reset` - Reset language preference (re-shows language selection)
 
 ### Premium User Commands
-- `/reason` - Set reasoning level (none/low/medium/high) + model selection (Opus/Sonnet/Haiku)
+- `/reason` - Set reasoning level (none/low/medium/high) + model selection (Opus 5/Sonnet 5/Haiku 4.5)
 - `/stats` - View donation statistics and premium status
 
 ### Admin/Debug Commands
@@ -770,21 +777,25 @@ Interesting fact: [text]
 
 ### Thinking Configuration
 
-Extended thinking is controlled per-user via reasoning levels. The implementation differs by model:
+Extended thinking is controlled per-user via reasoning levels. The implementation differs by model (`_build_thinking_config` in claude_client.py):
 
-**Opus 4.6** (adaptive thinking):
-- `none` -> thinking disabled
-- `low` -> `thinking: {type: "adaptive"}` + `output_config: {effort: "low"}`
+**Opus 5 / Sonnet 5** (adaptive thinking — `budget_tokens` is rejected with a 400 on these models):
+- `none` -> `thinking: {type: "disabled"}`
+- `low` -> `thinking: {type: "adaptive"}` + `output_config: {effort: "low"}` (default for all users)
 - `medium` -> `thinking: {type: "adaptive"}` + `output_config: {effort: "medium"}`
 - `high` -> `thinking: {type: "adaptive"}` + `output_config: {effort: "high"}`
 
-**Sonnet 4.5 / Haiku 4.5** (manual budget_tokens):
+**Haiku 4.5** (manual budget_tokens):
 - `none` -> thinking disabled
-- `low` -> 1024 token budget (default for all users)
+- `low` -> 1024 token budget
 - `medium` -> 2048 token budget
 - `high` -> 4096 token budget
 
-Minimum enforced for budget_tokens: 1024. Auto-fallback to disabled on API errors.
+Minimum enforced for budget_tokens: 1024. Auto-fallback on thinking-related API errors retries with explicit `{type: "disabled"}` and drops `output_config`.
+
+### Refusal Handling
+
+Claude 5 safety classifiers can decline a request with HTTP 200 and `stop_reason: "refusal"` (empty or partial content). `_check_response_stop_reason` runs before content parsing: the main path raises a clear error (handlers show the localized friendly message), NO_POI retries skip the radius step. Opus 5 requests additionally opt into server-side refusal fallbacks (`fallbacks="default"` + beta header), which re-run declined requests on Anthropic's recommended fallback model.
 
 ## Troubleshooting
 
@@ -816,8 +827,6 @@ Minimum enforced for budget_tokens: 1024. Auto-fallback to disabled on API error
 - Media group caption must be <= 1024 chars (auto-truncated)
 - Fallback chain: media group -> 2 images -> text-only -> individual images
 
-**Legacy files**
-- `src/services/openai_client.py` (2766 lines) is a legacy OpenAI-based client, not actively used
-- `requirements.txt` still lists `openai==1.99.2` as a dependency
-- `.env.example` references `OPENAI_API_KEY` (legacy)
-- The actual AI integration uses `anthropic` package via `claude_client.py`
+**Legacy compatibility notes**
+- `claude_client.py` still exports `OpenAIClient`/`get_openai_client` aliases (handlers import the Claude client under those names)
+- Stored user model preferences may contain pre-migration IDs; they are forward-mapped on read via `MODEL_MAPPING` in `async_donors_wrapper.py`
