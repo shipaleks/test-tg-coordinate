@@ -268,6 +268,61 @@ def test_model_mapping_forward_maps_to_current_lineup(claude_client):
     assert MODEL_MAPPING["gpt-5.1-mini"] == claude_client.MODEL_SONNET
 
 
+def test_refusal_response_raises(claude_client):
+    """A stop_reason == "refusal" response must not be parsed as content."""
+
+    async def _test():
+        mock_response = MagicMock()
+        mock_response.stop_reason = "refusal"
+        mock_response.content = []
+
+        with patch.object(
+            claude_client.client.messages,
+            "create",
+            AsyncMock(return_value=mock_response),
+        ):
+            with patch.object(
+                claude_client.web_search,
+                "search",
+                new_callable=AsyncMock,
+                return_value=[],
+            ):
+                with pytest.raises(ValueError):
+                    await claude_client.get_nearby_fact(
+                        55.751244, 37.618423, is_live_location=False
+                    )
+
+    anyio.run(_test)
+
+
+def test_opus_requests_use_server_side_fallbacks(claude_client):
+    """Opus 5 requests go through the beta endpoint with refusal fallbacks."""
+
+    async def _test():
+        plain_create = AsyncMock(return_value="plain")
+        beta_create = AsyncMock(return_value="beta")
+
+        with patch.object(claude_client.client.messages, "create", plain_create):
+            with patch.object(
+                claude_client.client.beta.messages, "create", beta_create
+            ):
+                result = await claude_client._create_message(
+                    {"model": claude_client.MODEL_OPUS, "max_tokens": 10}
+                )
+                assert result == "beta"
+                kwargs = beta_create.call_args.kwargs
+                assert kwargs["betas"] == ["server-side-fallback-2026-07-01"]
+                assert kwargs["fallbacks"] == "default"
+
+                result = await claude_client._create_message(
+                    {"model": claude_client.MODEL_SONNET, "max_tokens": 10}
+                )
+                assert result == "plain"
+                assert "fallbacks" not in plain_create.call_args.kwargs
+
+    anyio.run(_test)
+
+
 def test_parse_coordinates_from_response(claude_client):
     """Test parsing coordinates from Claude response."""
 
