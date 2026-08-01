@@ -1,9 +1,11 @@
 """Main application entry point for Bot Voyage."""
 
+import asyncio
 import logging
 import os
 from pathlib import Path
 
+from aiohttp import web
 from dotenv import load_dotenv
 from telegram import KeyboardButton, ReplyKeyboardMarkup, Update
 from telegram.ext import (
@@ -237,26 +239,15 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logger.error(f"Exception while handling an update: {context.error}")
 
 
-def main() -> None:
-    """Main function to run the bot."""
-    logger.info("Starting Bot Voyage...")
-
+async def _run_startup_tasks() -> None:
+    """One-time async startup tasks, run before the bot starts."""
     # Run database migration if PostgreSQL is configured
     if os.environ.get("DATABASE_URL"):
         logger.info("PostgreSQL detected, checking for migration...")
         try:
-            import asyncio
-
             from src.utils.migrate_to_postgres import check_and_migrate
 
-            # Create new event loop for migration
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(check_and_migrate())
-            loop.close()
-
-            # Reset event loop for telegram bot
-            asyncio.set_event_loop(asyncio.new_event_loop())
+            await check_and_migrate()
         except Exception as e:
             logger.error(f"Migration check failed: {e}")
             # Continue anyway - database will be created empty
@@ -264,29 +255,73 @@ def main() -> None:
     # Optional: reset languages on fresh deploy if requested
     if os.environ.get("RESET_LANG_ON_DEPLOY", "").lower() == "true":
         try:
-            import asyncio
-
-            async def _reset_all_languages():
-                db = await get_async_donors_db()
-                # best-effort: if backend supports bulk reset; otherwise skip
-                reset_supported = hasattr(db._db, "reset_all_languages")  # type: ignore[attr-defined]
-                if reset_supported:
-                    await db._db.reset_all_languages()  # type: ignore[attr-defined]
-
-            asyncio.get_event_loop_policy().get_event_loop().run_until_complete(
-                _reset_all_languages()
-            )
+            db = await get_async_donors_db()
+            # best-effort: if backend supports bulk reset; otherwise skip
+            if hasattr(db._db, "reset_all_languages"):  # type: ignore[attr-defined]
+                await db._db.reset_all_languages()  # type: ignore[attr-defined]
             logger.info("RESET_LANG_ON_DEPLOY executed")
         except Exception as e:
             logger.warning(f"RESET_LANG_ON_DEPLOY failed or unsupported: {e}")
+
+
+def _build_health_runner() -> web.AppRunner:
+    """Healthcheck endpoints for Railway/Koyeb, served on the bot's loop."""
+
+    async def _health(request: web.Request) -> web.Response:
+        return web.Response(text="OK")
+
+    health_app = web.Application()
+    for path in ("/", "/health", "/healthz"):
+        health_app.router.add_get(path, _health)
+    # access_log=None: suppress per-request log spam (as the old server did)
+    return web.AppRunner(health_app, access_log=None)
+
+
+def main() -> None:
+    """Main function to run the bot."""
+    logger.info("Starting Bot Voyage...")
+
+    # Run startup tasks on the loop PTB will reuse (run_webhook/run_polling
+    # pick up the current event loop), so loop-bound resources like DB
+    # connections stay valid for the bot's lifetime.
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(_run_startup_tasks())
 
     # Get bot token from environment
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not bot_token:
         raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
 
+    # Webhook vs polling is decided by WEBHOOK_URL
+    webhook_url = os.getenv("WEBHOOK_URL")
+    port = int(os.getenv("PORT", "8000"))
+
     # Create application
-    application = Application.builder().token(bot_token).build()
+    builder = Application.builder().token(bot_token)
+
+    if webhook_url:
+        # Healthcheck server for Railway/Koyeb on port+1, started on the
+        # bot's own event loop (replaces the old threaded HTTPServer).
+        health_port = port + 1
+        health_runner = _build_health_runner()
+
+        async def _start_health_server(app: Application) -> None:
+            await health_runner.setup()
+            site = web.TCPSite(health_runner, "0.0.0.0", health_port)
+            await site.start()
+            logger.info(
+                f"Healthcheck server started on port {health_port} (/, /health, /healthz)"
+            )
+
+        async def _stop_health_server(app: Application) -> None:
+            await health_runner.cleanup()
+
+        builder = builder.post_init(_start_health_server).post_shutdown(
+            _stop_health_server
+        )
+
+    application = builder.build()
 
     # Add command handlers
     application.add_handler(CommandHandler("start", start_command))
@@ -441,44 +476,9 @@ def main() -> None:
     # Add error handler
     application.add_error_handler(error_handler)
 
-    # Check if we should use webhook or polling
-    webhook_url = os.getenv("WEBHOOK_URL")
-    port = int(os.getenv("PORT", "8000"))
-
     if webhook_url:
         # Use webhook for production
         logger.info(f"Starting webhook on port {port}")
-
-        # Start simple healthcheck server in background thread
-        import threading
-        from http.server import BaseHTTPRequestHandler, HTTPServer
-
-        class HealthCheckHandler(BaseHTTPRequestHandler):
-            def do_GET(self):
-                """Healthcheck endpoint for Koyeb/Railway."""
-                if self.path in ["/", "/health", "/healthz"]:
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/plain")
-                    self.end_headers()
-                    self.wfile.write(b"OK")
-                else:
-                    self.send_response(404)
-                    self.end_headers()
-
-            def log_message(self, format, *args):
-                # Suppress HTTP server logs to avoid spam
-                pass
-
-        # Run healthcheck on a separate port to avoid conflicts
-        health_port = port + 1
-        health_server = HTTPServer(("0.0.0.0", health_port), HealthCheckHandler)
-        health_thread = threading.Thread(
-            target=health_server.serve_forever, daemon=True
-        )
-        health_thread.start()
-        logger.info(
-            f"Healthcheck server started on port {health_port} (/, /health, /healthz)"
-        )
 
         # Use synchronous run_webhook which handles event loop internally
         application.run_webhook(
