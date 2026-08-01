@@ -212,9 +212,24 @@ class ClaudeClient:
             or "effort" in message
         )
 
+    async def _create_message(self, request_kwargs: dict):
+        """Send a message request.
+
+        Opus 5 requests opt into server-side refusal fallbacks: if safety
+        classifiers decline the request, the API re-runs it on Anthropic's
+        recommended fallback model instead of returning the refusal.
+        """
+        if request_kwargs.get("model") == self.MODEL_OPUS:
+            return await self.client.beta.messages.create(
+                **request_kwargs,
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",
+            )
+        return await self.client.messages.create(**request_kwargs)
+
     async def _create_message_with_thinking_fallback(self, request_kwargs: dict):
         try:
-            return await self.client.messages.create(**request_kwargs)
+            return await self._create_message(request_kwargs)
         except Exception as e:
             if self._is_thinking_error(e):
                 current = request_kwargs.get("thinking", {})
@@ -225,8 +240,27 @@ class ClaudeClient:
                     retry_kwargs = dict(request_kwargs)
                     retry_kwargs["thinking"] = {"type": "disabled"}
                     retry_kwargs.pop("output_config", None)
-                    return await self.client.messages.create(**retry_kwargs)
+                    return await self._create_message(retry_kwargs)
             raise
+
+    def _check_response_stop_reason(self, response) -> bool:
+        """Inspect stop_reason; returns True when the response was refused.
+
+        Claude 5 safety classifiers can decline a request with a normal
+        HTTP 200 and stop_reason == "refusal" (content empty or partial),
+        so this must be checked before parsing content.
+        """
+        stop_reason = getattr(response, "stop_reason", None)
+        if stop_reason == "refusal":
+            details = getattr(response, "stop_details", None)
+            logger.warning(f"Claude refused the request (stop_details={details})")
+            return True
+        if stop_reason == "max_tokens":
+            logger.warning(
+                "Claude hit max_tokens; response may be truncated "
+                "(thinking shares the max_tokens budget)"
+            )
+        return False
 
     def _get_russian_style_instructions(self) -> str:
         """Get detailed Russian language style instructions for Atlas Obscura quality."""
@@ -998,6 +1032,9 @@ Sources:
                     request_kwargs
                 )
 
+            if self._check_response_stop_reason(response):
+                raise ValueError("Claude refused the request")
+
             # Extract content from response
             content = ""
             if response.content:
@@ -1045,6 +1082,11 @@ Sources:
                                 retry_kwargs
                             )
                         )
+
+                    # A refused retry is not fatal: keep the NO_POI content and
+                    # let the handler show its friendly "nothing found" message.
+                    if self._check_response_stop_reason(retry_response):
+                        continue
 
                     if retry_response.content:
                         retry_content = ""
